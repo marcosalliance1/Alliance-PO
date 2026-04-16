@@ -1,0 +1,71 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@import "tailwindcss";
+
+* {
+  font-family: 'Inter', sans-serif;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #0F1117;
+  color: #F1F5F9;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #1A1D2E; }
+::-webkit-scrollbar-thumb { background: #2E3150; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3D4170; }
+
+/* Tabela de orçamento */
+.tabela-orcamento {
+  background: #FFFFFF;
+  color: #1E293B;
+  font-size: 12px;
+}
+.tabela-orcamento th {
+  background: #F1F5F9;
+  color: #475569;
+  font-weight: 600;
+  padding: 8px 12px;
+  white-space: nowrap;
+  border-bottom: 2px solid #E2E8F0;
+  text-align: left;
+}
+.tabela-orcamento td {
+  padding: 6px 12px;
+  border-bottom: 1px solid #F1F5F9;
+  white-space: nowrap;
+}
+.tabela-orcamento tr:nth-child(even) td {
+  background: #F8FAFC;
+}
+.tabela-orcamento .valor {
+  text-align: right;
+  padding-right: 12px;
+  min-width: 140px;
+  white-space: nowrap;
+}
+.tabela-orcamento .valor-negativo {
+  color: #DC2626;
+}
+
+/* Status cores */
+.status-fechado { background: #BBF7D0 !important; color: #14532D !important; }
+.status-estimado { background: #BFDBFE !important; color: #1E3A8A !important; }
+.status-orcando { background: #FEF08A !important; color: #713F12 !important; }
+.status-aberto { background: #FECACA !important; color: #7F1D1D !important; }
+
+/* Separador de área */
+.separador-area {
+  background: #6B7280 !important;
+  color: #F9FAFB !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  height: 28px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
