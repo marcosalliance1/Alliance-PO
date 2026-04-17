@@ -1,13 +1,13 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useStorage } from '../../hooks/useStorage'
+import { supabase } from '../../lib/supabase'
+import { useItensProjeto, mapearProjetoDoDB } from '../../hooks/useProjetos'
 import { formatarMoeda, formatarPercentual } from '../../utils/formatters'
 import { calcularTotaisItens, calcularDesvio, calcularProjetado, calcularStatusPgto } from '../../utils/calculadora'
 import { NOMES_SECOES, ORDEM_SECOES } from '../../data/bancoItensDefault'
 import { ChevronDown, ChevronRight, Plus, ArrowLeft, Edit2, Trash2 } from 'lucide-react'
 import Btn from '../../components/UI/Btn'
 import { BadgeDefCusto, BadgeStatus, BadgePgto } from '../../components/UI/Badge'
-import { uuidv4 } from '../../utils/uuid'
 import Modal from '../../components/UI/Modal'
 import FormItem from './FormItem'
 
@@ -20,10 +20,28 @@ const HEADER_GRUPOS = [
 export default function OrcamentoPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [projetos, setProjetos] = useStorage('projetos', [])
-  const projeto = projetos.find(p => p.id === id)
+  const [projeto, setProjeto] = useState(null)
+  const [carregandoProjeto, setCarregandoProjeto] = useState(true)
+  const { secoes, carregando, adicionarItem, atualizarItem, excluirItem } = useItensProjeto(id)
   const [secoesAbertas, setSecoesAbertas] = useState(() => Object.fromEntries(ORDEM_SECOES.map(s => [s, true])))
-  const [modalItem, setModalItem] = useState(null) // { secao, item? }
+  const [modalItem, setModalItem] = useState(null)
+
+  useEffect(() => {
+    if (!id) return
+    supabase.from('po_projetos').select('*').eq('id', id).single()
+      .then(({ data, error }) => {
+        if (!error && data) setProjeto(mapearProjetoDoDB(data))
+        setCarregandoProjeto(false)
+      })
+  }, [id])
+
+  if (carregandoProjeto || carregando) {
+    return (
+      <div style={{ textAlign: 'center', padding: 60, color: '#64748B' }}>
+        <p>Carregando…</p>
+      </div>
+    )
+  }
 
   if (!projeto) {
     return (
@@ -34,59 +52,46 @@ export default function OrcamentoPage() {
     )
   }
 
-  function atualizarProjeto(updates) {
-    setProjetos(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p))
+  function recalcular(item) {
+    const atualizado = { ...item }
+    atualizado.totalAtual = (atualizado.qtde || 0) * (atualizado.valorUnitarioAtual || 0)
+    atualizado.valorProjetado = calcularProjetado(atualizado.valorUnitarioAtual, projeto.ipcaAm, projeto.tempoContrato)
+    atualizado.totalProjetado = (atualizado.qtde || 0) * atualizado.valorProjetado
+    atualizado.valorOrcado = (atualizado.qtdeOrcada || 0) * (atualizado.valorUnitarioOrcado || 0)
+    atualizado.valorContratado = (atualizado.qtdeContratada || 0) * (atualizado.valorUnitarioContratado || 0)
+    atualizado.pgto = calcularStatusPgto(atualizado.valorPago, atualizado.valorContratado)
+    return atualizado
   }
 
-  function atualizarItem(secao, itemId, campo, valor) {
-    const secoes = { ...projeto.secoes }
-    secoes[secao] = secoes[secao].map(item => {
-      if (item.id !== itemId) return item
-      const atualizado = { ...item, [campo]: valor }
-      // Recalcular totais
-      atualizado.totalAtual = (atualizado.qtde || 0) * (atualizado.valorUnitarioAtual || 0)
-      atualizado.valorProjetado = calcularProjetado(atualizado.valorUnitarioAtual, projeto.ipcaAm, projeto.tempoContrato)
-      atualizado.totalProjetado = (atualizado.qtde || 0) * atualizado.valorProjetado
-      atualizado.valorOrcado = (atualizado.qtdeOrcada || 0) * (atualizado.valorUnitarioOrcado || 0)
-      atualizado.valorContratado = (atualizado.qtdeContratada || 0) * (atualizado.valorUnitarioContratado || 0)
-      atualizado.pgto = calcularStatusPgto(atualizado.valorPago, atualizado.valorContratado)
-      return atualizado
-    })
-    atualizarProjeto({ secoes })
+  async function atualizarItemCelula(secao, itemId, campo, valor) {
+    const item = secoes[secao]?.find(i => i.id === itemId)
+    if (!item) return
+    const atualizado = recalcular({ ...item, [campo]: valor })
+    await atualizarItem(secao, itemId, atualizado)
   }
 
-  function salvarItem(secao, dados) {
-    const secoes = { ...projeto.secoes }
-    if (dados.id && secoes[secao].find(i => i.id === dados.id)) {
-      secoes[secao] = secoes[secao].map(i => i.id === dados.id ? { ...i, ...dados } : i)
+  async function salvarItem(secao, dados) {
+    const atualizado = recalcular({ ...dados })
+    if (dados.id && secoes[secao]?.find(i => i.id === dados.id)) {
+      await atualizarItem(secao, dados.id, atualizado)
     } else {
-      const novo = { ...dados, id: uuidv4(), secao }
-      novo.totalAtual = (novo.qtde || 0) * (novo.valorUnitarioAtual || 0)
-      novo.valorProjetado = calcularProjetado(novo.valorUnitarioAtual, projeto.ipcaAm, projeto.tempoContrato)
-      novo.totalProjetado = (novo.qtde || 0) * novo.valorProjetado
-      novo.valorOrcado = (novo.qtdeOrcada || 0) * (novo.valorUnitarioOrcado || 0)
-      novo.valorContratado = (novo.qtdeContratada || 0) * (novo.valorUnitarioContratado || 0)
-      novo.pgto = calcularStatusPgto(novo.valorPago, novo.valorContratado)
-      secoes[secao] = [...(secoes[secao] || []), novo]
+      await adicionarItem(secao, atualizado)
     }
-    atualizarProjeto({ secoes })
     setModalItem(null)
   }
 
-  function excluirItem(secao, itemId) {
+  async function excluirItemLocal(secao, itemId) {
     if (!confirm('Excluir item?')) return
-    const secoes = { ...projeto.secoes }
-    secoes[secao] = secoes[secao].filter(i => i.id !== itemId)
-    atualizarProjeto({ secoes })
+    await excluirItem(secao, itemId)
   }
 
   // KPIs gerais
   const kpis = useMemo(() => {
-    const todasSecoes = ORDEM_SECOES.flatMap(s => projeto.secoes?.[s] || [])
+    const todasSecoes = ORDEM_SECOES.flatMap(s => secoes[s] || [])
     const t = calcularTotaisItens(todasSecoes)
     const desvio = calcularDesvio(t.totalContratado, t.totalOrcado)
     return { ...t, desvio, custoFormando: projeto.totalAlunos > 0 ? t.totalContratado / projeto.totalAlunos : 0 }
-  }, [projeto])
+  }, [secoes, projeto])
 
   return (
     <div>
@@ -123,7 +128,7 @@ export default function OrcamentoPage() {
 
       {/* Seções */}
       {ORDEM_SECOES.map(secao => {
-        const itens = projeto.secoes?.[secao] || []
+        const itens = secoes[secao] || []
         const totais = calcularTotaisItens(itens)
         const aberta = secoesAbertas[secao] !== false
         const desvioSecao = calcularDesvio(totais.totalContratado, totais.totalOrcado)
@@ -201,9 +206,9 @@ export default function OrcamentoPage() {
                     <TabelaItens
                       itens={itens}
                       secao={secao}
-                      onAtualizarItem={atualizarItem}
+                      onAtualizarItem={atualizarItemCelula}
                       onEditar={(item) => setModalItem({ secao, item })}
-                      onExcluir={(itemId) => excluirItem(secao, itemId)}
+                      onExcluir={(itemId) => excluirItemLocal(secao, itemId)}
                     />
                     {itens.length === 0 && (
                       <tr>
@@ -263,7 +268,6 @@ function KPI({ label, valor, cor, valorStyle = {} }) {
 }
 
 function TabelaItens({ itens, secao, onAtualizarItem, onEditar, onExcluir }) {
-  // Agrupar por subCategoria para inserir separadores
   let subCatAtual = null
   const linhas = []
 
@@ -312,8 +316,6 @@ function TabelaItens({ itens, secao, onAtualizarItem, onEditar, onExcluir }) {
 }
 
 function LinhaItem({ item, statusClass, onAtualizar, onEditar, onExcluir }) {
-  const isNeg = (v) => Number(v) < 0
-
   return (
     <tr className={statusClass}>
       <td style={{ fontSize: 11, color: '#64748B' }}>{item.codigo || '—'}</td>

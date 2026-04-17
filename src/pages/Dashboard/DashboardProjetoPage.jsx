@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useStorage } from '../../hooks/useStorage'
+import { supabase } from '../../lib/supabase'
+import { useItensProjeto, useConciliacao, mapearProjetoDoDB } from '../../hooks/useProjetos'
 import { formatarMoeda, formatarPercentual } from '../../utils/formatters'
 import { calcularTotaisItens, calcularMargem, MAPEAMENTO_RESUMO } from '../../utils/calculadora'
 import { NOMES_SECOES, ORDEM_SECOES } from '../../data/bancoItensDefault'
@@ -22,8 +23,27 @@ const LINHAS_CUSTO = Object.keys(MAPEAMENTO_RESUMO)
 export default function DashboardProjetoPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [projetos, setProjetos] = useStorage('projetos', [])
-  const projeto = projetos.find(p => p.id === id)
+  const [projeto, setProjeto] = useState(null)
+  const [carregandoProjeto, setCarregandoProjeto] = useState(true)
+  const { secoes, carregando } = useItensProjeto(id)
+  const { conciliacao, salvarConciliacao } = useConciliacao(id)
+
+  useEffect(() => {
+    if (!id) return
+    supabase.from('po_projetos').select('*').eq('id', id).single()
+      .then(({ data, error }) => {
+        if (!error && data) setProjeto(mapearProjetoDoDB(data))
+        setCarregandoProjeto(false)
+      })
+  }, [id])
+
+  if (carregandoProjeto || carregando) {
+    return (
+      <div style={{ textAlign: 'center', padding: 60, color: '#64748B' }}>
+        <p>Carregando…</p>
+      </div>
+    )
+  }
 
   if (!projeto) {
     return (
@@ -35,31 +55,29 @@ export default function DashboardProjetoPage() {
   }
 
   function atualizarConciliacao(linha, campo, valor) {
-    const conciliacaoEverest = {
-      ...projeto.conciliacaoEverest,
-      [linha]: {
-        ...(projeto.conciliacaoEverest?.[linha] || {}),
-        [campo]: Number(valor) || 0,
-      }
-    }
-    setProjetos(prev => prev.map(p => p.id === id ? { ...p, conciliacaoEverest } : p))
+    salvarConciliacao(linha, 'custo', { ...conciliacao[linha], [campo]: Number(valor) || 0 })
+  }
+
+  function atualizarReceita(linha, campo, valor) {
+    const recAtual = conciliacao.receitas?.[linha] || {}
+    salvarConciliacao(linha, 'receita', { ...recAtual, [campo]: Number(valor) || 0 })
   }
 
   // Calcular custos por categoria a partir dos itens
   const custosPorCategoria = useMemo(() => {
     const resultado = {}
     for (const [linha, cfg] of Object.entries(MAPEAMENTO_RESUMO)) {
-      const itensSecao = projeto.secoes?.[cfg.secao] || []
+      const itensSecao = secoes[cfg.secao] || []
       const itensFiltrados = itensSecao.filter(cfg.filtro)
       const totais = calcularTotaisItens(itensFiltrados)
       resultado[linha] = totais
     }
     return resultado
-  }, [projeto])
+  }, [secoes])
 
-  // Receitas (do conciliacaoEverest ou zeros)
+  // Receitas (da conciliação Supabase ou zeros)
   const receitas = useMemo(() => {
-    const rec = projeto.conciliacaoEverest?.receitas || {}
+    const rec = conciliacao.receitas || {}
     return LINHAS_RECEITA.reduce((acc, linha) => {
       acc[linha] = {
         vendido: rec[linha]?.vendido || 0,
@@ -70,7 +88,7 @@ export default function DashboardProjetoPage() {
       }
       return acc
     }, {})
-  }, [projeto])
+  }, [conciliacao])
 
   // Totais
   const totalReceitaVendido = Object.values(receitas).reduce((a, r) => a + (r.vendido || 0), 0)
@@ -91,27 +109,13 @@ export default function DashboardProjetoPage() {
   // Totais por seção
   const totaisPorSecao = useMemo(() => {
     return ORDEM_SECOES.map(secao => {
-      const itens = projeto.secoes?.[secao] || []
+      const itens = secoes[secao] || []
       const totais = calcularTotaisItens(itens)
       return { secao, nome: NOMES_SECOES[secao], itens: itens.length, ...totais }
     })
-  }, [projeto])
+  }, [secoes])
 
   const totalContratadoGeral = totaisPorSecao.reduce((a, s) => a + s.totalContratado, 0)
-
-  function atualizarReceita(linha, campo, valor) {
-    const conciliacaoEverest = {
-      ...projeto.conciliacaoEverest,
-      receitas: {
-        ...(projeto.conciliacaoEverest?.receitas || {}),
-        [linha]: {
-          ...(projeto.conciliacaoEverest?.receitas?.[linha] || {}),
-          [campo]: Number(valor) || 0,
-        }
-      }
-    }
-    setProjetos(prev => prev.map(p => p.id === id ? { ...p, conciliacaoEverest } : p))
-  }
 
   return (
     <div>
@@ -179,8 +183,8 @@ export default function DashboardProjetoPage() {
               {/* Custos */}
               {LINHAS_CUSTO.map(linha => {
                 const c = custosPorCategoria[linha] || {}
-                const pago = projeto.conciliacaoEverest?.[linha]?.valorPago || 0
-                const falta = projeto.conciliacaoEverest?.[linha]?.faltaPagar || 0
+                const pago = conciliacao[linha]?.valorPago || 0
+                const falta = conciliacao[linha]?.faltaPagar || 0
                 return (
                   <tr key={linha}>
                     <td style={{ padding: '7px 16px', color: '#1E293B' }}>{linha}</td>
