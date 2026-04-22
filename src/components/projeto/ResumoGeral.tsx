@@ -8,16 +8,44 @@ interface ResumoGeralProps {
   onUpdateReceitas: (r: Receitas) => void
 }
 
-const INPUT = 'bg-transparent border border-transparent hover:border-blue-200 focus:border-blue-400 rounded px-1 py-0.5 text-right text-sm w-full focus:outline-none'
-
+// Input BRL inline: mostra valor formatado, clica para editar com vírgula decimal
 function ReceitaInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [raw, setRaw] = useState('')
+
+  function startEdit() {
+    setEditing(true)
+    setRaw(value === 0 ? '' : String(value).replace('.', ','))
+  }
+
+  function commit() {
+    setEditing(false)
+    const n = parseFloat(raw.replace(/\./g, '').replace(',', '.')) || 0
+    onChange(n)
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={raw}
+        onChange={(e) => setRaw(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Tab') commit() }}
+        className="w-full text-right bg-white border border-blue-400 rounded px-2 py-0.5 text-sm text-gray-800 focus:outline-none"
+        placeholder="0,00"
+      />
+    )
+  }
+
   return (
-    <input
-      type="number"
-      className={INPUT}
-      value={value || ''}
-      onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-    />
+    <span
+      onClick={startEdit}
+      className="block w-full text-right cursor-pointer hover:bg-blue-50 rounded px-2 py-0.5 text-sm text-text-main transition-colors"
+      title="Clique para editar"
+    >
+      {value ? formatBRL(value) : <span className="text-text-muted italic text-xs">clique para preencher</span>}
+    </span>
   )
 }
 
@@ -26,7 +54,6 @@ function ValorCell({ value, className = '' }: { value: number; className?: strin
 }
 
 export function ResumoGeral({ projeto, onUpdateReceitas }: ResumoGeralProps) {
-  const [editReceitas, setEditReceitas] = useState(false)
   const resumo = calcResumoProjeto(projeto)
   const r = projeto.receitas
 
@@ -47,12 +74,7 @@ export function ResumoGeral({ projeto, onUpdateReceitas }: ResumoGeralProps) {
       <div className="card overflow-x-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-text-main">Resumo Geral</h3>
-          <button
-            className="btn-secondary text-xs py-1 px-3"
-            onClick={() => setEditReceitas(!editReceitas)}
-          >
-            {editReceitas ? 'Salvar Receitas' : 'Editar Receitas'}
-          </button>
+          <span className="text-text-muted text-xs italic">Clique em qualquer receita para editar</span>
         </div>
 
         <table className="w-full border-collapse text-sm">
@@ -73,18 +95,15 @@ export function ResumoGeral({ projeto, onUpdateReceitas }: ResumoGeralProps) {
                 Receitas
               </td>
             </tr>
+
             {RECEITA_CAMPOS.map(({ label, key }) => (
               <tr key={key} className="border-b border-white/5 hover:bg-white/5">
-                <td className="px-3 py-1.5 text-text-main text-sm">{label}</td>
-                <td className="text-right px-3 py-1.5">
-                  {editReceitas ? (
-                    <ReceitaInput
-                      value={r[key]}
-                      onChange={(v) => onUpdateReceitas({ ...r, [key]: v })}
-                    />
-                  ) : (
-                    <span className="text-sm">{formatBRL(r[key])}</span>
-                  )}
+                <td className="px-3 py-1 text-text-main text-sm">{label}</td>
+                <td className="px-2 py-0.5 min-w-[160px]">
+                  <ReceitaInput
+                    value={r[key]}
+                    onChange={(v) => onUpdateReceitas({ ...r, [key]: v })}
+                  />
                 </td>
                 <td className="text-right px-3 py-1.5 text-text-muted text-sm">—</td>
                 <td className="text-right px-3 py-1.5 text-text-muted text-sm">—</td>
@@ -92,6 +111,7 @@ export function ResumoGeral({ projeto, onUpdateReceitas }: ResumoGeralProps) {
                 <td className="text-right px-3 py-1.5 text-text-muted text-sm">—</td>
               </tr>
             ))}
+
             {/* RECEITA BAILE */}
             <tr className="bg-blue-50 border-t-2 border-blue-200">
               <td className="px-3 py-2 font-bold text-blue-800 text-sm">RECEITA BAILE</td>
@@ -104,7 +124,7 @@ export function ResumoGeral({ projeto, onUpdateReceitas }: ResumoGeralProps) {
 
             {/* CUSTOS */}
             <tr>
-              <td colSpan={6} className="px-3 py-1 text-xs font-bold text-text-muted uppercase tracking-wide bg-surface border-t border-white/10 mt-2">
+              <td colSpan={6} className="px-3 py-1 text-xs font-bold text-text-muted uppercase tracking-wide bg-surface border-t border-white/10">
                 Custos
               </td>
             </tr>
@@ -118,6 +138,7 @@ export function ResumoGeral({ projeto, onUpdateReceitas }: ResumoGeralProps) {
                 <ValorCell value={c.faltaPagar} className={c.faltaPagar > 0 ? 'text-danger' : ''} />
               </tr>
             ))}
+
             {/* CUSTO TOTAL */}
             <tr className="bg-surface-2 border-t-2 border-white/20">
               <td className="px-3 py-2 font-bold text-text-main text-sm">CUSTO TOTAL</td>
