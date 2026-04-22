@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { font-family: 'DM Sans', sans-serif; }
+  body {
+    background-color: #0f0f1a;
+    color: #f0f0f0;
+    margin: 0;
+  }
+  * { box-sizing: border-box; }
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button { opacity: 0.5; }
+}
+
+@layer components {
+  .table-po {
+    background-color: #ffffff;
+    color: #1a1a2e;
+    border-radius: 8px;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.73rem;
+  }
+  .table-po th {
+    background-color: #1a1a2e;
+    color: #f0f0f0;
+    padding: 6px 8px;
+    text-align: left;
+    font-weight: 600;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .table-po td {
+    padding: 3px 6px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: middle;
+  }
+  .table-po tr.row-fechado > td { background-color: #f0fdf4; color: #166534; }
+  .table-po tr.row-orcar > td { background-color: #fffbeb; color: #92400e; }
+  .table-po tr.row-area > td {
+    background-color: #e2e8f0;
+    color: #1e293b;
+    font-weight: 700;
+  }
+  .table-po tr.row-subtotal > td { background-color: #f8fafc; font-weight: 600; }
+  .table-po tr.row-total > td {
+    background-color: #1a1a2e;
+    color: #ffffff;
+    font-weight: 700;
+  }
+  .table-po tr.row-cpf > td {
+    background-color: #f1f5f9;
+    color: #475569;
+    font-style: italic;
+    font-size: 0.7rem;
+  }
+  .table-po input,
+  .table-po select {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 2px 4px;
+    width: 100%;
+    font-size: 0.73rem;
+    color: inherit;
+    font-family: inherit;
+  }
+  .table-po input:focus,
+  .table-po select:focus {
+    outline: 2px solid #e94560;
+    background: white;
+  }
+  .btn-primary {
+    @apply bg-primary text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity text-sm cursor-pointer;
+  }
+  .btn-secondary {
+    @apply bg-surface-2 text-text-main px-4 py-2 rounded-lg font-medium hover:bg-surface transition-colors text-sm border border-white/10 cursor-pointer;
+  }
+  .card {
+    @apply bg-surface rounded-[12px] shadow-card p-6;
+  }
+}
