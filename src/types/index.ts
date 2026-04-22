@@ -71,14 +71,21 @@ export interface TAP {
   local: string
 }
 
+export interface ReceitaLinha {
+  vendido: number
+  orcado: number
+  contratado: number
+  pago: number
+}
+
 export interface Receitas {
-  faturamentoAdesoes: number
-  vendasConvitesExtras: number
-  vendasMesasExtras: number
-  arrecadacaoExtra: number
-  receitaVendasBaile: number
-  outros: number
-  receitaRescisoes: number
+  faturamentoAdesoes: ReceitaLinha
+  vendasConvitesExtras: ReceitaLinha
+  vendasMesasExtras: ReceitaLinha
+  arrecadacaoExtra: ReceitaLinha
+  receitaVendasBaile: ReceitaLinha
+  outros: ReceitaLinha
+  receitaRescisoes: ReceitaLinha
 }
 
 export interface Projeto {

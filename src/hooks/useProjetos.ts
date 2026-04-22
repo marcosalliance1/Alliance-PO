@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { Projeto, SecaoCusto, ItemCusto, TAP, Receitas } from '../types'
 import { v4 as uuid } from '../utils/uuid'
 import { getSecoesPorTipo } from '../data/secoesPorTipo'
-import { calcItemTotais } from '../utils/calculos'
+import { calcItemTotais, migrateReceitas, emptyReceitas } from '../utils/calculos'
 import { supabase } from '../lib/supabase'
 
 function rowToProjeto(row: Record<string, unknown>): Projeto {
@@ -10,7 +10,7 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
     id: row.id as string,
     tap: row.tap as TAP,
     secoes: row.secoes as SecaoCusto[],
-    receitas: row.receitas as Receitas,
+    receitas: migrateReceitas(row.receitas), // migra formato antigo automaticamente
     criadoEm: row.criado_em as string,
     atualizadoEm: row.atualizado_em as string,
     importadoDe: (row.importado_de as string) ?? undefined,
@@ -42,10 +42,7 @@ export function useProjetos() {
     const secoes: SecaoCusto[] = getSecoesPorTipo(tap.tipoEscola).map((def) => ({
       id: uuid(), numero: def.numero, nome: def.nome, itens: [],
     }))
-    const receitas: Receitas = {
-      faturamentoAdesoes: 0, vendasConvitesExtras: 0, vendasMesasExtras: 0,
-      arrecadacaoExtra: 0, receitaVendasBaile: 0, outros: 0, receitaRescisoes: 0,
-    }
+    const receitas: Receitas = emptyReceitas()
     const id = uuid()
     const { data, error: err } = await supabase
       .from('projetos')

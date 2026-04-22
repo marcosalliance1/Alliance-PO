@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx'
 import type { Projeto, SecaoCusto, ItemCusto, TAP, TipoEscola, StatusItem, StatusPagamento, TipoCusto } from '../types'
 import { v4 as uuid } from './uuid'
 import { getSecoesPorTipo } from '../data/secoesPorTipo'
-import { calcValorProjetado } from './calculos'
+import { calcValorProjetado, emptyReceitas } from './calculos'
 
 const MAPA_SECOES: Record<string, string> = {
   'custo producao': '2.1',
@@ -325,15 +325,7 @@ export function importarXlsx(buffer: ArrayBuffer, nomeArquivo: string): ImportRe
     id: uuid(),
     tap,
     secoes,
-    receitas: {
-      faturamentoAdesoes: 0,
-      vendasConvitesExtras: 0,
-      vendasMesasExtras: 0,
-      arrecadacaoExtra: 0,
-      receitaVendasBaile: 0,
-      outros: 0,
-      receitaRescisoes: 0,
-    },
+    receitas: emptyReceitas(),
     criadoEm: new Date().toISOString(),
     atualizadoEm: new Date().toISOString(),
     importadoDe: nomeArquivo,
