@@ -88,11 +88,24 @@ export interface Receitas {
   receitaRescisoes: ReceitaLinha
 }
 
+export interface LinhaEverest {
+  secaoId: string
+  secaoNome: string
+  valorEverest: number
+  observacao: string
+}
+
+export interface ConciliacaoEverest {
+  linhas: LinhaEverest[]
+  observacaoGeral: string
+}
+
 export interface Projeto {
   id: string
   tap: TAP
   secoes: SecaoCusto[]
   receitas: Receitas
+  conciliacaoEverest?: ConciliacaoEverest
   criadoEm: string
   atualizadoEm: string
   importadoDe?: string

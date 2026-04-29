@@ -1,15 +1,18 @@
-import { useMemo, useCallback } from 'react'
-import type { SecaoCusto as TSecao, ItemCusto } from '../../types'
+import { useMemo, useCallback, useState } from 'react'
+import type { SecaoCusto as TSecao, ItemCusto, ItemCatalogo } from '../../types'
 import { LinhaItem } from './LinhaItem'
 import { TotaisSecaoRow } from './TotaisSecao'
+import { ModalBancoItens } from './ModalBancoItens'
 import { calcTotaisSecao } from '../../utils/calculos'
 import { formatBRL } from '../../utils/formatters'
-import { Plus } from 'lucide-react'
+import { Plus, BookOpen } from 'lucide-react'
 
 interface SecaoCustoProps {
   secao: TSecao
   qtdFormandos: number
+  bancoItens?: ItemCatalogo[]
   onAddItem: () => void
+  onAddItemFromBanco?: (partial: Partial<ItemCusto>) => void
   onUpdateItem: (itemId: string, changes: Partial<ItemCusto>) => void
   onDeleteItem: (itemId: string) => void
   fornecedoresSugeridos?: string[]
@@ -29,11 +32,14 @@ const COLUNAS = [
 export function SecaoCusto({
   secao,
   qtdFormandos,
+  bancoItens = [],
   onAddItem,
+  onAddItemFromBanco,
   onUpdateItem,
   onDeleteItem,
   fornecedoresSugeridos = [],
 }: SecaoCustoProps) {
+  const [showBanco, setShowBanco] = useState(false)
   const totais = useMemo(() => calcTotaisSecao(secao, qtdFormandos), [secao, qtdFormandos])
 
   // Agrupar itens por área para exibir separadores
@@ -108,7 +114,25 @@ export function SecaoCusto({
         >
           <Plus size={13} /> Adicionar Item
         </button>
+        {bancoItens.length > 0 && onAddItemFromBanco && (
+          <button
+            onClick={() => setShowBanco(true)}
+            className="flex items-center gap-1.5 text-xs text-text-muted border border-white/20 hover:border-primary/30 hover:text-primary px-3 py-1.5 rounded-inner transition-colors"
+          >
+            <BookOpen size={13} /> Adicionar do Banco de Itens
+          </button>
+        )}
       </div>
+
+      {showBanco && onAddItemFromBanco && (
+        <ModalBancoItens
+          open={showBanco}
+          onClose={() => setShowBanco(false)}
+          itens={bancoItens}
+          secaoNumero={secao.numero}
+          onAdicionar={(partial) => { onAddItemFromBanco(partial); setShowBanco(false) }}
+        />
+      )}
     </div>
   )
 }

@@ -4,21 +4,37 @@ import type { Projeto, TipoEscola } from '../types'
 import { Header } from '../components/layout/Header'
 import { BadgeEscola } from '../components/ui/Badge'
 import { ImportadorPO } from '../components/projeto/ImportadorPO'
+import { AtualizadorPO } from '../components/projeto/AtualizadorPO'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { calcResumoProjeto, calcPercentFechados } from '../utils/calculos'
 import { formatBRL, formatPercent, formatDate } from '../utils/formatters'
 import { ProgressBar } from '../components/ui/ProgressBar'
-import { Plus, Upload, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Upload, Trash2, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
+
+function calcFrescor(atualizadoEm: string): { texto: string; cor: string } {
+  if (!atualizadoEm) return { texto: 'Nunca salvo', cor: '#e17055' }
+  const agora = new Date()
+  const atualizado = new Date(atualizadoEm)
+  const diffMs = agora.getTime() - atualizado.getTime()
+  const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffDias === 0) return { texto: 'Atualizado hoje', cor: '#00b894' }
+  if (diffDias === 1) return { texto: 'Atualizado ontem', cor: '#fdcb6e' }
+  if (diffDias <= 7) return { texto: `Atualizado há ${diffDias} dias`, cor: '#fdcb6e' }
+  return { texto: `Atualizado há ${diffDias} dias`, cor: '#e17055' }
+}
 
 interface ListaProjetosProps {
   projetos: Projeto[]
   onImportar: (p: Projeto) => Promise<void>
+  onAtualizar: (id: string, p: Projeto) => Promise<void>
   onExcluir: (id: string) => Promise<void>
 }
 
-export function ListaProjetos({ projetos, onImportar, onExcluir }: ListaProjetosProps) {
+export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir }: ListaProjetosProps) {
   const navigate = useNavigate()
   const [showImportar, setShowImportar] = useState(false)
+  const [atualizandoId, setAtualizandoId] = useState<string | null>(null)
   const [deletando, setDeletando] = useState<string | null>(null)
   const [filtroAno, setFiltroAno] = useState<number | null>(null)
   const [filtroTipo, setFiltroTipo] = useState<TipoEscola | ''>('')
@@ -43,6 +59,14 @@ export function ListaProjetos({ projetos, onImportar, onExcluir }: ListaProjetos
       const ano = p.tap.anoRealizacao
       if (!map.has(ano)) map.set(ano, [])
       map.get(ano)!.push(p)
+    }
+    // Ordena dentro de cada ano por atualizadoEm crescente (mais antigos primeiro)
+    for (const lista of map.values()) {
+      lista.sort((a, b) => {
+        const ta = a.atualizadoEm ? new Date(a.atualizadoEm).getTime() : 0
+        const tb = b.atualizadoEm ? new Date(b.atualizadoEm).getTime() : 0
+        return ta - tb
+      })
     }
     return Array.from(map.entries()).sort((a, b) => b[0] - a[0])
   }, [filtrados])
@@ -171,13 +195,31 @@ export function ListaProjetos({ projetos, onImportar, onExcluir }: ListaProjetos
 
                         <ProgressBar value={pct * 100} label={`Fechados: ${formatPercent(pct)}`} color="#00b894" />
 
-                        <button
-                          className="mt-3 text-danger/60 hover:text-danger text-xs flex items-center gap-1 transition-colors"
-                          onClick={(e) => { e.stopPropagation(); setDeletando(p.id) }}
+                        {/* Badge de frescor */}
+                        {(() => {
+                          const f = calcFrescor(p.atualizadoEm)
+                          return (
+                            <div className="flex items-center gap-1.5 mt-2">
+                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: f.cor, display: 'inline-block', flexShrink: 0 }} />
+                              <span className="text-[10px]" style={{ color: f.cor }}>{f.texto}</span>
+                            </div>
+                          )
+                        })()}
 
-                        >
-                          <Trash2 size={12} /> Excluir
-                        </button>
+                        <div className="flex items-center gap-3 mt-2">
+                          <button
+                            className="text-primary/60 hover:text-primary text-xs flex items-center gap-1 transition-colors"
+                            onClick={(e) => { e.stopPropagation(); setAtualizandoId(p.id) }}
+                          >
+                            <RefreshCw size={11} /> Atualizar P.O.
+                          </button>
+                          <button
+                            className="text-danger/60 hover:text-danger text-xs flex items-center gap-1 transition-colors"
+                            onClick={(e) => { e.stopPropagation(); setDeletando(p.id) }}
+                          >
+                            <Trash2 size={12} /> Excluir
+                          </button>
+                        </div>
                       </div>
                     )
                   })}
@@ -193,6 +235,14 @@ export function ListaProjetos({ projetos, onImportar, onExcluir }: ListaProjetos
         onClose={() => setShowImportar(false)}
         onImported={(p) => { onImportar(p); navigate(`/projetos/${p.id}`) }}
       />
+
+      {atualizandoId && (
+        <AtualizadorPO
+          projetoAtual={projetos.find((p) => p.id === atualizandoId)!}
+          onClose={() => setAtualizandoId(null)}
+          onAtualizado={(p) => { onAtualizar(atualizandoId, p); setAtualizandoId(null) }}
+        />
+      )}
 
       <ConfirmDialog
         open={!!deletando}

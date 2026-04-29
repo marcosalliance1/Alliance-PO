@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Projeto, SecaoCusto, ItemCusto, TAP, Receitas } from '../types'
+import type { Projeto, SecaoCusto, ItemCusto, TAP, Receitas, ConciliacaoEverest } from '../types'
 import { v4 as uuid } from '../utils/uuid'
 import { getSecoesPorTipo } from '../data/secoesPorTipo'
 import { calcItemTotais, migrateReceitas, emptyReceitas } from '../utils/calculos'
@@ -10,7 +10,8 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
     id: row.id as string,
     tap: row.tap as TAP,
     secoes: row.secoes as SecaoCusto[],
-    receitas: migrateReceitas(row.receitas), // migra formato antigo automaticamente
+    receitas: migrateReceitas(row.receitas),
+    conciliacaoEverest: (row.conciliacao_everest as ConciliacaoEverest) ?? undefined,
     criadoEm: row.criado_em as string,
     atualizadoEm: row.atualizado_em as string,
     importadoDe: (row.importado_de as string) ?? undefined,
@@ -57,6 +58,7 @@ export function useProjetos() {
 
   // ── Salvar / upsert ─────────────────────────────────────────────────────────
   const salvarProjeto = useCallback(async (projeto: Projeto) => {
+    const now = new Date().toISOString()
     const { error: err } = await supabase
       .from('projetos')
       .upsert({
@@ -64,13 +66,15 @@ export function useProjetos() {
         tap: projeto.tap,
         secoes: projeto.secoes,
         receitas: projeto.receitas,
+        conciliacao_everest: projeto.conciliacaoEverest ?? null,
         importado_de: projeto.importadoDe ?? null,
+        atualizado_em: now,
       })
     if (err) throw new Error(err.message)
-    setProjetos((prev) => prev.map((p) => p.id === projeto.id ? projeto : p))
+    setProjetos((prev) => prev.map((p) => p.id === projeto.id ? { ...projeto, atualizadoEm: now } : p))
   }, [])
 
-  // ── Importar (upsert completo) ──────────────────────────────────────────────
+  // ── Importar (upsert completo — novo projeto) ───────────────────────────────
   const importarProjeto = useCallback(async (projeto: Projeto) => {
     const { error: err } = await supabase
       .from('projetos')
@@ -79,13 +83,35 @@ export function useProjetos() {
         tap: projeto.tap,
         secoes: projeto.secoes,
         receitas: projeto.receitas,
+        conciliacao_everest: projeto.conciliacaoEverest ?? null,
         importado_de: projeto.importadoDe ?? null,
+        atualizado_em: new Date().toISOString(),
       })
     if (err) throw new Error(err.message)
     setProjetos((prev) => {
       const existe = prev.find((p) => p.id === projeto.id)
       return existe ? prev.map((p) => p.id === projeto.id ? projeto : p) : [projeto, ...prev]
     })
+  }, [])
+
+  // ── Reimportar (atualizar projeto existente a partir de novo xlsx) ──────────
+  const reimportarProjeto = useCallback(async (id: string, novosProjeto: Projeto) => {
+    const now = new Date().toISOString()
+    const { error: err } = await supabase
+      .from('projetos')
+      .update({
+        tap: novosProjeto.tap,
+        secoes: novosProjeto.secoes,
+        importado_de: novosProjeto.importadoDe ?? null,
+        atualizado_em: now,
+      })
+      .eq('id', id)
+    if (err) throw new Error(err.message)
+    setProjetos((prev) => prev.map((p) =>
+      p.id === id
+        ? { ...p, tap: novosProjeto.tap, secoes: novosProjeto.secoes, importadoDe: novosProjeto.importadoDe, atualizadoEm: now }
+        : p,
+    ))
   }, [])
 
   // ── Excluir ─────────────────────────────────────────────────────────────────
@@ -96,10 +122,11 @@ export function useProjetos() {
   }, [])
 
   // ── Helpers internos para salvar seções ────────────────────────────────────
-  async function patchProjeto(id: string, patch: Partial<{ tap: TAP; secoes: SecaoCusto[]; receitas: Receitas }>) {
-    const { error: err } = await supabase.from('projetos').update(patch).eq('id', id)
+  async function patchProjeto(id: string, patch: Partial<{ tap: TAP; secoes: SecaoCusto[]; receitas: Receitas; conciliacao_everest: unknown }>) {
+    const now = new Date().toISOString()
+    const { error: err } = await supabase.from('projetos').update({ ...patch, atualizado_em: now }).eq('id', id)
     if (err) throw new Error(err.message)
-    setProjetos((prev) => prev.map((p) => p.id === id ? { ...p, ...patch } : p))
+    setProjetos((prev) => prev.map((p) => p.id === id ? { ...p, ...patch, atualizadoEm: now } : p))
   }
 
   // ── TAP ─────────────────────────────────────────────────────────────────────
@@ -172,6 +199,11 @@ export function useProjetos() {
     await patchProjeto(projetoId, { secoes })
   }, [projetos])
 
+  // ── Conciliação Everest ──────────────────────────────────────────────────────
+  const atualizarConciliacao = useCallback(async (projetoId: string, conciliacaoEverest: ConciliacaoEverest) => {
+    await patchProjeto(projetoId, { conciliacao_everest: conciliacaoEverest })
+  }, [projetos]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const getProjeto = useCallback(
     (id: string) => projetos.find((p) => p.id === id),
     [projetos],
@@ -179,8 +211,8 @@ export function useProjetos() {
 
   return {
     projetos, loading, error,
-    carregar, criarProjeto, salvarProjeto, importarProjeto, excluirProjeto,
-    atualizarTAP, atualizarReceitas, adicionarItem, atualizarItem, excluirItem,
+    carregar, criarProjeto, salvarProjeto, importarProjeto, reimportarProjeto, excluirProjeto,
+    atualizarTAP, atualizarReceitas, atualizarConciliacao, adicionarItem, atualizarItem, excluirItem,
     getProjeto,
   }
 }

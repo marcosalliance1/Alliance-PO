@@ -25,7 +25,8 @@ function Spinner() {
 // ── Página de projeto isolada (precisa do hook próprio) ──────────────────────
 function ProjetoPage() {
   const { id } = useParams<{ id: string }>()
-  const { projetos, loading, atualizarTAP, atualizarReceitas, adicionarItem, atualizarItem, excluirItem, salvarProjeto } = useProjetos()
+  const { projetos, loading, atualizarTAP, atualizarReceitas, atualizarConciliacao, adicionarItem, atualizarItem, excluirItem, salvarProjeto } = useProjetos()
+  const { itens: bancoItens } = useBancoItens()
   const { config } = useConfiguracoes()
 
   if (loading) return <Spinner />
@@ -35,9 +36,12 @@ function ProjetoPage() {
   return (
     <ViewProjeto
       projeto={projeto}
+      bancoItens={bancoItens}
       onUpdateTAP={(tap: TAP) => atualizarTAP(projeto.id, tap)}
       onUpdateReceitas={(r: Receitas) => atualizarReceitas(projeto.id, r)}
+      onUpdateConciliacao={(c) => atualizarConciliacao(projeto.id, c)}
       onAddItem={(secaoId: string) => adicionarItem(projeto.id, secaoId, {})}
+      onAddItemFromBanco={(secaoId: string, partial: Partial<ItemCusto>) => adicionarItem(projeto.id, secaoId, partial)}
       onUpdateItem={(secaoId: string, itemId: string, changes: Partial<ItemCusto>) =>
         atualizarItem(projeto.id, secaoId, itemId, changes)
       }
@@ -50,7 +54,7 @@ function ProjetoPage() {
 
 // ── Rotas principais ─────────────────────────────────────────────────────────
 function AppRoutes() {
-  const { projetos, loading: loadingProjetos, criarProjeto, importarProjeto, excluirProjeto } = useProjetos()
+  const { projetos, loading: loadingProjetos, criarProjeto, importarProjeto, reimportarProjeto, excluirProjeto } = useProjetos()
   const { itens, loading: loadingItens, adicionarItem, atualizarItem, desativarItem, reativarItem } = useBancoItens()
   const { config, salvarConfig } = useConfiguracoes()
 
@@ -110,6 +114,7 @@ function AppRoutes() {
               <ListaProjetos
                 projetos={projetos}
                 onImportar={(p) => importarProjeto(p)}
+                onAtualizar={(id, p) => reimportarProjeto(id, p)}
                 onExcluir={(id) => excluirProjeto(id)}
               />
             )

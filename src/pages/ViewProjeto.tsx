@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { Projeto, ItemCusto, TAP, Receitas } from '../types'
+import type { Projeto, ItemCusto, ItemCatalogo, TAP, Receitas, ConciliacaoEverest } from '../types'
 import { TAPForm } from '../components/projeto/TAPForm'
 import { SecaoCusto } from '../components/projeto/SecaoCusto'
 import { ResumoGeral } from '../components/projeto/ResumoGeral'
@@ -10,9 +10,12 @@ import { ArrowLeft, Save, Check, Loader } from 'lucide-react'
 
 interface ViewProjetoProps {
   projeto: Projeto
+  bancoItens?: ItemCatalogo[]
   onUpdateTAP: (tap: TAP) => void
   onUpdateReceitas: (r: Receitas) => void
+  onUpdateConciliacao: (c: ConciliacaoEverest) => void
   onAddItem: (secaoId: string) => void
+  onAddItemFromBanco: (secaoId: string, partial: Partial<ItemCusto>) => void
   onUpdateItem: (secaoId: string, itemId: string, changes: Partial<ItemCusto>) => void
   onDeleteItem: (secaoId: string, itemId: string) => void
   onSalvar: () => Promise<void>
@@ -23,9 +26,12 @@ type SalvarEstado = 'idle' | 'saving' | 'saved' | 'error'
 
 export function ViewProjeto({
   projeto,
+  bancoItens = [],
   onUpdateTAP,
   onUpdateReceitas,
+  onUpdateConciliacao,
   onAddItem,
+  onAddItemFromBanco,
   onUpdateItem,
   onDeleteItem,
   onSalvar,
@@ -123,7 +129,9 @@ export function ViewProjeto({
             key={secao.id}
             secao={secao}
             qtdFormandos={projeto.tap.qtdFormandos}
+            bancoItens={bancoItens}
             onAddItem={() => onAddItem(secao.id)}
+            onAddItemFromBanco={(partial) => onAddItemFromBanco(secao.id, partial)}
             onUpdateItem={(itemId, changes) => handleUpdateItem(secao.id, itemId, changes)}
             onDeleteItem={(itemId) => onDeleteItem(secao.id, itemId)}
             fornecedoresSugeridos={fornecedoresSugeridos}
@@ -132,7 +140,7 @@ export function ViewProjeto({
       )}
 
       {abaAtiva === 'dashboard' && (
-        <ResumoGeral projeto={projeto} onUpdateReceitas={onUpdateReceitas} />
+        <ResumoGeral projeto={projeto} onUpdateReceitas={onUpdateReceitas} onUpdateConciliacao={onUpdateConciliacao} />
       )}
     </div>
   )
