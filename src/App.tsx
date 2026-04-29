@@ -54,7 +54,7 @@ function ProjetoPage() {
 
 // ── Rotas principais ─────────────────────────────────────────────────────────
 function AppRoutes() {
-  const { projetos, loading: loadingProjetos, criarProjeto, importarProjeto, reimportarProjeto, excluirProjeto } = useProjetos()
+  const { projetos, loading: loadingProjetos, criarProjeto, importarProjeto, reimportarProjeto, excluirProjeto, sincronizarSecoes, atualizarSheetsUrl } = useProjetos()
   const { itens, loading: loadingItens, adicionarItem, atualizarItem, desativarItem, reativarItem } = useBancoItens()
   const { config, salvarConfig } = useConfiguracoes()
 
@@ -116,6 +116,8 @@ function AppRoutes() {
                 onImportar={(p) => importarProjeto(p)}
                 onAtualizar={(id, p) => reimportarProjeto(id, p)}
                 onExcluir={(id) => excluirProjeto(id)}
+                onSincronizar={sincronizarSecoes}
+                onAtualizarSheetsUrl={atualizarSheetsUrl}
               />
             )
           }

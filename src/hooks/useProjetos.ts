@@ -15,6 +15,7 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
     criadoEm: row.criado_em as string,
     atualizadoEm: row.atualizado_em as string,
     importadoDe: (row.importado_de as string) ?? undefined,
+    sheetsUrl: (row.sheets_url as string) ?? undefined,
   }
 }
 
@@ -209,10 +210,30 @@ export function useProjetos() {
     [projetos],
   )
 
+  // ── Sincronização Google Sheets ─────────────────────────────────────────────
+  const sincronizarSecoes = useCallback(async (id: string, secoes: SecaoCusto[]) => {
+    const now = new Date().toISOString()
+    const { error: err } = await supabase
+      .from('projetos')
+      .update({ secoes, atualizado_em: now })
+      .eq('id', id)
+    if (err) throw new Error(err.message)
+    setProjetos((prev) => prev.map((p) => p.id === id ? { ...p, secoes, atualizadoEm: now } : p))
+  }, [])
+
+  const atualizarSheetsUrl = useCallback(async (id: string, url: string) => {
+    const { error: err } = await supabase
+      .from('projetos')
+      .update({ sheets_url: url || null })
+      .eq('id', id)
+    if (err) throw new Error(err.message)
+    setProjetos((prev) => prev.map((p) => p.id === id ? { ...p, sheetsUrl: url || undefined } : p))
+  }, [])
+
   return {
     projetos, loading, error,
     carregar, criarProjeto, salvarProjeto, importarProjeto, reimportarProjeto, excluirProjeto,
     atualizarTAP, atualizarReceitas, atualizarConciliacao, adicionarItem, atualizarItem, excluirItem,
-    getProjeto,
+    getProjeto, sincronizarSecoes, atualizarSheetsUrl,
   }
 }

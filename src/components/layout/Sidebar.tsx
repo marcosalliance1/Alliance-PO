@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, FolderOpen, BookOpen, Settings } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, BookOpen, Settings, Globe, CheckCircle, LogOut, Loader } from 'lucide-react'
+import { useGoogleAuth } from '../../contexts/GoogleAuthContext'
 
 const links = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -9,6 +10,8 @@ const links = [
 ]
 
 export function Sidebar() {
+  const { conectado, conectar, desconectar, logando } = useGoogleAuth()
+
   return (
     <aside className="fixed left-0 top-0 h-screen w-56 bg-surface border-r border-white/10 flex flex-col z-30">
       <div className="px-6 py-5 border-b border-white/10">
@@ -34,7 +37,35 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      <div className="px-6 py-4 border-t border-white/10">
+
+      {/* Google Drive Auth */}
+      <div className="px-3 py-3 border-t border-white/10 space-y-1.5">
+        {conectado ? (
+          <>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-success/10 border border-success/20">
+              <CheckCircle size={13} className="text-success flex-shrink-0" />
+              <span className="text-xs text-success font-medium truncate">Google conectado</span>
+            </div>
+            <button
+              onClick={desconectar}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-text-muted hover:text-text-main hover:bg-white/5 transition-colors"
+            >
+              <LogOut size={13} /> Desconectar
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={conectar}
+            disabled={logando}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-text-muted hover:text-text-main hover:bg-white/5 transition-colors disabled:opacity-50"
+          >
+            {logando ? <Loader size={13} className="animate-spin" /> : <Globe size={13} />}
+            {logando ? 'Conectando...' : 'Conectar Google Drive'}
+          </button>
+        )}
+      </div>
+
+      <div className="px-6 py-3 border-t border-white/10">
         <div className="text-text-muted text-xs">Alliance Cerimonial</div>
       </div>
     </aside>

@@ -109,6 +109,7 @@ export interface Projeto {
   criadoEm: string
   atualizadoEm: string
   importadoDe?: string
+  sheetsUrl?: string
 }
 
 export interface ItemCatalogo {
