@@ -119,27 +119,29 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
     return projetosFiltrados
       .map((p) => {
         const resumo = calcResumoProjeto(p)
-        const margemOrcadaPct =
-          resumo.receitaBaile.orcado > 0
-            ? ((resumo.receitaBaile.orcado - resumo.custoTotal.orcado) / resumo.receitaBaile.orcado) * 100
-            : 0
-        const margemRealPct =
-          resumo.receitaBaile.vendido > 0
-            ? ((resumo.receitaBaile.vendido - resumo.custoTotal.vendido) / resumo.receitaBaile.vendido) * 100
-            : 0
+        const pct = (n: number, d: number) => (d > 0 ? (n / d) * 100 : 0)
+        const margemProjetadaPct = pct(
+          resumo.receitaBaile.vendido - resumo.custoTotal.projetado,
+          resumo.receitaBaile.vendido,
+        )
+        const margemOrcadaPct = pct(
+          resumo.receitaBaile.orcado - resumo.custoTotal.orcado,
+          resumo.receitaBaile.orcado,
+        )
+        const margemContratadaPct = pct(
+          resumo.receitaBaile.contratado - resumo.custoTotal.contratado,
+          resumo.receitaBaile.contratado,
+        )
         const faltaPagarR = resumo.custoTotal.faltaPagar
-        const pctFalta =
-          resumo.custoTotal.contratado > 0
-            ? (faltaPagarR / resumo.custoTotal.contratado) * 100
-            : 0
+        const pctFalta = pct(faltaPagarR, resumo.custoTotal.contratado)
         return {
           projeto: p,
+          margemProjetadaPct,
           margemOrcadaPct,
-          margemRealPct,
+          margemContratadaPct,
           faltaPagarR,
           pctFalta,
           alertaFalta: pctFalta > 20,
-          margemMelhorou: margemRealPct >= margemOrcadaPct,
         }
       })
       .sort((a, b) => b.margemOrcadaPct - a.margemOrcadaPct)
@@ -333,20 +335,23 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
                       </div>
 
                       {/* Margens */}
-                      <div className="flex items-center gap-4 shrink-0">
-                        <div className="text-center">
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="text-center min-w-[52px]">
+                          <p className="text-[10px] text-text-muted">Projetada</p>
+                          <p className="text-sm font-semibold" style={{ color: r.margemProjetadaPct >= 0 ? '#16A34A' : '#DC2626' }}>
+                            {r.margemProjetadaPct.toFixed(1)}%
+                          </p>
+                        </div>
+                        <div className="text-center min-w-[48px]">
                           <p className="text-[10px] text-text-muted">Orçada</p>
                           <p className="text-sm font-semibold" style={{ color: r.margemOrcadaPct >= 0 ? '#16A34A' : '#DC2626' }}>
                             {r.margemOrcadaPct.toFixed(1)}%
                           </p>
                         </div>
-                        <div className="text-center">
-                          <p className="text-[10px] text-text-muted">Real</p>
-                          <p
-                            className="text-sm font-bold"
-                            style={{ color: r.margemMelhorou ? '#16A34A' : '#DC2626' }}
-                          >
-                            {r.margemRealPct.toFixed(1)}%
+                        <div className="text-center min-w-[56px]">
+                          <p className="text-[10px] text-text-muted">Contratada</p>
+                          <p className="text-sm font-semibold" style={{ color: r.margemContratadaPct >= 0 ? '#16A34A' : '#DC2626' }}>
+                            {r.margemContratadaPct.toFixed(1)}%
                           </p>
                         </div>
                       </div>
@@ -361,31 +366,22 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
                       </div>
 
                       {/* Alertas */}
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {!r.margemMelhorou && (
-                          <span
-                            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                            style={{ background: 'rgba(220,38,38,0.12)', color: '#DC2626' }}
-                          >
-                            ↓ Real
-                          </span>
-                        )}
-                        {r.alertaFalta && (
+                      <div className="flex items-center gap-1.5 shrink-0 w-14">
+                        {r.alertaFalta ? (
                           <span
                             className="text-[10px] px-1.5 py-0.5 rounded font-medium"
                             style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B' }}
                           >
                             ⚠ Falta
                           </span>
-                        )}
-                        {r.margemMelhorou && !r.alertaFalta && (
+                        ) : r.margemOrcadaPct > 0 ? (
                           <span
                             className="text-[10px] px-1.5 py-0.5 rounded font-medium"
                             style={{ background: 'rgba(22,163,74,0.12)', color: '#16A34A' }}
                           >
                             ✓
                           </span>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   )

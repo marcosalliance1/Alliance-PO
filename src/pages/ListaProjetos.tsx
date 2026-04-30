@@ -3,13 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import type { Projeto, TipoEscola } from '../types'
 import type { SyncResult } from '../utils/sheetsSync'
 import { Header } from '../components/layout/Header'
-import { BadgeEscola } from '../components/ui/Badge'
 import { ImportadorPO } from '../components/projeto/ImportadorPO'
 import { AtualizadorPO } from '../components/projeto/AtualizadorPO'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Toast } from '../components/ui/Toast'
 import { calcResumoProjeto, calcPercentFechados } from '../utils/calculos'
-import { formatBRL, formatPercent, formatDate } from '../utils/formatters'
+import { formatBRL, formatPercent } from '../utils/formatters'
 import { ProgressBar } from '../components/ui/ProgressBar'
 import { sincronizarComSheets, extrairSpreadsheetId } from '../utils/sheetsSync'
 import { useGoogleAuth } from '../contexts/GoogleAuthContext'
@@ -72,19 +71,33 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
     })
   }, [projetos, filtroAno, filtroTipo])
 
+  const TIPO_ORDER: TipoEscola[] = ['SUPERIOR', 'MEDIO', 'FUNDAMENTAL']
+  const TIPO_LABEL: Record<TipoEscola, string> = {
+    SUPERIOR: 'Ensino Superior',
+    MEDIO: 'Ensino Médio',
+    FUNDAMENTAL: 'Ensino Fundamental',
+  }
+  const TIPO_COLOR: Record<TipoEscola, string> = {
+    SUPERIOR: '#6366F1',
+    MEDIO: '#0EA5E9',
+    FUNDAMENTAL: '#10B981',
+  }
+
+  // porAno: Map<ano, Map<tipoEscola, Projeto[]>>
   const porAno = useMemo(() => {
-    const map = new Map<number, Projeto[]>()
+    const map = new Map<number, Map<TipoEscola, Projeto[]>>()
     for (const p of filtrados) {
       const ano = p.tap.anoRealizacao
-      if (!map.has(ano)) map.set(ano, [])
-      map.get(ano)!.push(p)
+      if (!map.has(ano)) map.set(ano, new Map())
+      const porTipo = map.get(ano)!
+      const tipo = p.tap.tipoEscola
+      if (!porTipo.has(tipo)) porTipo.set(tipo, [])
+      porTipo.get(tipo)!.push(p)
     }
-    for (const lista of map.values()) {
-      lista.sort((a, b) => {
-        const ta = a.atualizadoEm ? new Date(a.atualizadoEm).getTime() : 0
-        const tb = b.atualizadoEm ? new Date(b.atualizadoEm).getTime() : 0
-        return ta - tb
-      })
+    for (const porTipo of map.values()) {
+      for (const lista of porTipo.values()) {
+        lista.sort((a, b) => (a.tap.turma ?? '').localeCompare(b.tap.turma ?? ''))
+      }
     }
     return Array.from(map.entries()).sort((a, b) => b[0] - a[0])
   }, [filtrados])
@@ -239,7 +252,9 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
         </div>
       ) : (
         <div className="space-y-4">
-          {porAno.map(([ano, lista]) => (
+          {porAno.map(([ano, porTipo]) => {
+            const totalAno = Array.from(porTipo.values()).reduce((s, l) => s + l.length, 0)
+            return (
             <div key={ano} className="card p-0 overflow-hidden">
               <button
                 className="w-full flex items-center justify-between px-5 py-3 border-b border-white/10 hover:bg-white/5 transition-colors"
@@ -248,111 +263,129 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
                 <div className="flex items-center gap-2">
                   {isOpen(ano) ? <ChevronDown size={16} className="text-text-muted" /> : <ChevronRight size={16} className="text-text-muted" />}
                   <span className="text-text-main font-semibold">{ano}</span>
-                  <span className="text-text-muted text-xs">{lista.length} projeto{lista.length !== 1 ? 's' : ''}</span>
+                  <span className="text-text-muted text-xs">{totalAno} projeto{totalAno !== 1 ? 's' : ''}</span>
                 </div>
               </button>
 
               {isOpen(ano) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-0 divide-y divide-white/5">
-                  {lista.map((p) => {
-                    const resumo = calcResumoProjeto(p)
-                    const pct = calcPercentFechados(p)
-                    const temSheets = !!p.sheetsUrl && !!extrairSpreadsheetId(p.sheetsUrl)
-                    const isSincronizando = !!sincronizando[p.id]
-
+                <div>
+                  {TIPO_ORDER.filter((tipo) => porTipo.has(tipo)).map((tipo) => {
+                    const lista = porTipo.get(tipo)!
                     return (
-                      <div
-                        key={p.id}
-                        className="p-4 hover:bg-white/5 cursor-pointer transition-colors"
-                        onClick={() => navigate(`/projetos/${p.id}`)}
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-text-main text-sm leading-tight">{p.tap.turma || '—'}</p>
-                            <p className="text-text-muted text-xs mt-0.5">{p.tap.instituicao || '—'}</p>
-                          </div>
-                          <div className="flex flex-col items-end gap-1 ml-2">
-                            <BadgeEscola tipo={p.tap.tipoEscola} />
-                            {temSheets && (
-                              <span className="text-[10px] text-success bg-success/10 border border-success/20 rounded-full px-1.5 py-0.5 flex items-center gap-1">
-                                <Cloud size={8} /> Sheets
-                              </span>
-                            )}
-                          </div>
+                      <div key={tipo}>
+                        {/* Cabeçalho do tipo de ensino */}
+                        <div
+                          className="flex items-center gap-2 px-5 py-2 border-b border-white/5"
+                          style={{ borderLeft: `3px solid ${TIPO_COLOR[tipo]}` }}
+                        >
+                          <span className="text-xs font-semibold" style={{ color: TIPO_COLOR[tipo] }}>
+                            {TIPO_LABEL[tipo]}
+                          </span>
+                          <span className="text-[11px] text-text-muted">
+                            {lista.length} projeto{lista.length !== 1 ? 's' : ''}
+                          </span>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mb-3">
-                          <div>
-                            <span className="text-text-muted">Orçado:</span>{' '}
-                            <span className="text-text-main font-medium">{formatBRL(resumo.custoTotal.orcado)}</span>
-                          </div>
-                          <div>
-                            <span className="text-text-muted">Receita:</span>{' '}
-                            <span className="text-text-main font-medium">{formatBRL(resumo.receitaBaile.vendido)}</span>
-                          </div>
-                          <div>
-                            <span className="text-text-muted">Margem:</span>{' '}
-                            <span className={`font-medium ${resumo.margem.vendido >= 0 ? 'text-success' : 'text-danger'}`}>
-                              {formatBRL(resumo.margem.vendido)}
-                            </span>
-                          </div>
-                          {p.tap.dataEvento && (
-                            <div>
-                              <span className="text-text-muted">Data:</span>{' '}
-                              <span className="text-text-main">{formatDate(p.tap.dataEvento)}</span>
-                            </div>
-                          )}
-                        </div>
+                        {/* Grid de cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-0 divide-y divide-white/5 border-b border-white/5">
+                          {lista.map((p) => {
+                            const resumo = calcResumoProjeto(p)
+                            const pct = calcPercentFechados(p)
+                            const temSheets = !!p.sheetsUrl && !!extrairSpreadsheetId(p.sheetsUrl)
+                            const isSincronizando = !!sincronizando[p.id]
+                            const margemPct = resumo.receitaBaile.vendido > 0
+                              ? ((resumo.receitaBaile.vendido - resumo.custoTotal.orcado) / resumo.receitaBaile.vendido) * 100
+                              : 0
 
-                        <ProgressBar value={pct * 100} label={`Fechados: ${formatPercent(pct)}`} color="#00b894" />
+                            return (
+                              <div
+                                key={p.id}
+                                className="p-4 hover:bg-white/5 cursor-pointer transition-colors"
+                                onClick={() => navigate(`/projetos/${p.id}`)}
+                              >
+                                {/* Cabeçalho do card */}
+                                <div className="flex items-start justify-between mb-2.5">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-semibold text-text-main text-sm leading-tight">
+                                      {p.tap.turma || '—'}
+                                    </p>
+                                    <p className="text-text-muted text-xs mt-0.5">{p.tap.instituicao || '—'}</p>
+                                  </div>
+                                  {temSheets && (
+                                    <span className="text-[10px] text-success bg-success/10 border border-success/20 rounded-full px-1.5 py-0.5 flex items-center gap-1 ml-2 shrink-0">
+                                      <Cloud size={8} /> Sheets
+                                    </span>
+                                  )}
+                                </div>
 
-                        {(() => {
-                          const f = calcFrescor(p.atualizadoEm)
-                          return (
-                            <div className="flex items-center gap-1.5 mt-2">
-                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: f.cor, display: 'inline-block', flexShrink: 0 }} />
-                              <span className="text-[10px]" style={{ color: f.cor }}>{f.texto}</span>
-                            </div>
-                          )
-                        })()}
+                                {/* Dados financeiros — 3 campos, uma linha */}
+                                <div className="flex items-center gap-4 text-xs mb-2.5">
+                                  <div>
+                                    <span className="text-text-muted">Receita</span>
+                                    <p className="font-semibold text-text-main">{formatBRL(resumo.receitaBaile.vendido)}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-text-muted">Custo Orç.</span>
+                                    <p className="font-semibold text-text-main">{formatBRL(resumo.custoTotal.orcado)}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-text-muted">Margem Orç.</span>
+                                    <p className={`font-semibold ${margemPct >= 0 ? 'text-success' : 'text-danger'}`}>
+                                      {margemPct.toFixed(1)}%
+                                    </p>
+                                  </div>
+                                </div>
 
-                        <div className="flex items-center gap-3 mt-2" onClick={e => e.stopPropagation()}>
-                          {/* Botão Sincronizar (se tiver Sheets) ou Atualizar P.O. (xlsx) */}
-                          {temSheets ? (
-                            <button
-                              className="text-primary/70 hover:text-primary text-xs flex items-center gap-1 transition-colors disabled:opacity-50"
-                              disabled={isSincronizando}
-                              onClick={() => handleSincronizar(p)}
-                            >
-                              {isSincronizando
-                                ? <><Loader size={11} className="animate-spin" /> Sincronizando...</>
-                                : <><Cloud size={11} /> Sincronizar</>
-                              }
-                            </button>
-                          ) : (
-                            <button
-                              className="text-primary/60 hover:text-primary text-xs flex items-center gap-1 transition-colors"
-                              onClick={() => setAtualizandoId(p.id)}
-                            >
-                              <RefreshCw size={11} /> Atualizar P.O.
-                            </button>
-                          )}
+                                <ProgressBar value={pct * 100} label={`Fechados: ${formatPercent(pct)}`} color="#00b894" />
 
-                          {/* Botão configurar URL Sheets */}
-                          <button
-                            className="text-text-muted/50 hover:text-text-muted text-xs flex items-center gap-1 transition-colors"
-                            title="Configurar URL do Google Sheets"
-                            onClick={() => { setUrlModalId(p.id); setUrlInput(p.sheetsUrl ?? ''); setShowUrlModal(true) }}
-                          >
-                            <Link size={11} />
-                          </button>
-
-                          <button
-                            className="text-danger/60 hover:text-danger text-xs flex items-center gap-1 transition-colors ml-auto"
-                            onClick={() => setDeletando(p.id)}
-                          >
-                            <Trash2 size={12} /> Excluir
-                          </button>
+                                {/* Frescor + ações */}
+                                <div className="flex items-center justify-between mt-2" onClick={(e) => e.stopPropagation()}>
+                                  {(() => {
+                                    const f = calcFrescor(p.atualizadoEm)
+                                    return (
+                                      <div className="flex items-center gap-1.5">
+                                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: f.cor, display: 'inline-block', flexShrink: 0 }} />
+                                        <span className="text-[10px]" style={{ color: f.cor }}>{f.texto}</span>
+                                      </div>
+                                    )
+                                  })()}
+                                  <div className="flex items-center gap-2">
+                                    {temSheets ? (
+                                      <button
+                                        className="text-primary/70 hover:text-primary text-xs flex items-center gap-1 transition-colors disabled:opacity-50"
+                                        disabled={isSincronizando}
+                                        onClick={() => handleSincronizar(p)}
+                                      >
+                                        {isSincronizando
+                                          ? <><Loader size={11} className="animate-spin" /> Sinc...</>
+                                          : <><Cloud size={11} /> Sincronizar</>}
+                                      </button>
+                                    ) : (
+                                      <button
+                                        className="text-primary/60 hover:text-primary text-xs flex items-center gap-1 transition-colors"
+                                        onClick={() => setAtualizandoId(p.id)}
+                                      >
+                                        <RefreshCw size={11} /> Atualizar
+                                      </button>
+                                    )}
+                                    <button
+                                      className="text-text-muted/40 hover:text-text-muted text-xs transition-colors"
+                                      title="Configurar URL Google Sheets"
+                                      onClick={() => { setUrlModalId(p.id); setUrlInput(p.sheetsUrl ?? ''); setShowUrlModal(true) }}
+                                    >
+                                      <Link size={11} />
+                                    </button>
+                                    <button
+                                      className="text-danger/50 hover:text-danger text-xs flex items-center gap-1 transition-colors"
+                                      onClick={() => setDeletando(p.id)}
+                                    >
+                                      <Trash2 size={11} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     )
@@ -360,7 +393,8 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
                 </div>
               )}
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
