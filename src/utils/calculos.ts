@@ -1,7 +1,10 @@
 import type { ItemCusto, SecaoCusto, Projeto, TotaisSecao, ResumoProjeto, Receitas, ReceitaLinha } from '../types'
 
 export function calcValorProjetado(valorUnitarioAtual: number, ipca: number, parcelas: number): number {
-  return valorUnitarioAtual * Math.pow(1 + ipca, parcelas)
+  const safeIpca = (ipca == null || isNaN(ipca)) ? 0 : ipca
+  // parcelas está em meses; ipca é taxa anual decimal (ex: 0.0594 = 5,94% a.a.)
+  const safeParcelas = (parcelas == null || isNaN(parcelas) || parcelas <= 0) ? 12 : parcelas
+  return valorUnitarioAtual * Math.pow(1 + safeIpca, safeParcelas / 12)
 }
 
 export function calcItemTotais(item: ItemCusto, ipca: number, parcelas: number): Partial<ItemCusto> {
@@ -16,14 +19,15 @@ export function calcItemTotais(item: ItemCusto, ipca: number, parcelas: number):
 
 export function calcTotaisSecao(secao: SecaoCusto, qtdFormandos: number): TotaisSecao {
   const itens = secao.itens
-  const totalVendido = itens.reduce((s, i) => s + i.totalAtual, 0)
-  const totalOrcado = itens.reduce((s, i) => s + i.valorOrcado, 0)
-  const totalContratado = itens.reduce((s, i) => s + i.valorContratado, 0)
-  const totalPago = itens.reduce((s, i) => s + i.valorPago, 0)
-  const totalFaltaPagar = itens.reduce((s, i) => s + i.faltaPagar, 0)
+  const totalVendido = itens.reduce((s, i) => s + (i.totalAtual ?? 0), 0)
+  const totalProjetado = itens.reduce((s, i) => s + (i.totalProjetado ?? 0), 0)
+  const totalOrcado = itens.reduce((s, i) => s + (i.valorOrcado ?? 0), 0)
+  const totalContratado = itens.reduce((s, i) => s + (i.valorContratado ?? 0), 0)
+  const totalPago = itens.reduce((s, i) => s + (i.valorPago ?? 0), 0)
+  const totalFaltaPagar = itens.reduce((s, i) => s + (i.faltaPagar ?? 0), 0)
   const qf = qtdFormandos || 1
   return {
-    totalVendido, totalOrcado, totalContratado, totalPago, totalFaltaPagar,
+    totalVendido, totalProjetado, totalOrcado, totalContratado, totalPago, totalFaltaPagar,
     custoPorFormandoVendido: totalVendido / qf,
     custoPorFormandoOrcado: totalOrcado / qf,
     custoPorFormandoContratado: totalContratado / qf,
@@ -89,6 +93,7 @@ export function calcResumoProjeto(projeto: Projeto): ResumoProjeto {
       secaoId: secao.id,
       nome: `${secao.numero} ${secao.nome}`,
       vendido: t.totalVendido,
+      projetado: t.totalProjetado,
       orcado: t.totalOrcado,
       contratado: t.totalContratado,
       pago: t.totalPago,
@@ -99,12 +104,13 @@ export function calcResumoProjeto(projeto: Projeto): ResumoProjeto {
   const custoTotal = custos.reduce(
     (acc, c) => ({
       vendido: acc.vendido + c.vendido,
+      projetado: acc.projetado + c.projetado,
       orcado: acc.orcado + c.orcado,
       contratado: acc.contratado + c.contratado,
       pago: acc.pago + c.pago,
       faltaPagar: acc.faltaPagar + c.faltaPagar,
     }),
-    { vendido: 0, orcado: 0, contratado: 0, pago: 0, faltaPagar: 0 },
+    { vendido: 0, projetado: 0, orcado: 0, contratado: 0, pago: 0, faltaPagar: 0 },
   )
 
   const margem = {

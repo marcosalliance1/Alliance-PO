@@ -133,6 +133,7 @@ export interface ConfiguracaoGlobal {
 
 export interface TotaisSecao {
   totalVendido: number
+  totalProjetado: number
   totalOrcado: number
   totalContratado: number
   totalPago: number
@@ -154,7 +155,7 @@ export interface ResumoLinhaReceita {
 export interface ResumoProjeto {
   receitas: ResumoLinhaReceita[]
   receitaBaile: ResumoLinhaReceita
-  custos: { secaoId: string; nome: string; vendido: number; orcado: number; contratado: number; pago: number; faltaPagar: number }[]
-  custoTotal: { vendido: number; orcado: number; contratado: number; pago: number; faltaPagar: number }
+  custos: { secaoId: string; nome: string; vendido: number; projetado: number; orcado: number; contratado: number; pago: number; faltaPagar: number }[]
+  custoTotal: { vendido: number; projetado: number; orcado: number; contratado: number; pago: number; faltaPagar: number }
   margem: { vendido: number; orcado: number; contratado: number; pago: number; faltaPagar: number }
 }

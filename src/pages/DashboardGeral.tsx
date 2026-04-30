@@ -1,19 +1,29 @@
 import { useMemo, useState } from 'react'
-import type { Projeto } from '../types'
+import { useNavigate } from 'react-router-dom'
+import type { Projeto, TipoEscola } from '../types'
 import { KPICard } from '../components/dashboard/KPICard'
 import { GraficoBarras } from '../components/dashboard/GraficoBarras'
 import { GraficoLinha } from '../components/dashboard/GraficoLinha'
 import { Header } from '../components/layout/Header'
 import { calcResumoProjeto, calcPercentFechados } from '../utils/calculos'
 import { formatBRL, formatPercent } from '../utils/formatters'
-import { FolderOpen, TrendingUp, DollarSign, CheckCircle, SlidersHorizontal, Package } from 'lucide-react'
+import { FolderOpen, TrendingUp, DollarSign, CheckCircle, SlidersHorizontal, Package, Award } from 'lucide-react'
 
 interface DashboardGeralProps {
   projetos: Projeto[]
 }
 
+const TIPO_ESCOLA_OPTS: { value: 'TODOS' | TipoEscola; label: string }[] = [
+  { value: 'TODOS', label: 'Todos' },
+  { value: 'SUPERIOR', label: 'Ensino Superior' },
+  { value: 'MEDIO', label: 'Ensino Médio' },
+  { value: 'FUNDAMENTAL', label: 'Ensino Fundamental' },
+]
+
 export function DashboardGeral({ projetos }: DashboardGeralProps) {
+  const navigate = useNavigate()
   const [filtroFornecedor, setFiltroFornecedor] = useState('')
+  const [filtroTipoEscola, setFiltroTipoEscola] = useState<'TODOS' | TipoEscola>('TODOS')
 
   const fornecedoresUsados = useMemo(() => {
     const names = new Set<string>()
@@ -24,11 +34,18 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
     return [...names].sort()
   }, [projetos])
 
-  const projetosFiltrados = useMemo(() =>
-    filtroFornecedor
-      ? projetos.filter(p => p.secoes.some(sec => sec.itens.some(i => i.fornecedor?.trim() === filtroFornecedor)))
-      : projetos,
-  [projetos, filtroFornecedor])
+  const projetosFiltrados = useMemo(() => {
+    let lista = projetos
+    if (filtroTipoEscola !== 'TODOS') {
+      lista = lista.filter((p) => p.tap.tipoEscola === filtroTipoEscola)
+    }
+    if (filtroFornecedor) {
+      lista = lista.filter((p) =>
+        p.secoes.some((sec) => sec.itens.some((i) => i.fornecedor?.trim() === filtroFornecedor)),
+      )
+    }
+    return lista
+  }, [projetos, filtroFornecedor, filtroTipoEscola])
 
   const kpis = useMemo(() => {
     let totalReceita = 0
@@ -97,27 +114,87 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
       .slice(0, 8)
   }, [projetosFiltrados])
 
-  const selectCls = 'bg-surface border border-white/10 rounded-inner px-3 py-2 text-sm text-text-main outline-none focus:border-primary hover:border-white/20 transition-colors'
+  // ── Ranking de projetos por margem (Correção 6) ───────────────────────────
+  const ranking = useMemo(() => {
+    return projetosFiltrados
+      .map((p) => {
+        const resumo = calcResumoProjeto(p)
+        const margemOrcadaPct =
+          resumo.receitaBaile.orcado > 0
+            ? ((resumo.receitaBaile.orcado - resumo.custoTotal.orcado) / resumo.receitaBaile.orcado) * 100
+            : 0
+        const margemRealPct =
+          resumo.receitaBaile.vendido > 0
+            ? ((resumo.receitaBaile.vendido - resumo.custoTotal.vendido) / resumo.receitaBaile.vendido) * 100
+            : 0
+        const faltaPagarR = resumo.custoTotal.faltaPagar
+        const pctFalta =
+          resumo.custoTotal.contratado > 0
+            ? (faltaPagarR / resumo.custoTotal.contratado) * 100
+            : 0
+        return {
+          projeto: p,
+          margemOrcadaPct,
+          margemRealPct,
+          faltaPagarR,
+          pctFalta,
+          alertaFalta: pctFalta > 20,
+          margemMelhorou: margemRealPct >= margemOrcadaPct,
+        }
+      })
+      .sort((a, b) => b.margemOrcadaPct - a.margemOrcadaPct)
+  }, [projetosFiltrados])
+
+  const selectCls =
+    'bg-surface border border-white/10 rounded-inner px-3 py-2 text-sm text-text-main outline-none focus:border-primary hover:border-white/20 transition-colors'
 
   return (
     <div>
       <Header title="Dashboard Geral" subtitle="Consolidado de todos os projetos" />
 
-      {/* ── Filtros ── */}
+      {/* ── Filtros ─────────────────────────────────────────────────────── */}
       <div className="card flex flex-wrap items-center gap-2 mb-6 p-3">
         <div className="flex items-center gap-1.5 text-text-muted pr-2 border-r border-white/10 mr-1">
           <SlidersHorizontal className="w-3.5 h-3.5" />
           <span className="text-xs font-medium">Filtros</span>
         </div>
+
+        {/* Toggle tipo de ensino */}
+        <div className="flex gap-1 bg-surface-2 rounded-inner p-0.5">
+          {TIPO_ESCOLA_OPTS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setFiltroTipoEscola(opt.value)}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                filtroTipoEscola === opt.value
+                  ? 'bg-primary text-white'
+                  : 'text-text-muted hover:text-text-main'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
         {fornecedoresUsados.length > 0 && (
-          <select value={filtroFornecedor} onChange={e => setFiltroFornecedor(e.target.value)} className={selectCls}>
+          <select
+            value={filtroFornecedor}
+            onChange={(e) => setFiltroFornecedor(e.target.value)}
+            className={selectCls}
+          >
             <option value="">Todos os fornecedores</option>
-            {fornecedoresUsados.map(f => <option key={f} value={f}>{f}</option>)}
+            {fornecedoresUsados.map((f) => (
+              <option key={f} value={f}>{f}</option>
+            ))}
           </select>
         )}
-        {filtroFornecedor && (
-          <button onClick={() => setFiltroFornecedor('')} className="ml-auto text-xs text-text-muted hover:text-text-main transition-colors underline underline-offset-2">
-            Limpar filtro
+
+        {(filtroFornecedor || filtroTipoEscola !== 'TODOS') && (
+          <button
+            onClick={() => { setFiltroFornecedor(''); setFiltroTipoEscola('TODOS') }}
+            className="ml-auto text-xs text-text-muted hover:text-text-main transition-colors underline underline-offset-2"
+          >
+            Limpar filtros
           </button>
         )}
       </div>
@@ -143,61 +220,183 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
         <div className="card text-center py-12">
           <p className="text-text-muted">Nenhum projeto encontrado.</p>
           <p className="text-text-muted text-sm mt-1">
-            {projetos.length === 0 ? 'Crie ou importe um projeto para ver os dados aqui.' : 'Ajuste os filtros para ver resultados.'}
+            {projetos.length === 0
+              ? 'Crie ou importe um projeto para ver os dados aqui.'
+              : 'Ajuste os filtros para ver resultados.'}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-6">
-          <div className="card">
-            <h3 className="text-sm font-semibold text-text-main mb-4">Receita vs Custo por Turma</h3>
-            <GraficoBarras data={barData} />
-          </div>
-
-          {/* Top Fornecedores */}
-          <div className="card">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-6 h-6 rounded flex items-center justify-center shrink-0" style={{ background: 'rgba(116,185,255,0.15)' }}>
-                <Package className="w-3.5 h-3.5" style={{ color: '#74b9ff' }} />
-              </div>
-              <h3 className="text-sm font-semibold text-text-main">Top Fornecedores por Custo</h3>
+        <>
+          <div className="grid grid-cols-2 gap-6 mb-6">
+            <div className="card">
+              <h3 className="text-sm font-semibold text-text-main mb-4">Receita vs Custo por Turma</h3>
+              <GraficoBarras data={barData} />
             </div>
-            {topFornecedores.length === 0 ? (
-              <p className="text-text-muted text-sm text-center py-8">Sem dados de fornecedores</p>
-            ) : (
-              <div className="space-y-3">
-                {topFornecedores.map((f, i) => {
-                  const maxOrcado = topFornecedores[0].orcado
-                  const pct = maxOrcado > 0 ? (f.orcado / maxOrcado) * 100 : 0
-                  const pagoPct = f.orcado > 0 ? (f.pago / f.orcado) * 100 : 0
-                  return (
-                    <div key={f.nome}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] text-text-muted w-3 text-right shrink-0">{i + 1}</span>
-                        <span className="text-xs text-text-main truncate flex-1" title={f.nome}>{f.nome}</span>
-                        <span className="text-xs font-medium text-text-main shrink-0">{formatBRL(f.orcado)}</span>
-                      </div>
-                      <div className="ml-5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                        <div className="h-full rounded-full relative" style={{ width: `${pct}%`, background: 'rgba(59,130,246,0.45)' }}>
-                          <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${pagoPct}%`, background: 'rgba(0,184,148,0.8)' }} />
+
+            {/* Top Fornecedores */}
+            <div className="card">
+              <div className="flex items-center gap-2 mb-4">
+                <div
+                  className="w-6 h-6 rounded flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(116,185,255,0.15)' }}
+                >
+                  <Package className="w-3.5 h-3.5" style={{ color: '#74b9ff' }} />
+                </div>
+                <h3 className="text-sm font-semibold text-text-main">Top Fornecedores por Custo</h3>
+              </div>
+              {topFornecedores.length === 0 ? (
+                <p className="text-text-muted text-sm text-center py-8">Sem dados de fornecedores</p>
+              ) : (
+                <div className="space-y-3">
+                  {topFornecedores.map((f, i) => {
+                    const maxOrcado = topFornecedores[0].orcado
+                    const pct = maxOrcado > 0 ? (f.orcado / maxOrcado) * 100 : 0
+                    const pagoPct = f.orcado > 0 ? (f.pago / f.orcado) * 100 : 0
+                    return (
+                      <div key={f.nome}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] text-text-muted w-3 text-right shrink-0">{i + 1}</span>
+                          <span className="text-xs text-text-main truncate flex-1" title={f.nome}>{f.nome}</span>
+                          <span className="text-xs font-medium text-text-main shrink-0">{formatBRL(f.orcado)}</span>
+                        </div>
+                        <div className="ml-5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                          <div className="h-full rounded-full relative" style={{ width: `${pct}%`, background: 'rgba(59,130,246,0.45)' }}>
+                            <div
+                              className="absolute inset-y-0 left-0 rounded-full"
+                              style={{ width: `${pagoPct}%`, background: 'rgba(0,184,148,0.8)' }}
+                            />
+                          </div>
+                        </div>
+                        <div className="ml-5 flex gap-3 mt-0.5">
+                          <span className="text-[9px]" style={{ color: '#74b9ff' }}>Orç. {formatBRL(f.orcado)}</span>
+                          <span className="text-[9px]" style={{ color: '#00b894' }}>Pago {formatBRL(f.pago)}</span>
                         </div>
                       </div>
-                      <div className="ml-5 flex gap-3 mt-0.5">
-                        <span className="text-[9px]" style={{ color: '#74b9ff' }}>Orç. {formatBRL(f.orcado)}</span>
-                        <span className="text-[9px]" style={{ color: '#00b894' }}>Pago {formatBRL(f.pago)}</span>
+                    )
+                  })}
+                </div>
+              )}
+              <p className="text-[10px] text-text-muted mt-4 text-center">Barra: azul = orçado · verde = pago</p>
+            </div>
+
+            <div className="card col-span-2">
+              <h3 className="text-sm font-semibold text-text-main mb-4">Evolução por Ano</h3>
+              <GraficoLinha data={lineData} />
+            </div>
+          </div>
+
+          {/* ── Ranking de projetos (Correção 6) ──────────────────────── */}
+          {ranking.length > 0 && (
+            <div className="card">
+              <div className="flex items-center gap-2 mb-4">
+                <div
+                  className="w-6 h-6 rounded flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(251,191,36,0.15)' }}
+                >
+                  <Award className="w-3.5 h-3.5" style={{ color: '#FBBF24' }} />
+                </div>
+                <h3 className="text-sm font-semibold text-text-main">
+                  Top Projetos — Margem de Contribuição
+                </h3>
+              </div>
+
+              <div className="space-y-2">
+                {ranking.map((r, idx) => {
+                  const titulo =
+                    r.projeto.tap.turma ||
+                    `${r.projeto.tap.instituicao} ${r.projeto.tap.curso}`.trim() ||
+                    `Projeto #${r.projeto.id.slice(0, 6)}`
+
+                  return (
+                    <div
+                      key={r.projeto.id}
+                      className="flex items-center gap-3 p-3 rounded-inner hover:bg-white/5 cursor-pointer transition-colors border border-white/5"
+                      onClick={() => navigate(`/projetos/${r.projeto.id}`)}
+                    >
+                      {/* Posição */}
+                      <span
+                        className="text-xs font-bold w-5 text-center shrink-0"
+                        style={{ color: idx === 0 ? '#FBBF24' : idx === 1 ? '#94A3B8' : idx === 2 ? '#CD7F32' : '#64748B' }}
+                      >
+                        {idx + 1}
+                      </span>
+
+                      {/* Nome + tipo escola */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-text-main truncate">{titulo}</p>
+                        <p className="text-[11px] text-text-muted">
+                          {r.projeto.tap.tipoEscola === 'SUPERIOR' ? 'Ensino Superior'
+                            : r.projeto.tap.tipoEscola === 'FUNDAMENTAL' ? 'Ensino Fundamental'
+                            : 'Ensino Médio'}
+                          {r.projeto.tap.anoRealizacao ? ` · ${r.projeto.tap.anoRealizacao}` : ''}
+                        </p>
+                      </div>
+
+                      {/* Margens */}
+                      <div className="flex items-center gap-4 shrink-0">
+                        <div className="text-center">
+                          <p className="text-[10px] text-text-muted">Orçada</p>
+                          <p className="text-sm font-semibold" style={{ color: r.margemOrcadaPct >= 0 ? '#16A34A' : '#DC2626' }}>
+                            {r.margemOrcadaPct.toFixed(1)}%
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] text-text-muted">Real</p>
+                          <p
+                            className="text-sm font-bold"
+                            style={{ color: r.margemMelhorou ? '#16A34A' : '#DC2626' }}
+                          >
+                            {r.margemRealPct.toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Falta Pagar */}
+                      <div className="text-right shrink-0 min-w-[120px]">
+                        <p className="text-[11px] text-text-muted">Falta Pagar</p>
+                        <p className="text-sm font-medium text-text-main">{formatBRL(r.faltaPagarR)}</p>
+                        <p className="text-[10px]" style={{ color: r.alertaFalta ? '#F59E0B' : '#64748B' }}>
+                          {r.pctFalta.toFixed(1)}% do contratado
+                        </p>
+                      </div>
+
+                      {/* Alertas */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {!r.margemMelhorou && (
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                            style={{ background: 'rgba(220,38,38,0.12)', color: '#DC2626' }}
+                          >
+                            ↓ Real
+                          </span>
+                        )}
+                        {r.alertaFalta && (
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                            style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B' }}
+                          >
+                            ⚠ Falta
+                          </span>
+                        )}
+                        {r.margemMelhorou && !r.alertaFalta && (
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                            style={{ background: 'rgba(22,163,74,0.12)', color: '#16A34A' }}
+                          >
+                            ✓
+                          </span>
+                        )}
                       </div>
                     </div>
                   )
                 })}
               </div>
-            )}
-            <p className="text-[10px] text-text-muted mt-4 text-center">Barra: azul = orçado · verde = pago</p>
-          </div>
-
-          <div className="card col-span-2">
-            <h3 className="text-sm font-semibold text-text-main mb-4">Evolução por Ano</h3>
-            <GraficoLinha data={lineData} />
-          </div>
-        </div>
+              <p className="text-[10px] text-text-muted text-center mt-3">
+                Clique em um projeto para abrir o dashboard detalhado
+              </p>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

@@ -143,6 +143,13 @@ export function useProjetos() {
         ?? { id: uuid(), numero: def.numero, nome: def.nome, itens: [] }
       )
     }
+    // Recalcular projetados de todos os itens quando IPCA ou parcelas mudam
+    if (tap.ipca !== projeto.tap.ipca || tap.parcelas !== projeto.tap.parcelas) {
+      secoes = secoes.map((s) => ({
+        ...s,
+        itens: s.itens.map((it) => ({ ...it, ...calcItemTotais(it, tap.ipca, tap.parcelas) })),
+      }))
+    }
     await patchProjeto(projetoId, { tap, secoes })
   }, [projetos])
 

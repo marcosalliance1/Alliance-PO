@@ -60,6 +60,21 @@ export function SecaoCusto({
 
   return (
     <div className="overflow-x-auto rounded-inner shadow-card">
+      {/* Legenda de cores */}
+      <div className="flex items-center gap-4 px-3 py-1.5 bg-surface border-b border-white/5 text-[10px] text-text-muted">
+        <span className="font-medium">Status:</span>
+        {[
+          { color: '#3B82F6', label: 'Vendido' },
+          { color: '#EAB308', label: 'Orçado' },
+          { color: '#16A34A', label: 'Contratado' },
+          { color: '#10B981', label: 'Pago' },
+        ].map(({ color, label }) => (
+          <span key={label} className="flex items-center gap-1">
+            <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: color }} />
+            {label}
+          </span>
+        ))}
+      </div>
       <table className="table-po">
         <thead>
           <tr>

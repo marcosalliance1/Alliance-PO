@@ -4,6 +4,7 @@ import type { Projeto, ItemCusto, ItemCatalogo, TAP, Receitas, ConciliacaoEveres
 import { TAPForm } from '../components/projeto/TAPForm'
 import { SecaoCusto } from '../components/projeto/SecaoCusto'
 import { ResumoGeral } from '../components/projeto/ResumoGeral'
+import { ProjectDashboard } from '../components/projeto/ProjectDashboard'
 import { Header } from '../components/layout/Header'
 import { BadgeEscola } from '../components/ui/Badge'
 import { ArrowLeft, Save, Check, Loader } from 'lucide-react'
@@ -57,6 +58,7 @@ export function ViewProjeto({
     { id: 'tap', label: 'TAP' },
     ...projeto.secoes.map((s) => ({ id: s.id, label: s.numero })),
     { id: 'dashboard', label: 'Dashboard' },
+    { id: 'resumo', label: 'Resumo Geral' },
   ]
 
   const handleUpdateItem = useCallback(
@@ -140,6 +142,10 @@ export function ViewProjeto({
       )}
 
       {abaAtiva === 'dashboard' && (
+        <ProjectDashboard projeto={projeto} />
+      )}
+
+      {abaAtiva === 'resumo' && (
         <ResumoGeral projeto={projeto} onUpdateReceitas={onUpdateReceitas} onUpdateConciliacao={onUpdateConciliacao} />
       )}
     </div>

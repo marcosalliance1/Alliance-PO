@@ -80,16 +80,30 @@ function TextInput({ value, onChange, placeholder = '', width = '100px' }: {
   )
 }
 
-export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = [] }: LinhaItemProps) {
-  const rowClass = item.status === 'fechado' ? 'row-fechado' : item.status === 'orçar' ? 'row-orcar' : ''
+function getRowStyle(item: ItemCusto): React.CSSProperties {
+  if (item.statusPagamento === 'pago') {
+    return { backgroundColor: 'rgba(16,185,129,0.12)', borderLeft: '3px solid #10B981' }
+  }
+  if (item.status === 'fechado' || item.statusPagamento === 'parcial') {
+    return { backgroundColor: 'rgba(22,163,74,0.08)', borderLeft: '3px solid #16A34A' }
+  }
+  if (item.status === 'estimado' || item.status === 'orçando') {
+    return { backgroundColor: 'rgba(234,179,8,0.08)', borderLeft: '3px solid #EAB308' }
+  }
+  if (item.qtdeVendida > 0 && item.valorUnitarioAtual > 0) {
+    return { backgroundColor: 'rgba(59,130,246,0.08)', borderLeft: '3px solid #3B82F6' }
+  }
+  return {}
+}
 
+export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = [] }: LinhaItemProps) {
   const upd = useCallback(
     (changes: Partial<ItemCusto>) => onChange(changes),
     [onChange],
   )
 
   return (
-    <tr className={rowClass}>
+    <tr style={getRowStyle(item)}>
       <Td><TextInput value={item.codigo} onChange={(v) => upd({ codigo: v })} width="60px" /></Td>
       <Td><TextInput value={item.area} onChange={(v) => upd({ area: v })} width="80px" /></Td>
       <Td>

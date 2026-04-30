@@ -17,7 +17,7 @@ export function TotaisSecaoRow({ totais, nomeSecao }: TotaisSecaoProps) {
         </td>
         <td className="font-bold">{formatBRL(totais.totalVendido)}</td>
         <td />
-        <td />
+        <td className="font-bold text-blue-600">{formatBRL(totais.totalProjetado)}</td>
         <td />
         <td />
         <td />
