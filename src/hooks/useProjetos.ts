@@ -221,14 +221,28 @@ export function useProjetos() {
       : projeto.tap
     const novasReceitas = { ...projeto.receitas, ...result.receitas }
 
+    // Auto-fill Conciliação Everest: valorEverest = soma de valorPago de cada seção
+    const linhasEverest = result.secoes.map(secao => ({
+      secaoId: secao.id,
+      secaoNome: secao.nome,
+      valorEverest: secao.itens.reduce((s, i) => s + (i.valorPago || 0), 0),
+      observacao: projeto.conciliacaoEverest?.linhas.find(l => l.secaoId === secao.id)?.observacao ?? '',
+    }))
+    const novaConciliacao = {
+      linhas: linhasEverest,
+      observacaoGeral: projeto.conciliacaoEverest?.observacaoGeral ?? '',
+    }
+
     const now = new Date().toISOString()
     const { error: err } = await supabase
       .from('projetos')
-      .update({ secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, atualizado_em: now })
+      .update({ secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacao_everest: novaConciliacao, atualizado_em: now })
       .eq('id', id)
     if (err) throw new Error(err.message)
     setProjetos((prev) => prev.map((p) =>
-      p.id === id ? { ...p, secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, atualizadoEm: now } : p
+      p.id === id
+        ? { ...p, secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacaoEverest: novaConciliacao, atualizadoEm: now }
+        : p
     ))
   }, [projetos])
 

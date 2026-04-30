@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, useParams, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, useParams, Navigate, useLocation } from 'react-router-dom'
 import { Layout } from './components/layout/Layout'
 import { DashboardGeral } from './pages/DashboardGeral'
 import { ListaProjetos } from './pages/ListaProjetos'
@@ -9,7 +10,7 @@ import { Configuracoes } from './pages/Configuracoes'
 import { useProjetos } from './hooks/useProjetos'
 import { useBancoItens } from './hooks/useBancoItens'
 import { useConfiguracoes } from './hooks/useConfiguracoes'
-import type { ItemCusto, TAP, Receitas } from './types'
+import type { ItemCusto, TAP, Receitas, ConciliacaoEverest, Projeto, ConfiguracaoGlobal, ItemCatalogo } from './types'
 import { supabase } from './lib/supabase'
 
 // ── Spinner simples ──────────────────────────────────────────────────────────
@@ -22,12 +23,27 @@ function Spinner() {
   )
 }
 
-// ── Página de projeto isolada (precisa do hook próprio) ──────────────────────
-function ProjetoPage() {
+// ── ProjetoPage recebe tudo do pai — sem useProjetos próprio ─────────────────
+interface ProjetoPageProps {
+  projetos: Projeto[]
+  loading: boolean
+  bancoItens: ItemCatalogo[]
+  config: ConfiguracaoGlobal
+  atualizarTAP: (id: string, tap: TAP) => Promise<void>
+  atualizarReceitas: (id: string, r: Receitas) => Promise<void>
+  atualizarConciliacao: (id: string, c: ConciliacaoEverest) => Promise<void>
+  adicionarItem: (id: string, secaoId: string, partial: Partial<ItemCusto>) => Promise<void>
+  atualizarItem: (id: string, secaoId: string, itemId: string, changes: Partial<ItemCusto>) => Promise<void>
+  excluirItem: (id: string, secaoId: string, itemId: string) => Promise<void>
+  salvarProjeto: (p: Projeto) => Promise<void>
+}
+
+function ProjetoPage({
+  projetos, loading, bancoItens, config,
+  atualizarTAP, atualizarReceitas, atualizarConciliacao,
+  adicionarItem, atualizarItem, excluirItem, salvarProjeto,
+}: ProjetoPageProps) {
   const { id } = useParams<{ id: string }>()
-  const { projetos, loading, atualizarTAP, atualizarReceitas, atualizarConciliacao, adicionarItem, atualizarItem, excluirItem, salvarProjeto } = useProjetos()
-  const { itens: bancoItens } = useBancoItens()
-  const { config } = useConfiguracoes()
 
   if (loading) return <Spinner />
   const projeto = projetos.find((p) => p.id === id)
@@ -52,13 +68,28 @@ function ProjetoPage() {
   )
 }
 
-// ── Rotas principais ─────────────────────────────────────────────────────────
+// ── Rotas principais — única instância de useProjetos ────────────────────────
 function AppRoutes() {
-  const { projetos, loading: loadingProjetos, criarProjeto, importarProjeto, reimportarProjeto, excluirProjeto, sincronizarSecoes, atualizarSheetsUrl } = useProjetos()
-  const { itens, loading: loadingItens, adicionarItem, atualizarItem, desativarItem, reativarItem } = useBancoItens()
+  const {
+    projetos, loading: loadingProjetos, carregar,
+    criarProjeto, importarProjeto, reimportarProjeto, excluirProjeto,
+    atualizarTAP, atualizarReceitas, atualizarConciliacao,
+    adicionarItem, atualizarItem, excluirItem, salvarProjeto,
+    sincronizarSecoes, atualizarSheetsUrl,
+  } = useProjetos()
+
+  const { itens, itens: bancoItens, loading: loadingItens, adicionarItem: addBanco, atualizarItem: updBanco, desativarItem, reativarItem } = useBancoItens()
   const { config, salvarConfig } = useConfiguracoes()
 
-  // ── Export: lê direto do Supabase para ter dados atualizados ────────────────
+  // Atualiza dados ao voltar para dashboard ou lista de projetos
+  const location = useLocation()
+  useEffect(() => {
+    if (location.pathname === '/' || location.pathname === '/projetos') {
+      carregar()
+    }
+  }, [location.pathname]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Export ──────────────────────────────────────────────────────────────────
   async function exportarJSON() {
     const [{ data: pRows }, { data: bRows }, { data: cRows }] = await Promise.all([
       supabase.from('projetos').select('*'),
@@ -76,7 +107,7 @@ function AppRoutes() {
     URL.revokeObjectURL(url)
   }
 
-  // ── Import: restaura linhas no Supabase ─────────────────────────────────────
+  // ── Import ──────────────────────────────────────────────────────────────────
   async function importarJSON(json: string) {
     try {
       const data = JSON.parse(json) as {
@@ -91,7 +122,7 @@ function AppRoutes() {
     }
   }
 
-  // ── Limpar: apaga tudo no Supabase ─────────────────────────────────────────
+  // ── Limpar ──────────────────────────────────────────────────────────────────
   async function limparDados() {
     await Promise.all([
       supabase.from('projetos').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
@@ -131,15 +162,32 @@ function AppRoutes() {
             />
           }
         />
-        <Route path="/projetos/:id" element={<ProjetoPage />} />
+        <Route
+          path="/projetos/:id"
+          element={
+            <ProjetoPage
+              projetos={projetos}
+              loading={loadingProjetos}
+              bancoItens={bancoItens}
+              config={config}
+              atualizarTAP={atualizarTAP}
+              atualizarReceitas={atualizarReceitas}
+              atualizarConciliacao={atualizarConciliacao}
+              adicionarItem={adicionarItem}
+              atualizarItem={atualizarItem}
+              excluirItem={excluirItem}
+              salvarProjeto={salvarProjeto}
+            />
+          }
+        />
         <Route
           path="/banco-de-itens"
           element={
             loadingItens ? <Spinner /> : (
               <BancoDeItens
                 itens={itens}
-                onAdicionar={adicionarItem}
-                onAtualizar={atualizarItem}
+                onAdicionar={addBanco}
+                onAtualizar={updBanco}
                 onDesativar={desativarItem}
                 onReativar={reativarItem}
               />
