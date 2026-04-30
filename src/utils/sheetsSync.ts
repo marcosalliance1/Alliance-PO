@@ -297,7 +297,14 @@ export async function lerTAPDeSheets(
     ;(err as Error & { tipo?: string }).tipo = 'TOKEN_EXPIRADO'
     throw err
   }
-  if (!metaResp.ok) throw new Error('Não foi possível acessar a planilha.')
+  if (metaResp.status === 403) {
+    const body = await metaResp.json().catch(() => ({})) as { error?: { message?: string } }
+    throw new Error(body.error?.message ?? 'Acesso negado. Verifique se a planilha está compartilhada e se a Google Sheets API está ativada no Google Cloud Console.')
+  }
+  if (!metaResp.ok) {
+    const body = await metaResp.json().catch(() => ({})) as { error?: { message?: string } }
+    throw new Error(body.error?.message ?? `Erro ao acessar planilha (HTTP ${metaResp.status})`)
+  }
 
   const meta = await metaResp.json() as { sheets: { properties: { title: string } }[] }
   const sheetNames = meta.sheets.map(s => s.properties.title)
