@@ -1,8 +1,13 @@
-import type { Projeto, SecaoCusto, ItemCusto, StatusItem, StatusPagamento, TipoCusto } from '../types'
+import type { Projeto, SecaoCusto, ItemCusto, StatusItem, StatusPagamento, TipoCusto, TAP, TipoEscola, Receitas } from '../types'
 import { v4 as uuid } from './uuid'
-import { calcValorProjetado } from './calculos'
+import { calcValorProjetado, emptyReceitas } from './calculos'
 
-// Mesmo mapeamento do importadorXlsx.ts
+export interface SyncResult {
+  secoes: SecaoCusto[]
+  tap: Partial<TAP>
+  receitas: Partial<Receitas>
+}
+
 const MAPA_SECOES: Record<string, string> = {
   'custo producao': '2.1', 'custo produção': '2.1',
   'custo artistico': '2.2', 'custo artístico': '2.2',
@@ -25,6 +30,18 @@ function encontrarSecao(nomeAba: string): string | null {
   for (const [pattern, id] of Object.entries(MAPA_SECOES)) {
     if (n.includes(norm(pattern))) return id
   }
+  return null
+}
+
+function encontrarAbaEspecial(nomeAba: string): 'tap' | 'resumo' | null {
+  const n = norm(nomeAba)
+  if (
+    n === 'simulador' || n.includes('simulador de eventos') ||
+    n.includes('informacoes gerais') || n.includes('informações gerais') ||
+    n.includes('termo de abertura') || n.includes('termo abertura') ||
+    (n === 'tap') || (n.startsWith('tap '))
+  ) return 'tap'
+  if (n === 'resumo geral' || n === 'resumo') return 'resumo'
   return null
 }
 
@@ -87,13 +104,13 @@ function parseTipoCusto(val: unknown): TipoCusto {
 
 function parseItens(values: unknown[][], _secaoNumero: string, _secaoNome: string, ipca: number, parcelas: number): ItemCusto[] {
   const itens: ItemCusto[] = []
-  const INICIO = 8 // linha 9 (0-based), igual ao importador xlsx
+  const INICIO = 8
 
   for (let r = INICIO; r < values.length; r++) {
     const get = (c: number) => getCell(values, r, c)
 
-    const subcategoria = parseStr(get(4)) // col E
-    const item = parseStr(get(5))         // col F
+    const subcategoria = parseStr(get(4))
+    const item = parseStr(get(5))
     if (!subcategoria && !item) continue
 
     const codigo = parseCodigo(get(0))
@@ -137,6 +154,114 @@ function parseItens(values: unknown[][], _secaoNumero: string, _secaoNome: strin
   return itens
 }
 
+// ── TAP from Simulador / Informações Gerais tab ──────────────────────────────
+// Layout: left (col 0=label, col 1=value), middle (col 4=label, col 5=value),
+//         right (col 8=label, col 9=value)
+export function parseTAPFromSheet(values: unknown[][]): Partial<TAP> {
+  const map = new Map<string, unknown>()
+
+  for (let r = 0; r < values.length; r++) {
+    for (const [lc, vc] of [[0, 1], [4, 5], [8, 9]] as [number, number][]) {
+      const label = parseStr(getCell(values, r, lc))
+      if (!label || label.length < 3) continue
+      const val = getCell(values, r, vc)
+      if (val !== null && val !== '') map.set(norm(label), val)
+    }
+  }
+
+  function get(labels: string[]): unknown {
+    for (const l of labels) {
+      const v = map.get(l)
+      if (v !== undefined && v !== null && v !== '') return v
+    }
+    return undefined
+  }
+
+  // IPCA: sheet stores as percentage (8.0 = 8%), TAP stores as decimal (0.08)
+  let ipca = parseNum(get(['ipca a a', 'ipca aa', 'ipca a.a', 'ipca anual', 'ipca']))
+  if (ipca >= 1) ipca = ipca / 100
+
+  const parcelasNum = parseNum(get([
+    'tempo de contrato meses', 'tempo de contrato (meses)', 'parcelas', 'tempo contrato meses',
+  ]))
+
+  const tempoDeFestaN = parseNum(get(['tempo de festa horas', 'tempo de festa (horas)', 'tempo de festa']))
+
+  const tipoStr = parseStr(get(['tipo de orcamento', 'tipo orcamento', 'tipo de ensino'])).toLowerCase()
+  let tipoEscola: TipoEscola = 'MEDIO'
+  if (tipoStr.includes('fundamental')) tipoEscola = 'FUNDAMENTAL'
+  else if (tipoStr.includes('superior') || tipoStr.includes('faculdade') || tipoStr.includes('universidade')) tipoEscola = 'SUPERIOR'
+
+  return {
+    instituicao: parseStr(get(['instituicao de ensino', 'instituicao', 'escola'])),
+    curso: parseStr(get(['curso'])),
+    anoOrcamento: parseNum(get(['ano do orcamento', 'ano orcamento'])) || 0,
+    anoRealizacao: parseNum(get(['ano realizacao previsto', 'ano realizacao (previsto)', 'ano realizacao'])) || 0,
+    tipoEscola,
+    qtdFormandos: parseNum(get(['total de alunos na turma', 'total alunos na turma', 'qtd formandos', 'formandos'])),
+    adesoesPrevistas: parseNum(get(['adesoes previstas', 'adesoes'])),
+    qtdConvidadosBaile: parseNum(get(['qtde de convidados previstos', 'qtde convidados previstos', 'qtd convidados baile'])),
+    modeloContrato: parseStr(get(['modelo de contrato'])),
+    pacoteBase: String(get(['pacote base p calculo', 'pacote base para calculo', 'pacote base']) ?? ''),
+    tempoDeFesta: tempoDeFestaN ? `${tempoDeFestaN}h` : '',
+    parcelas: parcelasNum || 12,
+    ipca: ipca || 0,
+  }
+}
+
+// ── Receitas from Resumo Geral tab ───────────────────────────────────────────
+// Layout: col 1=label, col 2=vendido, col 4=orçado, col 6=contratado, col 8=pago/conciliação
+function parseReceitasFromResumo(values: unknown[][]): Partial<Receitas> {
+  type ReceitaKey = keyof Receitas
+  const MAPA: Record<string, ReceitaKey> = {
+    'faturamento adesoes': 'faturamentoAdesoes',
+    'vendas convites extras': 'vendasConvitesExtras',
+    'vendas mesas extras': 'vendasMesasExtras',
+    'arrecadacao extra': 'arrecadacaoExtra',
+    'receita vendas baile': 'receitaVendasBaile',
+    'rescisao': 'receitaRescisoes',
+    'receita rescisoes': 'receitaRescisoes',
+    'multa e juros': 'outros',
+    'receita orange week': 'outros',
+  }
+
+  const result: Partial<Receitas> = {}
+
+  for (let r = 0; r < values.length; r++) {
+    // Try col 1 (B) as label; also try col 0 (A)
+    let label = norm(parseStr(getCell(values, r, 1)))
+    if (!label) label = norm(parseStr(getCell(values, r, 0)))
+    if (!label) continue
+
+    let chave: ReceitaKey | undefined
+    for (const [pattern, key] of Object.entries(MAPA)) {
+      if (label.includes(pattern)) { chave = key; break }
+    }
+    if (!chave) continue
+
+    const vendido = parseNum(getCell(values, r, 2))
+    const orcado = parseNum(getCell(values, r, 4))
+    const contratado = parseNum(getCell(values, r, 6))
+    const pago = parseNum(getCell(values, r, 8))
+
+    if (!vendido && !orcado && !contratado) continue
+
+    const existing = result[chave]
+    if (existing) {
+      result[chave] = {
+        vendido: existing.vendido + vendido,
+        orcado: existing.orcado + orcado,
+        contratado: existing.contratado + contratado,
+        pago: existing.pago + pago,
+      }
+    } else {
+      result[chave] = { vendido, orcado, contratado, pago }
+    }
+  }
+
+  return result
+}
+
 async function fetchAba(spreadsheetId: string, nomeAba: string, accessToken: string): Promise<unknown[][] | null> {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(nomeAba)}?valueRenderOption=UNFORMATTED_VALUE`
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
@@ -158,12 +283,40 @@ async function fetchAba(spreadsheetId: string, nomeAba: string, accessToken: str
   return data.values ?? []
 }
 
+// ── Ler apenas o TAP de uma planilha (usado no Novo Projeto) ─────────────────
+export async function lerTAPDeSheets(
+  spreadsheetId: string,
+  accessToken: string,
+): Promise<Partial<TAP>> {
+  const metaResp = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties.title`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  )
+  if (metaResp.status === 401) {
+    const err = new Error('Token do Google expirado. Reconecte o Google Drive e tente novamente.')
+    ;(err as Error & { tipo?: string }).tipo = 'TOKEN_EXPIRADO'
+    throw err
+  }
+  if (!metaResp.ok) throw new Error('Não foi possível acessar a planilha.')
+
+  const meta = await metaResp.json() as { sheets: { properties: { title: string } }[] }
+  const sheetNames = meta.sheets.map(s => s.properties.title)
+
+  for (const nome of sheetNames) {
+    if (encontrarAbaEspecial(nome) === 'tap') {
+      const values = await fetchAba(spreadsheetId, nome, accessToken)
+      if (values) return parseTAPFromSheet(values)
+    }
+  }
+  return {}
+}
+
 export async function sincronizarComSheets(
   spreadsheetId: string,
   accessToken: string,
   projeto: Projeto,
   onProgress: (msg: string) => void,
-): Promise<SecaoCusto[]> {
+): Promise<SyncResult> {
   onProgress('Lendo estrutura da planilha...')
 
   const metaResp = await fetch(
@@ -184,17 +337,43 @@ export async function sincronizarComSheets(
   const meta = await metaResp.json() as { sheets: { properties: { title: string } }[] }
   const sheetNames = meta.sheets.map(s => s.properties.title)
 
-  // Montar mapa de seções por numero
   const novasSecoes = new Map<string, ItemCusto[]>()
+  let tapParsed: Partial<TAP> = {}
+  let receitasParsed: Partial<Receitas> = {}
 
   const ipca = projeto.tap.ipca
   const parcelas = projeto.tap.parcelas
 
   for (const nomeAba of sheetNames) {
+    const especial = encontrarAbaEspecial(nomeAba)
+
+    if (especial === 'tap') {
+      onProgress(`Lendo TAP (${nomeAba})...`)
+      try {
+        const values = await fetchAba(spreadsheetId, nomeAba, accessToken)
+        if (values) tapParsed = parseTAPFromSheet(values)
+      } catch (e) {
+        if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
+        console.warn(`Erro ao ler aba TAP "${nomeAba}":`, e)
+      }
+      continue
+    }
+
+    if (especial === 'resumo') {
+      onProgress(`Lendo Resumo Geral (${nomeAba})...`)
+      try {
+        const values = await fetchAba(spreadsheetId, nomeAba, accessToken)
+        if (values) receitasParsed = parseReceitasFromResumo(values)
+      } catch (e) {
+        if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
+        console.warn(`Erro ao ler aba Resumo "${nomeAba}":`, e)
+      }
+      continue
+    }
+
     const secaoId = encontrarSecao(nomeAba)
     if (!secaoId) continue
 
-    // Resolver o numero real da seção no projeto
     const secaoProjeto = projeto.secoes.find(s =>
       s.numero === secaoId ||
       (secaoId === 'cerimonia' && (s.nome.toLowerCase().includes('cerimônia') || s.nome.toLowerCase().includes('cerimonia'))) ||
@@ -215,10 +394,10 @@ export async function sincronizarComSheets(
     }
   }
 
-  // Fazer merge: preservar valorPago e itens não encontrados na planilha
+  // Merge sections: preserve valorPago and items not found in sheet
   const secoesAtualizadas = projeto.secoes.map(secao => {
     const novosItens = novasSecoes.get(secao.numero)
-    if (!novosItens) return secao // seção não lida, manter como está
+    if (!novosItens) return secao
 
     const existingMap = new Map<string, ItemCusto>()
     for (const item of secao.itens) {
@@ -234,7 +413,6 @@ export async function sincronizarComSheets(
       const existente = existingMap.get(chave)
 
       if (existente) {
-        // Preservar valorPago manual e jotform
         itensFinais.push({
           ...novoItem,
           id: existente.id,
@@ -246,7 +424,6 @@ export async function sincronizarComSheets(
       }
     }
 
-    // Manter itens que sumiram da planilha (não deletar)
     for (const [chave, item] of existingMap) {
       if (!vistos.has(chave)) itensFinais.push(item)
     }
@@ -254,7 +431,23 @@ export async function sincronizarComSheets(
     return { ...secao, itens: itensFinais }
   })
 
-  return secoesAtualizadas
+  // Merge receitas: only overwrite non-zero values from sheet
+  const receitasBase = emptyReceitas()
+  const receitasMerged = { ...receitasBase }
+  for (const k of Object.keys(receitasMerged) as (keyof Receitas)[]) {
+    const parsed = receitasParsed[k]
+    if (parsed && (parsed.vendido || parsed.orcado || parsed.contratado)) {
+      receitasMerged[k] = parsed
+    } else {
+      receitasMerged[k] = projeto.receitas[k] ?? receitasBase[k]
+    }
+  }
+
+  return {
+    secoes: secoesAtualizadas,
+    tap: tapParsed,
+    receitas: receitasMerged,
+  }
 }
 
 export function extrairSpreadsheetId(url: string): string | null {

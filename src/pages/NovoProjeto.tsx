@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import type { TAP, TipoEscola } from '../types'
 import { TAPForm } from '../components/projeto/TAPForm'
 import { Header } from '../components/layout/Header'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Cloud, Loader, Link } from 'lucide-react'
+import { useGoogleAuth } from '../contexts/GoogleAuthContext'
+import { lerTAPDeSheets, extrairSpreadsheetId } from '../utils/sheetsSync'
 
 interface NovoProjetoProps {
-  onCriar: (tap: TAP) => Promise<{ id: string }>
+  onCriar: (tap: TAP, sheetsUrl?: string) => Promise<{ id: string }>
   ipcaPadrao: number
 }
 
@@ -36,14 +38,49 @@ function tapInicial(ipca: number): TAP {
 
 export function NovoProjeto({ onCriar, ipcaPadrao }: NovoProjetoProps) {
   const navigate = useNavigate()
+  const { accessToken, conectar, logando } = useGoogleAuth()
+
   const [tap, setTap] = useState<TAP>(tapInicial(ipcaPadrao))
+  const [sheetsUrl, setSheetsUrl] = useState('')
+  const [carregandoSheets, setCarregandoSheets] = useState(false)
+  const [sheetsErro, setSheetsErro] = useState('')
+  const [sheetsOk, setSheetsOk] = useState(false)
+
+  async function carregarDoSheets() {
+    const id = extrairSpreadsheetId(sheetsUrl)
+    if (!id) { setSheetsErro('URL inválida. Cole o link completo da planilha Google Sheets.'); return }
+    setSheetsErro('')
+
+    if (!accessToken) { conectar(); return }
+
+    setCarregandoSheets(true)
+    try {
+      const tapParcial = await lerTAPDeSheets(id, accessToken)
+      if (Object.keys(tapParcial).length === 0) {
+        setSheetsErro('Aba de TAP/Simulador não encontrada na planilha.')
+        return
+      }
+      setTap(prev => ({
+        ...prev,
+        ...tapParcial,
+        ipca: tapParcial.ipca || prev.ipca,
+        parcelas: tapParcial.parcelas || prev.parcelas,
+      }))
+      setSheetsOk(true)
+    } catch (e) {
+      setSheetsErro((e as Error).message ?? 'Erro ao ler planilha.')
+    } finally {
+      setCarregandoSheets(false)
+    }
+  }
 
   async function handleCriar() {
     if (!tap.instituicao.trim() && !tap.turma.trim()) {
       alert('Preencha ao menos a Instituição ou Turma.')
       return
     }
-    const p = await onCriar(tap)
+    const spreadsheetId = extrairSpreadsheetId(sheetsUrl)
+    const p = await onCriar(tap, spreadsheetId ? sheetsUrl : undefined)
     navigate(`/projetos/${p.id}`)
   }
 
@@ -62,6 +99,44 @@ export function NovoProjeto({ onCriar, ipcaPadrao }: NovoProjetoProps) {
           </>
         }
       />
+
+      {/* Sheets URL */}
+      <div className="card mb-6">
+        <h3 className="text-sm font-semibold text-text-main mb-1 flex items-center gap-2">
+          <Cloud size={15} className="text-primary" />
+          Importar do Google Sheets (opcional)
+        </h3>
+        <p className="text-text-muted text-xs mb-3">
+          Cole o link da planilha para preencher automaticamente o TAP, receitas e custos.
+        </p>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Link size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <input
+              type="url"
+              value={sheetsUrl}
+              onChange={e => { setSheetsUrl(e.target.value); setSheetsOk(false); setSheetsErro('') }}
+              placeholder="https://docs.google.com/spreadsheets/d/..."
+              className="w-full bg-surface-2 border border-white/10 rounded-inner pl-8 pr-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary"
+            />
+          </div>
+          <button
+            onClick={carregarDoSheets}
+            disabled={carregandoSheets || logando || !sheetsUrl.trim()}
+            className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-40"
+          >
+            {carregandoSheets
+              ? <><Loader size={13} className="animate-spin" /> Carregando...</>
+              : !accessToken
+                ? <><Cloud size={13} /> Conectar e Carregar</>
+                : <><Cloud size={13} /> Carregar do Sheets</>
+            }
+          </button>
+        </div>
+        {sheetsErro && <p className="text-danger text-xs mt-2">{sheetsErro}</p>}
+        {sheetsOk && <p className="text-success text-xs mt-2">✓ TAP carregado da planilha — revise os campos abaixo.</p>}
+      </div>
+
       <TAPForm tap={tap} onChange={setTap} />
     </div>
   )

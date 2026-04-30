@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { Projeto, TipoEscola, SecaoCusto } from '../types'
+import type { Projeto, TipoEscola } from '../types'
+import type { SyncResult } from '../utils/sheetsSync'
 import { Header } from '../components/layout/Header'
 import { BadgeEscola } from '../components/ui/Badge'
 import { ImportadorPO } from '../components/projeto/ImportadorPO'
@@ -32,7 +33,7 @@ interface ListaProjetosProps {
   onImportar: (p: Projeto) => Promise<void>
   onAtualizar: (id: string, p: Projeto) => Promise<void>
   onExcluir: (id: string) => Promise<void>
-  onSincronizar: (id: string, secoes: SecaoCusto[]) => Promise<void>
+  onSincronizar: (id: string, result: SyncResult) => Promise<void>
   onAtualizarSheetsUrl: (id: string, url: string) => Promise<void>
 }
 
@@ -110,14 +111,14 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
     setProgressoSync('Iniciando sincronização...')
 
     try {
-      const secoesAtualizadas = await sincronizarComSheets(
+      const resultado = await sincronizarComSheets(
         spreadsheetId,
         accessToken,
         projeto,
         (msg) => setProgressoSync(msg),
       )
-      await onSincronizar(projeto.id, secoesAtualizadas)
-      setToast({ mensagem: `Sincronizado com sucesso — dados atualizados da planilha`, tipo: 'sucesso' })
+      await onSincronizar(projeto.id, resultado)
+      setToast({ mensagem: `Sincronizado com sucesso — TAP, receitas e custos atualizados`, tipo: 'sucesso' })
     } catch (err) {
       const e = err as Error & { tipo?: string }
       if (e.tipo === 'TOKEN_EXPIRADO') {

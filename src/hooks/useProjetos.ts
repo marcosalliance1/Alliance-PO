@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Projeto, SecaoCusto, ItemCusto, TAP, Receitas, ConciliacaoEverest } from '../types'
+import type { SyncResult } from '../utils/sheetsSync'
 import { v4 as uuid } from '../utils/uuid'
 import { getSecoesPorTipo } from '../data/secoesPorTipo'
 import { calcItemTotais, migrateReceitas, emptyReceitas } from '../utils/calculos'
@@ -40,7 +41,7 @@ export function useProjetos() {
   useEffect(() => { carregar() }, [carregar])
 
   // ── Criar ───────────────────────────────────────────────────────────────────
-  const criarProjeto = useCallback(async (tap: TAP): Promise<Projeto> => {
+  const criarProjeto = useCallback(async (tap: TAP, sheetsUrl?: string): Promise<Projeto> => {
     const secoes: SecaoCusto[] = getSecoesPorTipo(tap.tipoEscola).map((def) => ({
       id: uuid(), numero: def.numero, nome: def.nome, itens: [],
     }))
@@ -48,7 +49,7 @@ export function useProjetos() {
     const id = uuid()
     const { data, error: err } = await supabase
       .from('projetos')
-      .insert({ id, tap, secoes, receitas })
+      .insert({ id, tap, secoes, receitas, sheets_url: sheetsUrl || null })
       .select()
       .single()
     if (err) throw new Error(err.message)
@@ -211,15 +212,25 @@ export function useProjetos() {
   )
 
   // ── Sincronização Google Sheets ─────────────────────────────────────────────
-  const sincronizarSecoes = useCallback(async (id: string, secoes: SecaoCusto[]) => {
+  const sincronizarSecoes = useCallback(async (id: string, result: SyncResult) => {
+    const projeto = projetos.find(p => p.id === id)
+    if (!projeto) return
+
+    const novoTAP = Object.keys(result.tap).length > 0
+      ? { ...projeto.tap, ...result.tap }
+      : projeto.tap
+    const novasReceitas = { ...projeto.receitas, ...result.receitas }
+
     const now = new Date().toISOString()
     const { error: err } = await supabase
       .from('projetos')
-      .update({ secoes, atualizado_em: now })
+      .update({ secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, atualizado_em: now })
       .eq('id', id)
     if (err) throw new Error(err.message)
-    setProjetos((prev) => prev.map((p) => p.id === id ? { ...p, secoes, atualizadoEm: now } : p))
-  }, [])
+    setProjetos((prev) => prev.map((p) =>
+      p.id === id ? { ...p, secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, atualizadoEm: now } : p
+    ))
+  }, [projetos])
 
   const atualizarSheetsUrl = useCallback(async (id: string, url: string) => {
     const { error: err } = await supabase
