@@ -155,17 +155,24 @@ function parseItens(values: unknown[][], _secaoNumero: string, _secaoNome: strin
 }
 
 // ── TAP from Simulador / Informações Gerais tab ──────────────────────────────
-// Layout: left (col 0=label, col 1=value), middle (col 4=label, col 5=value),
-//         right (col 8=label, col 9=value)
+// Scans all cells dynamically — for each label cell, takes the next non-empty
+// value to the right (up to 5 columns). Handles any column layout.
 export function parseTAPFromSheet(values: unknown[][]): Partial<TAP> {
   const map = new Map<string, unknown>()
 
   for (let r = 0; r < values.length; r++) {
-    for (const [lc, vc] of [[0, 1], [4, 5], [8, 9]] as [number, number][]) {
-      const label = parseStr(getCell(values, r, lc))
+    const row = (values[r] as unknown[] | undefined) ?? []
+    for (let c = 0; c < row.length; c++) {
+      const label = parseStr(row[c])
       if (!label || label.length < 3) continue
-      const val = getCell(values, r, vc)
-      if (val !== null && val !== '') map.set(norm(label), val)
+      for (let d = 1; d <= 5; d++) {
+        if (c + d >= row.length) break
+        const val = row[c + d]
+        if (val !== null && val !== undefined && String(val).trim() !== '') {
+          if (!map.has(norm(label))) map.set(norm(label), val)
+          break
+        }
+      }
     }
   }
 
@@ -192,21 +199,44 @@ export function parseTAPFromSheet(values: unknown[][]): Partial<TAP> {
   if (tipoStr.includes('fundamental')) tipoEscola = 'FUNDAMENTAL'
   else if (tipoStr.includes('superior') || tipoStr.includes('faculdade') || tipoStr.includes('universidade')) tipoEscola = 'SUPERIOR'
 
-  return {
-    instituicao: parseStr(get(['instituicao de ensino', 'instituicao', 'escola'])),
-    curso: parseStr(get(['curso'])),
-    anoOrcamento: parseNum(get(['ano do orcamento', 'ano orcamento'])) || 0,
-    anoRealizacao: parseNum(get(['ano realizacao previsto', 'ano realizacao (previsto)', 'ano realizacao'])) || 0,
-    tipoEscola,
-    qtdFormandos: parseNum(get(['total de alunos na turma', 'total alunos na turma', 'qtd formandos', 'formandos'])),
-    adesoesPrevistas: parseNum(get(['adesoes previstas', 'adesoes'])),
-    qtdConvidadosBaile: parseNum(get(['qtde de convidados previstos', 'qtde convidados previstos', 'qtd convidados baile'])),
-    modeloContrato: parseStr(get(['modelo de contrato'])),
-    pacoteBase: String(get(['pacote base p calculo', 'pacote base para calculo', 'pacote base']) ?? ''),
-    tempoDeFesta: tempoDeFestaN ? `${tempoDeFestaN}h` : '',
-    parcelas: parcelasNum || 12,
-    ipca: ipca || 0,
-  }
+  // Only include fields that were actually found (non-zero, non-empty)
+  // so merging in the caller doesn't overwrite defaults with zeros/empty
+  const found: Partial<TAP> = {}
+
+  const instituicao = parseStr(get(['instituicao de ensino', 'instituicao', 'escola']))
+  if (instituicao) found.instituicao = instituicao
+
+  const curso = parseStr(get(['curso']))
+  if (curso) found.curso = curso
+
+  const anoOrcamento = parseNum(get(['ano do orcamento', 'ano orcamento']))
+  if (anoOrcamento) found.anoOrcamento = anoOrcamento
+
+  const anoRealizacao = parseNum(get(['ano realizacao previsto', 'ano realizacao (previsto)', 'ano realizacao']))
+  if (anoRealizacao) found.anoRealizacao = anoRealizacao
+
+  if (tipoStr) found.tipoEscola = tipoEscola
+
+  const qtdFormandos = parseNum(get(['total de alunos na turma', 'total alunos na turma', 'qtd formandos', 'formandos']))
+  if (qtdFormandos) found.qtdFormandos = qtdFormandos
+
+  const adesoesPrevistas = parseNum(get(['adesoes previstas', 'adesoes']))
+  if (adesoesPrevistas) found.adesoesPrevistas = adesoesPrevistas
+
+  const qtdConvidadosBaile = parseNum(get(['qtde de convidados previstos', 'qtde convidados previstos', 'qtd convidados baile']))
+  if (qtdConvidadosBaile) found.qtdConvidadosBaile = qtdConvidadosBaile
+
+  const modeloContrato = parseStr(get(['modelo de contrato']))
+  if (modeloContrato) found.modeloContrato = modeloContrato
+
+  const pacoteBase = String(get(['pacote base p calculo', 'pacote base para calculo', 'pacote base']) ?? '')
+  if (pacoteBase) found.pacoteBase = pacoteBase
+
+  if (tempoDeFestaN) found.tempoDeFesta = `${tempoDeFestaN}h`
+  if (parcelasNum) found.parcelas = parcelasNum
+  if (ipca) found.ipca = ipca
+
+  return found
 }
 
 // ── Receitas from Resumo Geral tab ───────────────────────────────────────────

@@ -41,6 +41,7 @@ export function NovoProjeto({ onCriar, ipcaPadrao }: NovoProjetoProps) {
   const { accessToken, conectar, logando } = useGoogleAuth()
 
   const [tap, setTap] = useState<TAP>(tapInicial(ipcaPadrao))
+  const [tapVersion, setTapVersion] = useState(0)  // muda ao carregar do Sheets → força remount do TAPForm
   const [sheetsUrl, setSheetsUrl] = useState('')
   const [carregandoSheets, setCarregandoSheets] = useState(false)
   const [sheetsErro, setSheetsErro] = useState('')
@@ -56,16 +57,18 @@ export function NovoProjeto({ onCriar, ipcaPadrao }: NovoProjetoProps) {
     setCarregandoSheets(true)
     try {
       const tapParcial = await lerTAPDeSheets(id, accessToken)
-      if (Object.keys(tapParcial).length === 0) {
-        setSheetsErro('Aba de TAP/Simulador não encontrada na planilha.')
+
+      const camposEncontrados = Object.keys(tapParcial).length
+      if (camposEncontrados === 0) {
+        setSheetsErro('Aba de TAP/Simulador não encontrada ou sem dados reconhecíveis.')
         return
       }
-      setTap(prev => ({
-        ...prev,
-        ...tapParcial,
-        ipca: tapParcial.ipca || prev.ipca,
-        parcelas: tapParcial.parcelas || prev.parcelas,
-      }))
+
+      // Merge: tapParcial só contém campos encontrados (sem zeros/vazios)
+      // então o spread não apaga os defaults do tapInicial
+      const tapAtualizado: TAP = { ...tapInicial(ipcaPadrao), ...tapParcial }
+      setTap(tapAtualizado)
+      setTapVersion(v => v + 1)  // força o TAPForm a remontar com os novos valores
       setSheetsOk(true)
     } catch (e) {
       setSheetsErro((e as Error).message ?? 'Erro ao ler planilha.')
@@ -134,10 +137,11 @@ export function NovoProjeto({ onCriar, ipcaPadrao }: NovoProjetoProps) {
           </button>
         </div>
         {sheetsErro && <p className="text-danger text-xs mt-2">{sheetsErro}</p>}
-        {sheetsOk && <p className="text-success text-xs mt-2">✓ TAP carregado da planilha — revise os campos abaixo.</p>}
+        {sheetsOk && <p className="text-success text-xs mt-2">✓ TAP carregado — revise os campos abaixo.</p>}
       </div>
 
-      <TAPForm tap={tap} onChange={setTap} />
+      {/* key={tapVersion} força remount quando dados chegam do Sheets */}
+      <TAPForm key={tapVersion} tap={tap} onChange={setTap} />
     </div>
   )
 }
