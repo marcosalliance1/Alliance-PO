@@ -6,6 +6,7 @@ export interface SyncResult {
   secoes: SecaoCusto[]
   tap: Partial<TAP>
   receitas: Partial<Receitas>
+  avisos: string[]
 }
 
 const MAPA_SECOES: Record<string, string> = {
@@ -240,41 +241,97 @@ export function parseTAPFromSheet(values: unknown[][]): Partial<TAP> {
 }
 
 // ── Receitas from Resumo Geral tab ───────────────────────────────────────────
-// Layout: col 1=label, col 2=vendido, col 4=orçado, col 6=contratado, col 8=pago/conciliação
+// Double header: row0=group ("Vendido pelo Comercial", "Orçado", etc.)
+//                row1=subcolumn ("Valor", "Qtde", "Falta Pagar", etc.)
+// Merged key: norm(group) + ' / ' + norm(subcolumn)
+// Stops at "RECEITA BAILE" row (calculated dynamically — not imported).
 function parseReceitasFromResumo(values: unknown[][]): Partial<Receitas> {
   type ReceitaKey = keyof Receitas
-  const MAPA: Record<string, ReceitaKey> = {
-    'faturamento adesoes': 'faturamentoAdesoes',
-    'vendas convites extras': 'vendasConvitesExtras',
-    'vendas mesas extras': 'vendasMesasExtras',
-    'arrecadacao extra': 'arrecadacaoExtra',
-    'receita vendas baile': 'receitaVendasBaile',
-    'rescisao': 'receitaRescisoes',
-    'receita rescisoes': 'receitaRescisoes',
-    'multa e juros': 'outros',
-    'receita orange week': 'outros',
+
+  // More specific patterns must come before broader ones
+  const MAPA: Array<[string, ReceitaKey]> = [
+    ['faturamento adesoes', 'faturamentoAdesoes'],
+    ['vendas convites extras', 'vendasConvitesExtras'],
+    ['vendas mesas extras', 'vendasMesasExtras'],
+    ['juros e multas sge', 'arrecadacaoExtra'],
+    ['arrecadacao extra', 'arrecadacaoExtra'],
+    ['receita vendas baile', 'receitaVendasBaile'],
+    ['receita rescisoes', 'receitaRescisoes'],
+    ['rescisao', 'receitaRescisoes'],
+    ['receita - outros', 'outros'],
+    ['outros', 'outros'],
+  ]
+
+  // Step 1: find header rows — scan first 15 rows for group-header row
+  let headerRow0 = -1
+  for (let r = 0; r < Math.min(values.length, 15); r++) {
+    const joined = ((values[r] as unknown[]) ?? []).map(c => norm(parseStr(c))).join(' ')
+    if (joined.includes('vendido') || joined.includes('orcado')) {
+      headerRow0 = r
+      break
+    }
+  }
+
+  // Step 2: build column map from merged (group / subcolumn) headers
+  let colVendido = 2
+  let colOrcado = 4
+  let colContratado = 6
+  let colPago = 8
+  let colFaltaPagar = 9
+  let dataStart = 0
+
+  if (headerRow0 >= 0 && headerRow0 + 1 < values.length) {
+    const row0 = (values[headerRow0] as unknown[]) ?? []
+    const row1 = (values[headerRow0 + 1] as unknown[]) ?? []
+    dataStart = headerRow0 + 2
+
+    let currentGroup = ''
+    for (let c = 0; c < Math.max(row0.length, row1.length); c++) {
+      const g = parseStr(row0[c] ?? null)
+      const s = parseStr(row1[c] ?? null)
+      if (g) currentGroup = g
+      if (!currentGroup && !s) continue
+      const key = s ? `${norm(currentGroup)} / ${norm(s)}` : norm(currentGroup)
+
+      if (key.includes('vendido') && key.includes('valor') && !key.includes('conciliacao')) colVendido = c
+      else if (key.includes('orcado') && key.includes('valor') && !key.includes('contratado') && !key.includes('conciliacao')) colOrcado = c
+      else if (key.includes('contratado') && key.includes('valor') && !key.includes('conciliacao')) colContratado = c
+      else if (key.includes('conciliacao') && key.includes('valor') && !key.includes('falta')) colPago = c
+      else if (key.includes('conciliacao') && (key.includes('falta pagar') || key.includes('falta'))) colFaltaPagar = c
+    }
+  }
+
+  // Step 3: parse data rows
+  const parseCell = (r: number, col: number): number => {
+    const v = getCell(values, r, col)
+    const s = String(v ?? '').trim()
+    if (!s || s === '-' || s === '—') return 0
+    return parseNum(v)
   }
 
   const result: Partial<Receitas> = {}
 
-  for (let r = 0; r < values.length; r++) {
-    // Try col 1 (B) as label; also try col 0 (A)
+  for (let r = dataStart; r < values.length; r++) {
     let label = norm(parseStr(getCell(values, r, 1)))
     if (!label) label = norm(parseStr(getCell(values, r, 0)))
     if (!label) continue
 
+    // RECEITA BAILE marks the end of the receitas block — computed dynamically, not imported
+    if (label.includes('receita baile')) break
+
     let chave: ReceitaKey | undefined
-    for (const [pattern, key] of Object.entries(MAPA)) {
-      if (label.includes(pattern)) { chave = key; break }
+    for (const [pattern, key] of MAPA) {
+      if (label.includes(norm(pattern))) { chave = key; break }
     }
     if (!chave) continue
 
-    const vendido = parseNum(getCell(values, r, 2))
-    const orcado = parseNum(getCell(values, r, 4))
-    const contratado = parseNum(getCell(values, r, 6))
-    const pago = parseNum(getCell(values, r, 8))
+    const vendido = parseCell(r, colVendido)
+    const orcado = parseCell(r, colOrcado)
+    const contratado = parseCell(r, colContratado)
+    const pago = parseCell(r, colPago)
+    const faltaPagar = parseCell(r, colFaltaPagar)
 
-    if (!vendido && !orcado && !contratado) continue
+    if (!vendido && !orcado && !contratado && !pago && !faltaPagar) continue
 
     const existing = result[chave]
     if (existing) {
@@ -283,17 +340,19 @@ function parseReceitasFromResumo(values: unknown[][]): Partial<Receitas> {
         orcado: existing.orcado + orcado,
         contratado: existing.contratado + contratado,
         pago: existing.pago + pago,
+        faltaPagar: existing.faltaPagar + faltaPagar,
       }
     } else {
-      result[chave] = { vendido, orcado, contratado, pago }
+      result[chave] = { vendido, orcado, contratado, pago, faltaPagar }
     }
   }
 
   return result
 }
 
-async function fetchAba(spreadsheetId: string, nomeAba: string, accessToken: string): Promise<unknown[][] | null> {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(nomeAba)}?valueRenderOption=UNFORMATTED_VALUE`
+async function fetchAba(spreadsheetId: string, nomeAba: string, accessToken: string, rangeSpec?: string): Promise<unknown[][] | null> {
+  const rangeParam = rangeSpec ?? nomeAba
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(rangeParam)}?valueRenderOption=UNFORMATTED_VALUE`
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
 
   if (resp.status === 401) {
@@ -377,6 +436,7 @@ export async function sincronizarComSheets(
   const novasSecoes = new Map<string, ItemCusto[]>()
   let tapParsed: Partial<TAP> = {}
   let receitasParsed: Partial<Receitas> = {}
+  let resumoEncontrado = false
 
   const ipca = projeto.tap.ipca
   const parcelas = projeto.tap.parcelas
@@ -397,9 +457,10 @@ export async function sincronizarComSheets(
     }
 
     if (especial === 'resumo') {
+      resumoEncontrado = true
       onProgress(`Lendo Resumo Geral (${nomeAba})...`)
       try {
-        const values = await fetchAba(spreadsheetId, nomeAba, accessToken)
+        const values = await fetchAba(spreadsheetId, nomeAba, accessToken, `'${nomeAba}'!A1:Q50`)
         if (values) receitasParsed = parseReceitasFromResumo(values)
       } catch (e) {
         if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
@@ -473,17 +534,23 @@ export async function sincronizarComSheets(
   const receitasMerged = { ...receitasBase }
   for (const k of Object.keys(receitasMerged) as (keyof Receitas)[]) {
     const parsed = receitasParsed[k]
-    if (parsed && (parsed.vendido || parsed.orcado || parsed.contratado)) {
+    if (parsed && (parsed.vendido || parsed.orcado || parsed.contratado || parsed.pago || parsed.faltaPagar)) {
       receitasMerged[k] = parsed
     } else {
       receitasMerged[k] = projeto.receitas[k] ?? receitasBase[k]
     }
   }
 
+  const avisos: string[] = []
+  if (!resumoEncontrado) {
+    avisos.push("Receitas não importadas — aba 'Resumo Geral' não localizada")
+  }
+
   return {
     secoes: secoesAtualizadas,
     tap: tapParsed,
     receitas: receitasMerged,
+    avisos,
   }
 }
 

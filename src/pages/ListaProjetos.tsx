@@ -132,6 +132,9 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
       )
       await onSincronizar(projeto.id, resultado)
       setToast({ mensagem: `Sincronizado com sucesso — TAP, receitas e custos atualizados`, tipo: 'sucesso' })
+      if (resultado.avisos.length > 0) {
+        setTimeout(() => setToast({ mensagem: resultado.avisos[0], tipo: 'erro' }), 3000)
+      }
     } catch (err) {
       const e = err as Error & { tipo?: string }
       if (e.tipo === 'TOKEN_EXPIRADO') {

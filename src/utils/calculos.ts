@@ -47,7 +47,7 @@ function somarLinhas(r: Receitas): { vendido: number; orcado: number; contratado
       acc.orcado += l.orcado
       acc.contratado += l.contratado
       acc.pago += l.pago
-      acc.faltaPagar += l.contratado - l.pago
+      acc.faltaPagar += l.faltaPagar !== 0 ? l.faltaPagar : (l.contratado - l.pago)
       return acc
     },
     { vendido: 0, orcado: 0, contratado: 0, pago: 0, faltaPagar: 0 },
@@ -80,7 +80,7 @@ export function calcResumoProjeto(projeto: Projeto): ResumoProjeto {
       orcado: l.orcado,
       contratado: l.contratado,
       pago: l.pago,
-      faltaPagar: l.contratado - l.pago,
+      faltaPagar: l.faltaPagar !== 0 ? l.faltaPagar : (l.contratado - l.pago),
     }
   })
 
@@ -139,7 +139,7 @@ export function calcPercentFechados(projeto: Projeto): number {
 // ── Helpers de inicialização e migração ──────────────────────────────────────
 
 export function emptyLinha(): ReceitaLinha {
-  return { vendido: 0, orcado: 0, contratado: 0, pago: 0 }
+  return { vendido: 0, orcado: 0, contratado: 0, pago: 0, faltaPagar: 0 }
 }
 
 export function emptyReceitas(): Receitas {
@@ -161,7 +161,7 @@ export function migrateReceitas(raw: unknown): Receitas {
   const obj = raw as Record<string, unknown>
 
   function toLinha(val: unknown): ReceitaLinha {
-    if (typeof val === 'number') return { vendido: val, orcado: 0, contratado: 0, pago: 0 }
+    if (typeof val === 'number') return { vendido: val, orcado: 0, contratado: 0, pago: 0, faltaPagar: 0 }
     if (val && typeof val === 'object') {
       const v = val as Partial<ReceitaLinha>
       return {
@@ -169,6 +169,7 @@ export function migrateReceitas(raw: unknown): Receitas {
         orcado: v.orcado ?? 0,
         contratado: v.contratado ?? 0,
         pago: v.pago ?? 0,
+        faltaPagar: v.faltaPagar ?? 0,
       }
     }
     return emptyLinha()

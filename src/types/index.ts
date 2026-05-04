@@ -76,6 +76,7 @@ export interface ReceitaLinha {
   orcado: number
   contratado: number
   pago: number
+  faltaPagar: number
 }
 
 export interface Receitas {
