@@ -42,7 +42,7 @@ function encontrarAbaEspecial(nomeAba: string): 'tap' | 'resumo' | null {
     n.includes('termo de abertura') || n.includes('termo abertura') ||
     (n === 'tap') || (n.startsWith('tap '))
   ) return 'tap'
-  if (n === 'resumo geral' || n === 'resumo') return 'resumo'
+  if (n === 'resumo geral' || n === 'resumo' || n.includes('resumo geral')) return 'resumo'
   return null
 }
 
