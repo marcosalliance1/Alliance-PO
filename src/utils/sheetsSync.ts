@@ -103,9 +103,13 @@ function parseTipoCusto(val: unknown): TipoCusto {
   return 'Custo Fixo'
 }
 
-function parseItens(values: unknown[][], _secaoNumero: string, _secaoNome: string, ipca: number, parcelas: number): ItemCusto[] {
+function parseItens(
+  values: unknown[][], _secaoNumero: string, secaoNome: string, ipca: number, parcelas: number,
+): { itens: ItemCusto[], avisos: string[] } {
   const itens: ItemCusto[] = []
+  const avisos: string[] = []
   const INICIO = 8
+  const TOLERANCIA = 1.0 // R$ 1,00
 
   for (let r = INICIO; r < values.length; r++) {
     const get = (c: number) => getCell(values, r, c)
@@ -129,10 +133,22 @@ function parseItens(values: unknown[][], _secaoNumero: string, _secaoNome: strin
     const qtdeOrcada = parseNum(get(13))
     const valorUnitarioOrcado = parseNum(get(14))
     const valorOrcado = qtdeOrcada * valorUnitarioOrcado
+    // Col 15 = "Valor Orçado" direto na planilha (pode ter fórmula com literais em vez de Qtde × VU)
+    const valorOrcadoPlanilha = parseNum(get(15))
+    if (valorOrcadoPlanilha > 0 && Math.abs(valorOrcadoPlanilha - valorOrcado) > TOLERANCIA) {
+      const nome = item || subcategoria
+      avisos.push(`${secaoNome} › ${nome} — Orçado: planilha R$${valorOrcadoPlanilha.toFixed(2).replace('.', ',')} ≠ Qtde×VU R$${valorOrcado.toFixed(2).replace('.', ',')}`)
+    }
 
     const qtdeContratada = parseNum(get(17))
     const valorUnitarioContratado = parseNum(get(18))
     const valorContratado = qtdeContratada * valorUnitarioContratado
+    // Col 19 = "Valor Contratado" direto na planilha
+    const valorContratadoPlanilha = parseNum(get(19))
+    if (valorContratadoPlanilha > 0 && Math.abs(valorContratadoPlanilha - valorContratado) > TOLERANCIA) {
+      const nome = item || subcategoria
+      avisos.push(`${secaoNome} › ${nome} — Contratado: planilha R$${valorContratadoPlanilha.toFixed(2).replace('.', ',')} ≠ Qtde×VU R$${valorContratado.toFixed(2).replace('.', ',')}`)
+    }
 
     const responsavel = parseStr(get(20))
     const status = parseStatus(get(21))
@@ -152,7 +168,7 @@ function parseItens(values: unknown[][], _secaoNumero: string, _secaoNome: strin
     })
   }
 
-  return itens
+  return { itens, avisos }
 }
 
 // ── TAP from Simulador / Informações Gerais tab ──────────────────────────────
@@ -437,6 +453,7 @@ export async function sincronizarComSheets(
   let tapParsed: Partial<TAP> = {}
   let receitasParsed: Partial<Receitas> = {}
   let resumoEncontrado = false
+  const avisosItens: string[] = []
 
   const ipca = projeto.tap.ipca
   const parcelas = projeto.tap.parcelas
@@ -484,7 +501,9 @@ export async function sincronizarComSheets(
     try {
       const values = await fetchAba(spreadsheetId, nomeAba, accessToken)
       if (values) {
-        novasSecoes.set(secaoProjeto.numero, parseItens(values, secaoProjeto.numero, secaoProjeto.nome, ipca, parcelas))
+        const { itens, avisos: avisosAba } = parseItens(values, secaoProjeto.numero, secaoProjeto.nome, ipca, parcelas)
+        novasSecoes.set(secaoProjeto.numero, itens)
+        avisosItens.push(...avisosAba)
       }
     } catch (e) {
       if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
@@ -545,6 +564,7 @@ export async function sincronizarComSheets(
   if (!resumoEncontrado) {
     avisos.push("Receitas não importadas — aba 'Resumo Geral' não localizada")
   }
+  avisos.push(...avisosItens)
 
   return {
     secoes: secoesAtualizadas,

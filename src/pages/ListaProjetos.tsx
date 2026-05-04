@@ -12,7 +12,7 @@ import { formatBRL, formatPercent } from '../utils/formatters'
 import { ProgressBar } from '../components/ui/ProgressBar'
 import { sincronizarComSheets, extrairSpreadsheetId } from '../utils/sheetsSync'
 import { useGoogleAuth } from '../contexts/GoogleAuthContext'
-import { Plus, Upload, Trash2, ChevronDown, ChevronRight, RefreshCw, Cloud, Loader, Link } from 'lucide-react'
+import { Plus, Upload, Trash2, ChevronDown, ChevronRight, RefreshCw, Cloud, Loader, Link, AlertTriangle, X } from 'lucide-react'
 
 function calcFrescor(atualizadoEm: string): { texto: string; cor: string } {
   if (!atualizadoEm) return { texto: 'Nunca salvo', cor: '#e17055' }
@@ -52,6 +52,7 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
   const [progressoSync, setProgressoSync] = useState<string | null>(null)
   const [pendingSyncId, setPendingSyncId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ mensagem: string; tipo: 'sucesso' | 'erro' } | null>(null)
+  const [avisosSync, setAvisosSync] = useState<string[]>([])
 
   // Modal de URL do Sheets
   const [showUrlModal, setShowUrlModal] = useState(false)
@@ -133,7 +134,7 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
       await onSincronizar(projeto.id, resultado)
       setToast({ mensagem: `Sincronizado com sucesso — TAP, receitas e custos atualizados`, tipo: 'sucesso' })
       if (resultado.avisos.length > 0) {
-        setTimeout(() => setToast({ mensagem: resultado.avisos[0], tipo: 'erro' }), 3000)
+        setAvisosSync(resultado.avisos)
       }
     } catch (err) {
       const e = err as Error & { tipo?: string }
@@ -237,6 +238,26 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
         <div className="flex items-center gap-2 px-4 py-2.5 mb-4 rounded-lg bg-primary/10 border border-primary/20 text-primary text-sm">
           <Loader size={14} className="animate-spin flex-shrink-0" />
           {progressoSync}
+        </div>
+      )}
+
+      {/* Painel de avisos pós-sync */}
+      {avisosSync.length > 0 && (
+        <div className="mb-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-200">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-yellow-500/20">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <AlertTriangle size={14} className="flex-shrink-0" />
+              {avisosSync.length === 1 ? '1 aviso na importação' : `${avisosSync.length} avisos na importação`}
+            </div>
+            <button onClick={() => setAvisosSync([])} className="text-yellow-200/60 hover:text-yellow-200 transition-colors">
+              <X size={14} />
+            </button>
+          </div>
+          <ul className="px-4 py-2 space-y-1 max-h-48 overflow-y-auto">
+            {avisosSync.map((a, i) => (
+              <li key={i} className="text-xs text-yellow-100/80">{a}</li>
+            ))}
+          </ul>
         </div>
       )}
 
