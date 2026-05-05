@@ -263,8 +263,8 @@ function lerResumoGeral(wb: XLSX.WorkBook): { receitas: Receitas; verbaExtras: I
   const ws = wb.Sheets[sheetName]
   const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][]
 
-  // Detectar colunas pelo cabeçalho; fallback: col C (idx 2) = vendido, col I (idx 8) = orçado
-  let vendidoCol = 2
+  // Detectar colunas vendido/orçado pelo cabeçalho (fallback: col D idx 3 e col I idx 8)
+  let vendidoCol = 3
   let orcadoCol = 8
   for (let i = 0; i < Math.min(rows.length, 15); i++) {
     const row = rows[i]
@@ -277,22 +277,32 @@ function lerResumoGeral(wb: XLSX.WorkBook): { receitas: Receitas; verbaExtras: I
 
   let extIdx = 1
   for (const row of rows) {
-    const label = normLabel(row[1])
+    // Label: col B (idx 1) preferido; col A (idx 0) se col B for vazio/número
+    const labelB = typeof row[1] === 'string' ? normLabel(row[1]) : ''
+    const labelA = typeof row[0] === 'string' ? normLabel(row[0]) : ''
+    const label = labelB || labelA
     if (!label || SKIP_RESUMO.test(label)) continue
 
-    const vendido = parseNum(row[vendidoCol])
-    const orcado = parseNum(row[orcadoCol])
+    const originalLabel = (String(row[1] ?? '').trim()) || String(row[0] ?? '').trim()
 
     // "Verba extra - *" → custo adicional sem aba própria
     if (/^verba\s*extra/.test(label)) {
-      if (vendido === 0 && orcado === 0) continue
-      const nomeItem = String(row[1] ?? '').trim()
+      // Varrer TODAS as colunas para encontrar valores numéricos > 1 (exclui percentuais decimais)
+      // Layout esperado: vendido à esquerda, orçado à direita
+      const vals: number[] = []
+      for (let j = 0; j < row.length; j++) {
+        const v = row[j]
+        if (typeof v === 'number' && v > 1) vals.push(v)
+      }
+      if (vals.length === 0) continue
+      const orcado = vals[vals.length - 1]            // último (mais à direita) = orçado
+      const vendido = vals.length >= 2 ? vals[0] : 0 // primeiro = vendido (0 se só há orçado)
       verbaExtras.push({
         id: uuid(),
         codigo: `ext.${extIdx++}`,
         area: '',
         subcategoria: 'Verbas Extras',
-        item: nomeItem,
+        item: originalLabel,
         fornecedor: '',
         tipoCusto: 'Custo Variável',
         moscow: '',
@@ -320,9 +330,11 @@ function lerResumoGeral(wb: XLSX.WorkBook): { receitas: Receitas; verbaExtras: I
       continue
     }
 
-    // Receitas
+    // Receitas (usa colunas detectadas)
     const field = mapLabelReceita(label)
     if (!field) continue
+    const vendido = parseNum(row[vendidoCol])
+    const orcado = parseNum(row[orcadoCol])
     if (vendido === 0 && orcado === 0) continue
     receitas[field].vendido += vendido
     receitas[field].orcado += orcado
