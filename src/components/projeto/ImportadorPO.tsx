@@ -2,8 +2,10 @@ import { useState, useRef } from 'react'
 import { Modal } from '../ui/Modal'
 import { ProgressBar } from '../ui/ProgressBar'
 import { importarXlsx } from '../../utils/importadorXlsx'
+import type { DivergenciaItem } from '../../utils/importadorXlsx'
 import type { Projeto } from '../../types'
-import { Upload, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Upload, AlertTriangle, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import { formatBRL } from '../../utils/formatters'
 
 interface ImportadorPOProps {
   open: boolean
@@ -19,6 +21,9 @@ export function ImportadorPO({ open, onClose, onImported }: ImportadorPOProps) {
   const [avisos, setAvisos] = useState<string[]>([])
   const [erro, setErro] = useState('')
   const [projetoImportado, setProjetoImportado] = useState<Projeto | null>(null)
+  const [divergencias, setDivergencias] = useState<DivergenciaItem[]>([])
+  const [totalDivergencias, setTotalDivergencias] = useState(0)
+  const [showDiv, setShowDiv] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   function reset() {
@@ -27,6 +32,9 @@ export function ImportadorPO({ open, onClose, onImported }: ImportadorPOProps) {
     setAvisos([])
     setErro('')
     setProjetoImportado(null)
+    setDivergencias([])
+    setTotalDivergencias(0)
+    setShowDiv(false)
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -45,9 +53,11 @@ export function ImportadorPO({ open, onClose, onImported }: ImportadorPOProps) {
     try {
       const buffer = await file.arrayBuffer()
       setProgresso(60)
-      const { projeto, avisos: av } = importarXlsx(buffer, file.name)
+      const { projeto, avisos: av, divergencias: divs, totalDivergencias: totalDiv } = importarXlsx(buffer, file.name)
       setProgresso(90)
       setAvisos(av)
+      setDivergencias(divs)
+      setTotalDivergencias(totalDiv)
       setProjetoImportado(projeto)
       setEstado('done')
       setProgresso(100)
@@ -119,6 +129,49 @@ export function ImportadorPO({ open, onClose, onImported }: ImportadorPOProps) {
               <span className="text-text-main font-medium">Total de itens:</span> {projetoImportado.secoes.reduce((s, sec) => s + sec.itens.length, 0)}
             </div>
           </div>
+
+          {totalDivergencias > 0 ? (
+            <div className="border rounded-inner p-3" style={{ background: '#3D2D00', borderColor: '#92400E' }}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={14} style={{ color: '#F59E0B' }} />
+                  <span className="text-xs font-medium" style={{ color: '#FEF9C3' }}>
+                    Divergências encontradas: {totalDivergencias} {totalDivergencias === 1 ? 'item' : 'itens'}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowDiv((v) => !v)}
+                  className="flex items-center gap-1 text-xs"
+                  style={{ background: 'none', border: '1px solid #92400E', borderRadius: 4, padding: '2px 8px', color: '#FEF9C3', cursor: 'pointer' }}
+                >
+                  {showDiv ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                  {showDiv ? 'Ocultar' : 'Ver lista'}
+                </button>
+              </div>
+              <p className="text-xs mt-1.5" style={{ color: '#D4A017' }}>
+                Os totais desses itens diferem de Qtde × $ Unit. Eles ficam marcados com ⚠️ na tabela para revisão.
+              </p>
+              {showDiv && (
+                <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto">
+                  {divergencias.map((d, i) => (
+                    <div key={i} className="rounded p-1.5" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                      <p className="text-xs font-medium" style={{ color: '#FEF9C3' }}>{d.secaoNome} — {d.codigo ? `[${d.codigo}] ` : ''}{d.item}</p>
+                      {d.divergenciaDetalhe.map((det, j) => (
+                        <p key={j} className="text-xs mt-0.5 ml-2" style={{ color: '#D4A017' }}>
+                          {det.coluna}: {det.qtde} × {formatBRL(det.unitario)} = {formatBRL(det.totalCalculado)} | Planilha: {formatBRL(det.totalPlanilha)}
+                        </p>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-inner p-2.5" style={{ background: '#052e16', border: '1px solid #14532d' }}>
+              <CheckCircle size={14} style={{ color: '#22C55E' }} />
+              <span className="text-xs" style={{ color: '#86EFAC' }}>Todos os totais conferem com Qtde × $ Unit.</span>
+            </div>
+          )}
 
           {avisos.length > 0 && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-inner p-3 space-y-1">

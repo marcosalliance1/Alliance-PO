@@ -7,7 +7,8 @@ import { GraficoLinha } from '../components/dashboard/GraficoLinha'
 import { Header } from '../components/layout/Header'
 import { calcResumoProjeto, calcPercentFechados } from '../utils/calculos'
 import { formatBRL, formatPercent } from '../utils/formatters'
-import { FolderOpen, TrendingUp, DollarSign, CheckCircle, SlidersHorizontal, Package, Award } from 'lucide-react'
+import { FolderOpen, TrendingUp, DollarSign, CheckCircle, SlidersHorizontal, Package, Award, ChevronDown, ChevronRight } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface DashboardGeralProps {
   projetos: Projeto[]
@@ -24,6 +25,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
   const navigate = useNavigate()
   const [filtroFornecedor, setFiltroFornecedor] = useState('')
   const [filtroTipoEscola, setFiltroTipoEscola] = useState<'TODOS' | TipoEscola>('TODOS')
+  const [showVendidoVsOrcado, setShowVendidoVsOrcado] = useState(false)
 
   const fornecedoresUsados = useMemo(() => {
     const names = new Set<string>()
@@ -55,8 +57,8 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
 
     for (const p of projetosFiltrados) {
       const resumo = calcResumoProjeto(p)
-      totalReceita += resumo.receitaBaile.vendido
-      totalCusto += resumo.custoTotal.vendido
+      totalReceita += resumo.receitaBaile.orcado
+      totalCusto += resumo.custoTotal.orcado
       const pct = calcPercentFechados(p)
       const itens = p.secoes.reduce((s, sec) => s + sec.itens.length, 0)
       totalFechados += pct * itens
@@ -85,8 +87,8 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
             s + sec.itens
               .filter(i => i.fornecedor?.trim() === filtroFornecedor)
               .reduce((ss, i) => ss + (i.valorOrcado ?? 0), 0), 0)
-        : resumo.custoTotal.vendido
-      const entry = { nome: p.tap.turma || p.id.slice(0, 6), receita: resumo.receitaBaile.vendido, custo, margem: resumo.margem.vendido }
+        : resumo.custoTotal.orcado
+      const entry = { nome: p.tap.turma || p.id.slice(0, 6), receita: resumo.receitaBaile.orcado, custo, margem: resumo.margem.orcado }
       grupos.set(tipo, [...(grupos.get(tipo) ?? []), entry])
     }
     return (['SUPERIOR', 'MEDIO', 'FUNDAMENTAL'] as const)
@@ -110,8 +112,8 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
       const resumo = calcResumoProjeto(p)
       const cur = byAno.get(ano) ?? { receita: 0, margem: 0 }
       byAno.set(ano, {
-        receita: cur.receita + resumo.receitaBaile.vendido,
-        margem: cur.margem + resumo.margem.vendido,
+        receita: cur.receita + resumo.receitaBaile.orcado,
+        margem: cur.margem + resumo.margem.orcado,
       })
     }
     return Array.from(byAno.entries())
@@ -136,6 +138,19 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
       .sort((a, b) => b.orcado - a.orcado)
       .slice(0, 8)
   }, [projetosFiltrados])
+
+  const vendidoVsOrcadoData = useMemo(() =>
+    projetosFiltrados.map((p) => {
+      const resumo = calcResumoProjeto(p)
+      return {
+        nome: p.tap.turma || p.id.slice(0, 6),
+        receitaVendido: resumo.receitaBaile.vendido,
+        receitaOrcado: resumo.receitaBaile.orcado,
+        custoVendido: resumo.custoTotal.vendido,
+        custoOrcado: resumo.custoTotal.orcado,
+      }
+    }),
+  [projetosFiltrados])
 
   // ── Ranking de projetos por margem (Correção 6) ───────────────────────────
   const ranking = useMemo(() => {
@@ -226,9 +241,9 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
 
       <div className="grid grid-cols-4 gap-4 mb-6">
         <KPICard title="Projetos" value={String(projetosFiltrados.length)} icon={FolderOpen} color="#74b9ff" />
-        <KPICard title="Receita Total" value={formatBRL(kpis.totalReceita)} icon={DollarSign} color="#00b894" />
+        <KPICard title="Receita Orçada" value={formatBRL(kpis.totalReceita)} icon={DollarSign} color="#00b894" />
         <KPICard
-          title="Margem Total"
+          title="Margem Orçada"
           value={formatBRL(kpis.margem)}
           icon={TrendingUp}
           color={kpis.margem >= 0 ? '#00b894' : '#e17055'}
@@ -254,7 +269,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
         <>
           <div className="grid grid-cols-2 gap-6 mb-6">
             <div className="card">
-              <h3 className="text-sm font-semibold text-text-main mb-3">Receita vs Custo por Turma</h3>
+              <h3 className="text-sm font-semibold text-text-main mb-3">Receita vs Custo por Turma (Orçado)</h3>
 
               {filtroFornecedor && (
                 <div className="flex items-center justify-between bg-primary/10 border border-primary/20 rounded-inner px-3 py-2 mb-4">
@@ -333,6 +348,39 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
               <GraficoLinha data={lineData} />
             </div>
           </div>
+
+          {/* ── Vendido vs Orçado ─────────────────────────────────────── */}
+          {vendidoVsOrcadoData.length > 0 && (
+            <div className="card mb-6">
+              <button
+                className="flex items-center gap-2 w-full text-left"
+                onClick={() => setShowVendidoVsOrcado((v) => !v)}
+              >
+                {showVendidoVsOrcado ? <ChevronDown className="w-4 h-4 text-text-muted" /> : <ChevronRight className="w-4 h-4 text-text-muted" />}
+                <h3 className="text-sm font-semibold text-text-main">Vendido vs Orçado por Turma</h3>
+              </button>
+              {showVendidoVsOrcado && (
+                <div className="mt-4">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={vendidoVsOrcadoData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="nome" tick={{ fill: '#8892b0', fontSize: 11 }} />
+                      <YAxis tick={{ fill: '#8892b0', fontSize: 11 }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip
+                        contentStyle={{ background: 'var(--color-surface, #1a1a2e)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, fontSize: 12 }}
+                        formatter={(v: number) => formatBRL(v)}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 12, color: '#8892b0' }} />
+                      <Bar dataKey="receitaVendido" name="Receita Vendida" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="receitaOrcado" name="Receita Orçada" fill="#00b894" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="custoVendido" name="Custo Vendido" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="custoOrcado" name="Custo Orçado" fill="#e94560" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Ranking de projetos (Correção 6) ──────────────────────── */}
           {ranking.length > 0 && (

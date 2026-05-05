@@ -1,5 +1,13 @@
 export type TipoEscola = 'FUNDAMENTAL' | 'MEDIO' | 'SUPERIOR'
 
+export interface DivergenciaDetalhe {
+  coluna: string
+  qtde: number
+  unitario: number
+  totalPlanilha: number
+  totalCalculado: number
+}
+
 export type StatusItem = 'orçar' | 'orçando' | 'estimado' | 'fechado' | 'N/A'
 
 export type TipoCusto = 'Custo Fixo' | 'Custo Variável'
@@ -40,6 +48,9 @@ export interface ItemCusto {
   emAberto: number
 
   jotform: string[]
+
+  divergenciaTotais?: boolean
+  divergenciaDetalhe?: DivergenciaDetalhe[]
 }
 
 export interface SecaoCusto {

@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import type { Projeto, SecaoCusto, ItemCusto, TAP, TipoEscola, StatusItem, StatusPagamento, TipoCusto } from '../types'
+import type { Projeto, SecaoCusto, ItemCusto, TAP, TipoEscola, StatusItem, StatusPagamento, TipoCusto, DivergenciaDetalhe } from '../types'
 import { v4 as uuid } from './uuid'
 import { getSecoesPorTipo } from '../data/secoesPorTipo'
 import { calcValorProjetado, emptyReceitas } from './calculos'
@@ -108,6 +108,13 @@ function parseTipoCusto(val: unknown): TipoCusto {
   return 'Custo Fixo'
 }
 
+function detectDiv(qtde: number, unitario: number, totalCelula: number, presente: boolean): boolean {
+  if (!presente) return false
+  const calc = qtde * unitario
+  if (calc === 0) return false
+  return Math.abs(calc - totalCelula) > 0.01
+}
+
 function isLinhaIgnorar(row: unknown[]): boolean {
   const col1 = String(row[1] ?? '').toLowerCase()
   const col5 = String(row[5] ?? '').trim()
@@ -146,15 +153,30 @@ function lerAba(ws: XLSX.WorkSheet, secaoId: string, secaoNome: string, ipca: nu
     const codigo = parseCodigo(row[0], `${secaoId}.${itemIdx++}`)
     const qtdeVendida = parseNum(row[7])
     const valorUnitarioAtual = parseNum(row[8])
-    const totalAtual = qtdeVendida * valorUnitarioAtual
+    const rawTotalAtual = row[9]
+    const totalAtual = parseNum(rawTotalAtual)
     const valorProjetado = calcValorProjetado(valorUnitarioAtual, ipca, parcelas)
-    const totalProjetado = qtdeVendida * valorProjetado
+    const totalProjetado = parseNum(row[11])
     const qtdeOrcada = parseNum(row[13])
     const valorUnitarioOrcado = parseNum(row[14])
-    const valorOrcado = qtdeOrcada * valorUnitarioOrcado
+    const rawValorOrcado = row[15]
+    const valorOrcado = parseNum(rawValorOrcado)
     const qtdeContratada = parseNum(row[17])
     const valorUnitarioContratado = parseNum(row[18])
-    const valorContratado = qtdeContratada * valorUnitarioContratado
+    const rawValorContratado = row[19]
+    const valorContratado = parseNum(rawValorContratado)
+
+    const divergenciaDetalhe: DivergenciaDetalhe[] = []
+    if (detectDiv(qtdeVendida, valorUnitarioAtual, totalAtual, rawTotalAtual !== null && rawTotalAtual !== '')) {
+      divergenciaDetalhe.push({ coluna: 'Vendido', qtde: qtdeVendida, unitario: valorUnitarioAtual, totalPlanilha: totalAtual, totalCalculado: qtdeVendida * valorUnitarioAtual })
+    }
+    if (detectDiv(qtdeOrcada, valorUnitarioOrcado, valorOrcado, rawValorOrcado !== null && rawValorOrcado !== '')) {
+      divergenciaDetalhe.push({ coluna: 'Orçado', qtde: qtdeOrcada, unitario: valorUnitarioOrcado, totalPlanilha: valorOrcado, totalCalculado: qtdeOrcada * valorUnitarioOrcado })
+    }
+    if (detectDiv(qtdeContratada, valorUnitarioContratado, valorContratado, rawValorContratado !== null && rawValorContratado !== '')) {
+      divergenciaDetalhe.push({ coluna: 'Contratado', qtde: qtdeContratada, unitario: valorUnitarioContratado, totalPlanilha: valorContratado, totalCalculado: qtdeContratada * valorUnitarioContratado })
+    }
+    const divergenciaTotais = divergenciaDetalhe.length > 0
     const valorFinal = parseNum(row[26])
     const valorPago = parseNum(row[27])
     const faltaPagar = valorFinal - valorPago
@@ -194,6 +216,8 @@ function lerAba(ws: XLSX.WorkSheet, secaoId: string, secaoNome: string, ipca: nu
       totalProgramado: parseNum(row[30]),
       emAberto: parseNum(row[31]),
       jotform,
+      divergenciaTotais,
+      divergenciaDetalhe,
     })
   }
 
@@ -230,9 +254,18 @@ function lerTAP(ws: XLSX.WorkSheet): Partial<TAP> {
   }
 }
 
+export interface DivergenciaItem {
+  secaoNome: string
+  item: string
+  codigo: string
+  divergenciaDetalhe: DivergenciaDetalhe[]
+}
+
 export interface ImportResult {
   projeto: Projeto
   avisos: string[]
+  divergencias: DivergenciaItem[]
+  totalDivergencias: number
 }
 
 export function importarXlsx(buffer: ArrayBuffer, nomeArquivo: string): ImportResult {
@@ -331,5 +364,16 @@ export function importarXlsx(buffer: ArrayBuffer, nomeArquivo: string): ImportRe
     importadoDe: nomeArquivo,
   }
 
-  return { projeto, avisos }
+  const divergencias: DivergenciaItem[] = secoes.flatMap((sec) =>
+    sec.itens
+      .filter((i) => i.divergenciaTotais)
+      .map((i) => ({
+        secaoNome: sec.nome,
+        item: i.item,
+        codigo: i.codigo,
+        divergenciaDetalhe: i.divergenciaDetalhe ?? [],
+      })),
+  )
+
+  return { projeto, avisos, divergencias, totalDivergencias: divergencias.length }
 }

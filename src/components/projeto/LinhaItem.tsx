@@ -80,6 +80,16 @@ function TextInput({ value, onChange, placeholder = '', width = '100px' }: {
   )
 }
 
+function isDivCol(item: ItemCusto, coluna: string): boolean {
+  return item.divergenciaDetalhe?.some((d) => d.coluna === coluna) ?? false
+}
+
+function divTitle(item: ItemCusto, coluna: string): string {
+  const d = item.divergenciaDetalhe?.find((x) => x.coluna === coluna)
+  if (!d) return ''
+  return `${coluna}: ${d.qtde} × ${formatBRL(d.unitario)} = ${formatBRL(d.totalCalculado)} | Planilha: ${formatBRL(d.totalPlanilha)}`
+}
+
 function getRowStyle(item: ItemCusto): React.CSSProperties {
   if (item.statusPagamento === 'pago') {
     return { backgroundColor: 'rgba(16,185,129,0.12)', borderLeft: '3px solid #10B981' }
@@ -104,7 +114,17 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
 
   return (
     <tr style={getRowStyle(item)}>
-      <Td><TextInput value={item.codigo} onChange={(v) => upd({ codigo: v })} width="60px" /></Td>
+      <Td>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <TextInput value={item.codigo} onChange={(v) => upd({ codigo: v })} width="60px" />
+          {item.divergenciaTotais && (
+            <span
+              title={item.divergenciaDetalhe?.map((d) => `${d.coluna}: ${d.qtde}×${formatBRL(d.unitario)}=${formatBRL(d.totalCalculado)} | Planilha: ${formatBRL(d.totalPlanilha)}`).join('\n')}
+              style={{ fontSize: 10, cursor: 'help', userSelect: 'none' }}
+            >⚠️</span>
+          )}
+        </div>
+      </Td>
       <Td><TextInput value={item.area} onChange={(v) => upd({ area: v })} width="80px" /></Td>
       <Td>
         <select value={item.moscow} onChange={(e) => upd({ moscow: e.target.value })} style={{ width: '50px' }}>
@@ -139,7 +159,14 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
       {/* VENDIDO */}
       <Td><QtyInput value={item.qtdeVendida} onChange={(v) => upd({ qtdeVendida: v })} /></Td>
       <Td><NumInput value={item.valorUnitarioAtual} onChange={(v) => upd({ valorUnitarioAtual: v })} /></Td>
-      <Td className="font-medium">{item.totalAtual ? formatBRL(item.totalAtual) : ''}</Td>
+      <Td className="font-medium">
+        {item.totalAtual ? (
+          <span
+            style={isDivCol(item, 'Vendido') ? { background: '#FEF9C3', color: '#CA8A04', borderRadius: 3, padding: '1px 4px' } : undefined}
+            title={divTitle(item, 'Vendido') || undefined}
+          >{formatBRL(item.totalAtual)}</span>
+        ) : ''}
+      </Td>
       <Td className="text-blue-600">{item.valorProjetado ? formatBRL(item.valorProjetado) : ''}</Td>
       <Td className="text-blue-600">{item.totalProjetado ? formatBRL(item.totalProjetado) : ''}</Td>
 
@@ -148,14 +175,28 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
       {/* ORÇADO */}
       <Td><QtyInput value={item.qtdeOrcada} onChange={(v) => upd({ qtdeOrcada: v })} /></Td>
       <Td><NumInput value={item.valorUnitarioOrcado} onChange={(v) => upd({ valorUnitarioOrcado: v })} /></Td>
-      <Td className="font-medium">{item.valorOrcado ? formatBRL(item.valorOrcado) : ''}</Td>
+      <Td className="font-medium">
+        {item.valorOrcado ? (
+          <span
+            style={isDivCol(item, 'Orçado') ? { background: '#FEF9C3', color: '#CA8A04', borderRadius: 3, padding: '1px 4px' } : undefined}
+            title={divTitle(item, 'Orçado') || undefined}
+          >{formatBRL(item.valorOrcado)}</span>
+        ) : ''}
+      </Td>
 
       <Td className="text-gray-300 select-none">|</Td>
 
       {/* CONTRATADO */}
       <Td><QtyInput value={item.qtdeContratada} onChange={(v) => upd({ qtdeContratada: v })} /></Td>
       <Td><NumInput value={item.valorUnitarioContratado} onChange={(v) => upd({ valorUnitarioContratado: v })} /></Td>
-      <Td className="font-medium">{item.valorContratado ? formatBRL(item.valorContratado) : ''}</Td>
+      <Td className="font-medium">
+        {item.valorContratado ? (
+          <span
+            style={isDivCol(item, 'Contratado') ? { background: '#FEF9C3', color: '#CA8A04', borderRadius: 3, padding: '1px 4px' } : undefined}
+            title={divTitle(item, 'Contratado') || undefined}
+          >{formatBRL(item.valorContratado)}</span>
+        ) : ''}
+      </Td>
 
       <Td><TextInput value={item.responsavel} onChange={(v) => upd({ responsavel: v })} width="80px" /></Td>
       <Td>
