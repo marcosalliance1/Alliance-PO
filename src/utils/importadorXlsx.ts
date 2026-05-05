@@ -261,9 +261,71 @@ function lerResumoGeral(wb: XLSX.WorkBook): { receitas: Receitas; verbaExtras: I
   if (!sheetName) return { receitas, verbaExtras }
 
   const ws = wb.Sheets[sheetName]
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][]
+  const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1:Z200')
 
-  // Detectar colunas vendido/orçado pelo cabeçalho (fallback: col D idx 3 e col I idx 8)
+  // ── "Verba extra": acesso direto por célula (evita problemas de índice de coluna) ──
+  let extIdx = 1
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    // Busca label "Verba extra" em qualquer célula de texto na linha
+    let labelFound = ''
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c })]
+      if (!cell || cell.t !== 's') continue
+      const norm = normLabel(String(cell.v))
+      if (/^verba\s*extra/.test(norm)) { labelFound = String(cell.v).trim(); break }
+    }
+    if (!labelFound) continue
+
+    // Coleta valores numéricos sem formato de percentual (cell.z sem '%')
+    const numVals: number[] = []
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c })]
+      if (!cell || cell.t !== 'n') continue
+      if (typeof cell.z === 'string' && cell.z.includes('%')) continue
+      const v = cell.v as number
+      if (v > 0) numVals.push(v)
+    }
+    if (numVals.length === 0) continue
+
+    // Maior valor = orçado; segundo maior = vendido (se houver)
+    const sorted = [...numVals].sort((a, b) => b - a)
+    const orcado = sorted[0]
+    const vendido = sorted[1] ?? 0
+
+    verbaExtras.push({
+      id: uuid(),
+      codigo: `ext.${extIdx++}`,
+      area: '',
+      subcategoria: 'Verbas Extras',
+      item: labelFound,
+      fornecedor: '',
+      tipoCusto: 'Custo Variável',
+      moscow: '',
+      qtdeVendida: vendido > 0 ? 1 : 0,
+      valorUnitarioAtual: vendido,
+      totalAtual: vendido,
+      valorProjetado: vendido,
+      totalProjetado: vendido,
+      qtdeOrcada: orcado > 0 ? 1 : 0,
+      valorUnitarioOrcado: orcado,
+      valorOrcado: orcado,
+      qtdeContratada: 0,
+      valorUnitarioContratado: 0,
+      valorContratado: 0,
+      responsavel: '',
+      status: 'orçar',
+      statusPagamento: 'N/A',
+      valorFinal: 0,
+      valorPago: 0,
+      faltaPagar: 0,
+      totalProgramado: 0,
+      emAberto: 0,
+      jotform: [],
+    })
+  }
+
+  // ── Receitas: sheet_to_json com detecção de colunas ──
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][]
   let vendidoCol = 3
   let orcadoCol = 8
   for (let i = 0; i < Math.min(rows.length, 15); i++) {
@@ -274,63 +336,10 @@ function lerResumoGeral(wb: XLSX.WorkBook): { receitas: Receitas; verbaExtras: I
       if (c === 'orcado' || c === 'orcamento') orcadoCol = j
     }
   }
-
-  let extIdx = 1
   for (const row of rows) {
-    // Label: col B (idx 1) preferido; col A (idx 0) se col B for vazio/número
-    const labelB = typeof row[1] === 'string' ? normLabel(row[1]) : ''
-    const labelA = typeof row[0] === 'string' ? normLabel(row[0]) : ''
-    const label = labelB || labelA
-    if (!label || SKIP_RESUMO.test(label)) continue
-
-    const originalLabel = (String(row[1] ?? '').trim()) || String(row[0] ?? '').trim()
-
-    // "Verba extra - *" → custo adicional sem aba própria
-    if (/^verba\s*extra/.test(label)) {
-      // Varrer TODAS as colunas para encontrar valores numéricos > 1 (exclui percentuais decimais)
-      // Layout esperado: vendido à esquerda, orçado à direita
-      const vals: number[] = []
-      for (let j = 0; j < row.length; j++) {
-        const v = row[j]
-        if (typeof v === 'number' && v > 1) vals.push(v)
-      }
-      if (vals.length === 0) continue
-      const orcado = vals[vals.length - 1]            // último (mais à direita) = orçado
-      const vendido = vals.length >= 2 ? vals[0] : 0 // primeiro = vendido (0 se só há orçado)
-      verbaExtras.push({
-        id: uuid(),
-        codigo: `ext.${extIdx++}`,
-        area: '',
-        subcategoria: 'Verbas Extras',
-        item: originalLabel,
-        fornecedor: '',
-        tipoCusto: 'Custo Variável',
-        moscow: '',
-        qtdeVendida: vendido > 0 ? 1 : 0,
-        valorUnitarioAtual: vendido,
-        totalAtual: vendido,
-        valorProjetado: vendido,
-        totalProjetado: vendido,
-        qtdeOrcada: orcado > 0 ? 1 : 0,
-        valorUnitarioOrcado: orcado,
-        valorOrcado: orcado,
-        qtdeContratada: 0,
-        valorUnitarioContratado: 0,
-        valorContratado: 0,
-        responsavel: '',
-        status: 'orçar',
-        statusPagamento: 'N/A',
-        valorFinal: 0,
-        valorPago: 0,
-        faltaPagar: 0,
-        totalProgramado: 0,
-        emAberto: 0,
-        jotform: [],
-      })
-      continue
-    }
-
-    // Receitas (usa colunas detectadas)
+    const label = (typeof row[1] === 'string' ? normLabel(row[1]) : '') ||
+                  (typeof row[0] === 'string' ? normLabel(row[0]) : '')
+    if (!label || SKIP_RESUMO.test(label) || /^verba\s*extra/.test(label)) continue
     const field = mapLabelReceita(label)
     if (!field) continue
     const vendido = parseNum(row[vendidoCol])
