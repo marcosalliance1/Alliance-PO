@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import type { Projeto, SecaoCusto, ItemCusto, TAP, TipoEscola, StatusItem, StatusPagamento, TipoCusto, DivergenciaDetalhe } from '../types'
+import type { Projeto, SecaoCusto, ItemCusto, TAP, TipoEscola, StatusItem, StatusPagamento, TipoCusto, DivergenciaDetalhe, Receitas } from '../types'
 import { v4 as uuid } from './uuid'
 import { getSecoesPorTipo } from '../data/secoesPorTipo'
 import { calcValorProjetado, emptyReceitas } from './calculos'
@@ -224,6 +224,75 @@ function lerAba(ws: XLSX.WorkSheet, secaoId: string, secaoNome: string, ipca: nu
   return { id: uuid(), numero: secaoId, nome: secaoNome, itens }
 }
 
+// Normaliza label de célula para matching (remove acentos, lowercase, sem chars especiais)
+function normLabel(val: unknown): string {
+  return String(val ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Mapeia label normalizado para campo de Receitas
+function mapLabelReceita(label: string): keyof Receitas | null {
+  if (/faturamento/.test(label)) return 'faturamentoAdesoes'
+  // "verba extra - adesões" ou "arrecadação extra"
+  if (/verba\s*extra.*ades/.test(label) || /arrecadac/.test(label)) return 'arrecadacaoExtra'
+  // "verba extra - convites" ou "vendas convites extras"
+  if (/verba\s*extra.*conv/.test(label) || /convite.*extra/.test(label) || /venda.*convite/.test(label)) return 'vendasConvitesExtras'
+  if (/mesa.*extra/.test(label) || /venda.*mesa/.test(label)) return 'vendasMesasExtras'
+  if (/receita.*venda/.test(label) || /venda.*baile/.test(label)) return 'receitaVendasBaile'
+  if (/rescis/.test(label)) return 'receitaRescisoes'
+  if (/\boutro/.test(label)) return 'outros'
+  return null
+}
+
+const SKIP_RESUMO = /^(receita baile|custo total|margem|total geral|resumo)/
+
+function lerReceitas(wb: XLSX.WorkBook): Receitas {
+  const sheetName = wb.SheetNames.find((n) => {
+    const norm = normalizarNomeAba(n)
+    return norm.includes('resumo geral') || norm === 'resumo'
+  })
+  const result = emptyReceitas()
+  if (!sheetName) return result
+
+  const ws = wb.Sheets[sheetName]
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][]
+
+  // Tentar detectar colunas pelo cabeçalho (busca "vendido" e "orçado" nas primeiras linhas)
+  let vendidoCol = 2  // padrão col C
+  let orcadoCol = 8   // padrão col I
+  for (let i = 0; i < Math.min(rows.length, 15); i++) {
+    const row = rows[i]
+    for (let j = 0; j < row.length; j++) {
+      const c = normLabel(row[j])
+      if (c === 'vendido') vendidoCol = j
+      if (c === 'orcado' || c === 'orcamento') orcadoCol = j
+    }
+  }
+
+  for (const row of rows) {
+    // Label pode estar em col B (idx 1) — col A contém fórmulas de referência
+    const label = normLabel(row[1])
+    if (!label || SKIP_RESUMO.test(label)) continue
+
+    const field = mapLabelReceita(label)
+    if (!field) continue
+
+    const vendido = parseNum(row[vendidoCol])
+    const orcado = parseNum(row[orcadoCol])
+    if (vendido === 0 && orcado === 0) continue
+
+    result[field].vendido += vendido
+    result[field].orcado += orcado
+  }
+
+  return result
+}
+
 function lerTAP(ws: XLSX.WorkSheet): Partial<TAP> {
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
   const map: Record<string, unknown> = {}
@@ -358,7 +427,7 @@ export function importarXlsx(buffer: ArrayBuffer, nomeArquivo: string): ImportRe
     id: uuid(),
     tap,
     secoes,
-    receitas: emptyReceitas(),
+    receitas: lerReceitas(wb),
     criadoEm: new Date().toISOString(),
     atualizadoEm: new Date().toISOString(),
     importadoDe: nomeArquivo,
