@@ -4,14 +4,16 @@ export function calcularProjetado(valorAtual, ipcaAm, tempoMeses) {
   return Number(valorAtual) * Math.pow(1 + Number(ipcaAm), Number(tempoMeses))
 }
 
-// Calcular totais de uma lista de itens
+// Calcular totais de uma lista de itens.
+// Usa os valores armazenados (importados/editados) em vez de recalcular qtde×unitário,
+// para que o total reflita o que está na P.O. (inclusive ajustes manuais).
 export function calcularTotaisItens(itens) {
   const sum = (arr, fn) => arr.reduce((acc, i) => acc + (fn(i) || 0), 0)
   return {
-    totalAtual: sum(itens, i => (i.qtde || 0) * (i.valorUnitarioAtual || 0)),
-    totalProjetado: sum(itens, i => (i.qtde || 0) * (i.valorProjetado || 0)),
-    totalOrcado: sum(itens, i => (i.qtdeOrcada || 0) * (i.valorUnitarioOrcado || 0)),
-    totalContratado: sum(itens, i => (i.qtdeContratada || 0) * (i.valorUnitarioContratado || 0)),
+    totalAtual: sum(itens, i => i.totalAtual || 0),
+    totalProjetado: sum(itens, i => i.totalProjetado || 0),
+    totalOrcado: sum(itens, i => i.valorOrcado || 0),
+    totalContratado: sum(itens, i => i.valorContratado || 0),
     totalPago: sum(itens, i => i.valorPago || 0),
   }
 }

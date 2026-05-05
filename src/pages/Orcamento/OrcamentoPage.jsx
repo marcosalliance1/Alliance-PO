@@ -315,10 +315,41 @@ function TabelaItens({ itens, secao, onAtualizarItem, onEditar, onExcluir }) {
   )
 }
 
+// Detecta divergências entre totais importados e qtde×unitário
+function detectarDivergencias(item) {
+  const calcAtual = (item.qtde || 0) * (item.valorUnitarioAtual || 0)
+  const calcOrcado = (item.qtdeOrcada || 0) * (item.valorUnitarioOrcado || 0)
+  const calcContratado = (item.qtdeContratada || 0) * (item.valorUnitarioContratado || 0)
+
+  const vendido = calcAtual > 0 && Math.abs(calcAtual - (item.totalAtual || 0)) > 0.01
+  const orcado = calcOrcado > 0 && Math.abs(calcOrcado - (item.valorOrcado || 0)) > 0.01
+  const contratado = calcContratado > 0 && Math.abs(calcContratado - (item.valorContratado || 0)) > 0.01
+
+  return { vendido, orcado, contratado, qualquer: vendido || orcado || contratado }
+}
+
+function tooltipDivergencia(coluna, qtde, unitario, totalPlanilha) {
+  const calculado = (qtde || 0) * (unitario || 0)
+  return [
+    `Valor total importado difere de Qtde × $ Unit. Verifique a P.O. original.`,
+    `${coluna}: ${qtde} × ${formatarMoeda(unitario)} = ${formatarMoeda(calculado)} | Importado: ${formatarMoeda(totalPlanilha)}`,
+  ].join('\n')
+}
+
 function LinhaItem({ item, statusClass, onAtualizar, onEditar, onExcluir }) {
+  const div = detectarDivergencias(item)
+
   return (
     <tr className={statusClass}>
-      <td style={{ fontSize: 11, color: '#64748B' }}>{item.codigo || '—'}</td>
+      <td style={{ fontSize: 11, color: '#64748B' }}>
+        {div.qualquer && (
+          <span
+            title="Valor total importado difere de Qtde × $ Unit. Verifique a P.O. original."
+            style={{ marginRight: 3, cursor: 'help', fontSize: 10 }}
+          >⚠️</span>
+        )}
+        {item.codigo || '—'}
+      </td>
       <td style={{ fontSize: 11 }}>{item.area || '—'}</td>
       <td style={{ fontSize: 11, textAlign: 'center' }}>{item.moscow || '—'}</td>
       <td><BadgeDefCusto tipo={item.defCusto} /></td>
@@ -329,19 +360,31 @@ function LinhaItem({ item, statusClass, onAtualizar, onEditar, onExcluir }) {
       {/* Vendido */}
       <CelulaEditavel valor={item.qtde} tipo="number" onChange={v => onAtualizar('qtde', Number(v))} style={{ borderLeft: '2px solid #BFDBFE' }} />
       <CelulaEditavel valor={item.valorUnitarioAtual} tipo="number" moeda onChange={v => onAtualizar('valorUnitarioAtual', Number(v))} />
-      <CelulaMoeda valor={item.totalAtual} />
+      <CelulaMoeda
+        valor={item.totalAtual}
+        divergente={div.vendido}
+        tooltipDiv={div.vendido ? tooltipDivergencia('Vendido', item.qtde, item.valorUnitarioAtual, item.totalAtual) : undefined}
+      />
       <CelulaMoeda valor={item.valorProjetado} />
       <CelulaMoeda valor={item.totalProjetado} />
 
       {/* Orçado */}
       <CelulaEditavel valor={item.qtdeOrcada} tipo="number" onChange={v => onAtualizar('qtdeOrcada', Number(v))} style={{ borderLeft: '2px solid #FEF3C7' }} />
       <CelulaEditavel valor={item.valorUnitarioOrcado} tipo="number" moeda onChange={v => onAtualizar('valorUnitarioOrcado', Number(v))} />
-      <CelulaMoeda valor={item.valorOrcado} />
+      <CelulaMoeda
+        valor={item.valorOrcado}
+        divergente={div.orcado}
+        tooltipDiv={div.orcado ? tooltipDivergencia('Orçado', item.qtdeOrcada, item.valorUnitarioOrcado, item.valorOrcado) : undefined}
+      />
 
       {/* Contratado */}
       <CelulaEditavel valor={item.qtdeContratada} tipo="number" onChange={v => onAtualizar('qtdeContratada', Number(v))} style={{ borderLeft: '2px solid #BBF7D0' }} />
       <CelulaEditavel valor={item.valorUnitarioContratado} tipo="number" moeda onChange={v => onAtualizar('valorUnitarioContratado', Number(v))} />
-      <CelulaMoeda valor={item.valorContratado} />
+      <CelulaMoeda
+        valor={item.valorContratado}
+        divergente={div.contratado}
+        tooltipDiv={div.contratado ? tooltipDivergencia('Contratado', item.qtdeContratada, item.valorUnitarioContratado, item.valorContratado) : undefined}
+      />
       <CelulaEditavel valor={item.valorPago} tipo="number" moeda onChange={v => onAtualizar('valorPago', Number(v))} />
       <CelulaEditavel valor={item.responsavel} tipo="text" onChange={v => onAtualizar('responsavel', v)} />
       <CelulaStatus valor={item.status} onChange={v => onAtualizar('status', v)} />
@@ -359,8 +402,20 @@ function LinhaItem({ item, statusClass, onAtualizar, onEditar, onExcluir }) {
   )
 }
 
-function CelulaMoeda({ valor }) {
+function CelulaMoeda({ valor, divergente, tooltipDiv }) {
   const n = Number(valor) || 0
+  if (divergente) {
+    return (
+      <td
+        className="valor"
+        title={tooltipDiv}
+        style={{ background: '#FEF9C3', color: '#CA8A04', cursor: 'help' }}
+      >
+        <span style={{ fontSize: 9, marginRight: 3 }}>⚠️</span>
+        {formatarMoeda(n)}
+      </td>
+    )
+  }
   return (
     <td className="valor" style={{ color: n < 0 ? '#DC2626' : undefined }}>
       {formatarMoeda(n)}

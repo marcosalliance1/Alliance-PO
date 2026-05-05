@@ -46,11 +46,8 @@ function limparTexto(val) {
 
 function tratarCodigo(val) {
   if (!val && val !== 0) return ''
-  // Se vier como data do Excel, extrair o valor numérico
   if (typeof val === 'number') {
-    // Pode ser serial date do Excel ou número normal
     if (val > 40000 && val < 50000) {
-      // É uma data serial do Excel, converter para string do ano
       const data = new Date((val - 25569) * 86400 * 1000)
       return String(data.getFullYear())
     }
@@ -98,13 +95,21 @@ function lerTAP(workbook) {
   }
 }
 
+// Detecta divergência entre total da planilha e qtde × unitário
+// Só aciona se a célula estava presente E o cálculo esperado é não-zero
+function detectarDivergencia(qtde, unitario, totalCelula, celulaPresente) {
+  if (!celulaPresente) return false
+  const calculado = (qtde || 0) * (unitario || 0)
+  if (calculado === 0) return false
+  return Math.abs(calculado - totalCelula) > 0.01
+}
+
 // Ler itens de uma aba de seção
 function lerItensSecao(sheet, secao, ipcaAm, tempoContrato) {
   const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:Z100')
   const itens = []
 
-  // Cabeçalho na linha 8 (índice 7), itens a partir da linha 9 (índice 8)
-  const LINHA_INICIO = 8 // índice 0-based
+  const LINHA_INICIO = 8 // índice 0-based (linha 9 na planilha)
 
   for (let r = LINHA_INICIO; r <= range.e.r; r++) {
     const getCel = (c) => {
@@ -113,10 +118,9 @@ function lerItensSecao(sheet, secao, ipcaAm, tempoContrato) {
       return cell.v !== undefined ? cell.v : null
     }
 
-    const subCat = limparTexto(getCel(4)) // Col E
+    const subCat = limparTexto(getCel(4))  // Col E
     const itemDesc = limparTexto(getCel(5)) // Col F
 
-    // Pular se ambos vazios
     if (!subCat && !itemDesc) continue
 
     const codigo = tratarCodigo(getCel(0))
@@ -124,19 +128,68 @@ function lerItensSecao(sheet, secao, ipcaAm, tempoContrato) {
     const moscow = limparTexto(getCel(2))
     const defCusto = limparTexto(getCel(3))
     const fornecedor = limparTexto(getCel(6))
-    const qtde = limparValor(getCel(7))
-    const valorUnitarioAtual = limparValor(getCel(8))
-    const qtdeOrcada = limparValor(getCel(13))
-    const valorUnitarioOrcado = limparValor(getCel(14))
-    const qtdeContratada = limparValor(getCel(17))
-    const valorUnitarioContratado = limparValor(getCel(18))
+
+    // Vendido pelo Comercial
+    const qtde = limparValor(getCel(7))                    // H — Qtde
+    const valorUnitarioAtual = limparValor(getCel(8))      // I — $ Unit. Atual
+    const rawTotalAtual = getCel(9)                        // J — Total Atual (lido direto)
+    const totalAtual = limparValor(rawTotalAtual)
+
+    // Projetado (unit price calculado; total lido da célula)
+    const valorProjetado = calcularProjetado(valorUnitarioAtual, ipcaAm, tempoContrato)
+    const rawTotalProjetado = getCel(11)                   // L — Total Projetado (lido direto)
+    const totalProjetado = limparValor(rawTotalProjetado)
+
+    // Orçado
+    const qtdeOrcada = limparValor(getCel(13))             // N — Qtde Orç.
+    const valorUnitarioOrcado = limparValor(getCel(14))    // O — $ Unit. Orç.
+    const rawValorOrcado = getCel(15)                      // P — Valor Orçado (lido direto)
+    const valorOrcado = limparValor(rawValorOrcado)
+
+    // Contratado
+    const qtdeContratada = limparValor(getCel(17))         // R — Qtde Contr.
+    const valorUnitarioContratado = limparValor(getCel(18))// S — $ Unit. Contr.
+    const rawValorContratado = getCel(19)                  // T — Valor Contratado (lido direto)
+    const valorContratado = limparValor(rawValorContratado)
+
     const responsavel = limparTexto(getCel(20))
     const status = limparTexto(getCel(21))
     const pgtoStr = limparTexto(getCel(24))
     const valorPago = limparValor(getCel(27))
     const faltaPagar = limparValor(getCel(28))
 
-    const valorProjetado = calcularProjetado(valorUnitarioAtual, ipcaAm, tempoContrato)
+    // Detecção de divergência (apenas quando a célula total estava presente)
+    const divergenciaDetalhe = []
+
+    if (detectarDivergencia(qtde, valorUnitarioAtual, totalAtual, rawTotalAtual !== null)) {
+      divergenciaDetalhe.push({
+        coluna: 'Vendido',
+        qtde,
+        unitario: valorUnitarioAtual,
+        totalPlanilha: totalAtual,
+        totalCalculado: qtde * valorUnitarioAtual,
+      })
+    }
+    if (detectarDivergencia(qtdeOrcada, valorUnitarioOrcado, valorOrcado, rawValorOrcado !== null)) {
+      divergenciaDetalhe.push({
+        coluna: 'Orçado',
+        qtde: qtdeOrcada,
+        unitario: valorUnitarioOrcado,
+        totalPlanilha: valorOrcado,
+        totalCalculado: qtdeOrcada * valorUnitarioOrcado,
+      })
+    }
+    if (detectarDivergencia(qtdeContratada, valorUnitarioContratado, valorContratado, rawValorContratado !== null)) {
+      divergenciaDetalhe.push({
+        coluna: 'Contratado',
+        qtde: qtdeContratada,
+        unitario: valorUnitarioContratado,
+        totalPlanilha: valorContratado,
+        totalCalculado: qtdeContratada * valorUnitarioContratado,
+      })
+    }
+
+    const divergenciaTotais = divergenciaDetalhe.length > 0
 
     itens.push({
       id: uuidv4(),
@@ -150,20 +203,22 @@ function lerItensSecao(sheet, secao, ipcaAm, tempoContrato) {
       fornecedor,
       qtde,
       valorUnitarioAtual,
-      totalAtual: qtde * valorUnitarioAtual,
+      totalAtual,
       valorProjetado,
-      totalProjetado: qtde * valorProjetado,
+      totalProjetado,
       qtdeOrcada,
       valorUnitarioOrcado,
-      valorOrcado: qtdeOrcada * valorUnitarioOrcado,
+      valorOrcado,
       qtdeContratada,
       valorUnitarioContratado,
-      valorContratado: qtdeContratada * valorUnitarioContratado,
+      valorContratado,
       responsavel,
       status: status || 'Em aberto',
       pgto: pgtoStr,
       valorPago,
       faltaPagar,
+      divergenciaTotais,
+      divergenciaDetalhe,
     })
   }
 
@@ -210,12 +265,23 @@ export async function importarXLSX(arquivo, onProgress) {
     }
   }
 
-  // Garantir que todas as seções existam
   for (const s of ordemSecoes) {
     if (!secoes[s]) secoes[s] = []
   }
 
   onProgress?.('Finalizando...')
+
+  // Consolidar divergências para o resumo de importação
+  const divergencias = Object.entries(secoes).flatMap(([secao, itens]) =>
+    itens
+      .filter(i => i.divergenciaTotais)
+      .map(i => ({
+        secao,
+        item: i.item,
+        codigo: i.codigo,
+        divergenciaDetalhe: i.divergenciaDetalhe,
+      }))
+  )
 
   return {
     tap,
@@ -223,5 +289,7 @@ export async function importarXLSX(arquivo, onProgress) {
     resumo,
     erros,
     totalItens: Object.values(secoes).reduce((acc, arr) => acc + arr.length, 0),
+    divergencias,
+    totalDivergencias: divergencias.length,
   }
 }
