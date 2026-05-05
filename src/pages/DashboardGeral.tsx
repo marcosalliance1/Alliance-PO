@@ -69,16 +69,39 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
     return { totalReceita, totalCusto, margem, pctFechados }
   }, [projetosFiltrados])
 
-  const barData = useMemo(() =>
-    projetosFiltrados.map((p) => {
+  const TIPO_LABELS: Record<string, string> = {
+    SUPERIOR: 'Ensino Superior',
+    MEDIO: 'Ensino Médio',
+    FUNDAMENTAL: 'Ensino Fundamental',
+  }
+
+  const barDataPorTipo = useMemo(() => {
+    const grupos = new Map<string, { nome: string; receita: number; custo: number; margem: number }[]>()
+    for (const p of projetosFiltrados) {
+      const tipo = p.tap.tipoEscola ?? 'MEDIO'
       const resumo = calcResumoProjeto(p)
-      return {
-        nome: p.tap.turma || p.id.slice(0, 6),
-        receita: resumo.receitaBaile.vendido,
-        custo: resumo.custoTotal.vendido,
-        margem: resumo.margem.vendido,
-      }
-    }), [projetosFiltrados])
+      const custo = filtroFornecedor
+        ? p.secoes.reduce((s, sec) =>
+            s + sec.itens
+              .filter(i => i.fornecedor?.trim() === filtroFornecedor)
+              .reduce((ss, i) => ss + (i.valorOrcado ?? 0), 0), 0)
+        : resumo.custoTotal.vendido
+      const entry = { nome: p.tap.turma || p.id.slice(0, 6), receita: resumo.receitaBaile.vendido, custo, margem: resumo.margem.vendido }
+      grupos.set(tipo, [...(grupos.get(tipo) ?? []), entry])
+    }
+    return (['SUPERIOR', 'MEDIO', 'FUNDAMENTAL'] as const)
+      .filter(t => grupos.has(t))
+      .map(t => ({ tipo: t, label: TIPO_LABELS[t], data: grupos.get(t)! }))
+  }, [projetosFiltrados, filtroFornecedor])
+
+  const custoFornecedorTotal = useMemo(() => {
+    if (!filtroFornecedor) return 0
+    return projetosFiltrados.reduce((total, p) =>
+      total + p.secoes.reduce((s, sec) =>
+        s + sec.itens
+          .filter(i => i.fornecedor?.trim() === filtroFornecedor)
+          .reduce((ss, i) => ss + (i.valorOrcado ?? 0), 0), 0), 0)
+  }, [projetosFiltrados, filtroFornecedor])
 
   const lineData = useMemo(() => {
     const byAno = new Map<number, { receita: number; margem: number }>()
@@ -231,8 +254,32 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
         <>
           <div className="grid grid-cols-2 gap-6 mb-6">
             <div className="card">
-              <h3 className="text-sm font-semibold text-text-main mb-4">Receita vs Custo por Turma</h3>
-              <GraficoBarras data={barData} />
+              <h3 className="text-sm font-semibold text-text-main mb-3">Receita vs Custo por Turma</h3>
+
+              {filtroFornecedor && (
+                <div className="flex items-center justify-between bg-primary/10 border border-primary/20 rounded-inner px-3 py-2 mb-4">
+                  <span className="text-xs text-text-muted">
+                    Total orçado — <span className="text-text-main font-medium">{filtroFornecedor}</span>
+                  </span>
+                  <span className="text-sm font-bold text-primary">{formatBRL(custoFornecedorTotal)}</span>
+                </div>
+              )}
+
+              {barDataPorTipo.map((grupo, idx) => {
+                const chartHeight = barDataPorTipo.length === 1 ? 260 : barDataPorTipo.length === 2 ? 200 : 170
+                return (
+                  <div key={grupo.tipo} className={idx > 0 ? 'mt-4 pt-4 border-t border-white/5' : ''}>
+                    {barDataPorTipo.length > 1 && (
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-2">{grupo.label}</p>
+                    )}
+                    <GraficoBarras
+                      data={grupo.data}
+                      height={chartHeight}
+                      custoLabel={filtroFornecedor ? 'Custo Fornecedor' : 'Custo'}
+                    />
+                  </div>
+                )
+              })}
             </div>
 
             {/* Top Fornecedores */}

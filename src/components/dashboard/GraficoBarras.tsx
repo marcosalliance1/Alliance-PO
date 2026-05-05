@@ -12,6 +12,8 @@ interface DataItem {
 
 interface GraficoBarrasProps {
   data: DataItem[]
+  custoLabel?: string
+  height?: number
 }
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number }[]; label?: string }) => {
@@ -26,9 +28,9 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   )
 }
 
-export function GraficoBarras({ data }: GraficoBarrasProps) {
+export function GraficoBarras({ data, custoLabel = 'Custo', height = 260 }: GraficoBarrasProps) {
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
         <XAxis dataKey="nome" tick={{ fill: '#8892b0', fontSize: 11 }} />
@@ -36,7 +38,7 @@ export function GraficoBarras({ data }: GraficoBarrasProps) {
         <Tooltip content={<CustomTooltip />} />
         <Legend wrapperStyle={{ fontSize: 12, color: '#8892b0' }} />
         <Bar dataKey="receita" name="Receita" fill="#00b894" radius={[4, 4, 0, 0]} />
-        <Bar dataKey="custo" name="Custo" fill="#e94560" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="custo" name={custoLabel} fill="#e94560" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   )
