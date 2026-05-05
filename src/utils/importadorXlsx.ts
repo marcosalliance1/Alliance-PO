@@ -235,13 +235,11 @@ function normLabel(val: unknown): string {
     .trim()
 }
 
-// Mapeia label normalizado para campo de Receitas
+// Mapeia label de RECEITA (nunca "verba extra" — esses são custos)
 function mapLabelReceita(label: string): keyof Receitas | null {
   if (/faturamento/.test(label)) return 'faturamentoAdesoes'
-  // "verba extra - adesões" ou "arrecadação extra"
-  if (/verba\s*extra.*ades/.test(label) || /arrecadac/.test(label)) return 'arrecadacaoExtra'
-  // "verba extra - convites" ou "vendas convites extras"
-  if (/verba\s*extra.*conv/.test(label) || /convite.*extra/.test(label) || /venda.*convite/.test(label)) return 'vendasConvitesExtras'
+  if (/arrecadac/.test(label)) return 'arrecadacaoExtra'
+  if (/convite.*extra/.test(label) || /venda.*convite/.test(label)) return 'vendasConvitesExtras'
   if (/mesa.*extra/.test(label) || /venda.*mesa/.test(label)) return 'vendasMesasExtras'
   if (/receita.*venda/.test(label) || /venda.*baile/.test(label)) return 'receitaVendasBaile'
   if (/rescis/.test(label)) return 'receitaRescisoes'
@@ -251,20 +249,23 @@ function mapLabelReceita(label: string): keyof Receitas | null {
 
 const SKIP_RESUMO = /^(receita baile|custo total|margem|total geral|resumo)/
 
-function lerReceitas(wb: XLSX.WorkBook): Receitas {
+// Lê a aba Resumo Geral e retorna receitas + itens de "Verba extra" (custos sem aba própria)
+function lerResumoGeral(wb: XLSX.WorkBook): { receitas: Receitas; verbaExtras: ItemCusto[] } {
+  const receitas = emptyReceitas()
+  const verbaExtras: ItemCusto[] = []
+
   const sheetName = wb.SheetNames.find((n) => {
     const norm = normalizarNomeAba(n)
     return norm.includes('resumo geral') || norm === 'resumo'
   })
-  const result = emptyReceitas()
-  if (!sheetName) return result
+  if (!sheetName) return { receitas, verbaExtras }
 
   const ws = wb.Sheets[sheetName]
   const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][]
 
-  // Tentar detectar colunas pelo cabeçalho (busca "vendido" e "orçado" nas primeiras linhas)
-  let vendidoCol = 2  // padrão col C
-  let orcadoCol = 8   // padrão col I
+  // Detectar colunas pelo cabeçalho; fallback: col C (idx 2) = vendido, col I (idx 8) = orçado
+  let vendidoCol = 2
+  let orcadoCol = 8
   for (let i = 0; i < Math.min(rows.length, 15); i++) {
     const row = rows[i]
     for (let j = 0; j < row.length; j++) {
@@ -274,23 +275,60 @@ function lerReceitas(wb: XLSX.WorkBook): Receitas {
     }
   }
 
+  let extIdx = 1
   for (const row of rows) {
-    // Label pode estar em col B (idx 1) — col A contém fórmulas de referência
     const label = normLabel(row[1])
     if (!label || SKIP_RESUMO.test(label)) continue
 
-    const field = mapLabelReceita(label)
-    if (!field) continue
-
     const vendido = parseNum(row[vendidoCol])
     const orcado = parseNum(row[orcadoCol])
-    if (vendido === 0 && orcado === 0) continue
 
-    result[field].vendido += vendido
-    result[field].orcado += orcado
+    // "Verba extra - *" → custo adicional sem aba própria
+    if (/^verba\s*extra/.test(label)) {
+      if (vendido === 0 && orcado === 0) continue
+      const nomeItem = String(row[1] ?? '').trim()
+      verbaExtras.push({
+        id: uuid(),
+        codigo: `ext.${extIdx++}`,
+        area: '',
+        subcategoria: 'Verbas Extras',
+        item: nomeItem,
+        fornecedor: '',
+        tipoCusto: 'Custo Variável',
+        moscow: '',
+        qtdeVendida: vendido > 0 ? 1 : 0,
+        valorUnitarioAtual: vendido,
+        totalAtual: vendido,
+        valorProjetado: vendido,
+        totalProjetado: vendido,
+        qtdeOrcada: orcado > 0 ? 1 : 0,
+        valorUnitarioOrcado: orcado,
+        valorOrcado: orcado,
+        qtdeContratada: 0,
+        valorUnitarioContratado: 0,
+        valorContratado: 0,
+        responsavel: '',
+        status: 'orçar',
+        statusPagamento: 'N/A',
+        valorFinal: 0,
+        valorPago: 0,
+        faltaPagar: 0,
+        totalProgramado: 0,
+        emAberto: 0,
+        jotform: [],
+      })
+      continue
+    }
+
+    // Receitas
+    const field = mapLabelReceita(label)
+    if (!field) continue
+    if (vendido === 0 && orcado === 0) continue
+    receitas[field].vendido += vendido
+    receitas[field].orcado += orcado
   }
 
-  return result
+  return { receitas, verbaExtras }
 }
 
 function lerTAP(ws: XLSX.WorkSheet): Partial<TAP> {
@@ -401,6 +439,12 @@ export function importarXlsx(buffer: ArrayBuffer, nomeArquivo: string): ImportRe
     return secoesMap.get(def.numero) ?? { id: uuid(), numero: def.numero, nome: def.nome, itens: [] }
   })
 
+  // Ler Resumo Geral: receitas + verbas extras (custos sem aba própria)
+  const { receitas: receitasImportadas, verbaExtras } = lerResumoGeral(wb)
+  if (verbaExtras.length > 0) {
+    secoes.push({ id: uuid(), numero: 'extras', nome: 'VERBAS EXTRAS', itens: verbaExtras })
+  }
+
   const tap: TAP = {
     instituicao: tapParcial.instituicao ?? '',
     curso: tapParcial.curso ?? '',
@@ -427,7 +471,7 @@ export function importarXlsx(buffer: ArrayBuffer, nomeArquivo: string): ImportRe
     id: uuid(),
     tap,
     secoes,
-    receitas: lerReceitas(wb),
+    receitas: receitasImportadas,
     criadoEm: new Date().toISOString(),
     atualizadoEm: new Date().toISOString(),
     importadoDe: nomeArquivo,
