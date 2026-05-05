@@ -368,7 +368,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
                       <YAxis tick={{ fill: '#8892b0', fontSize: 11 }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
                       <Tooltip
                         contentStyle={{ background: 'var(--color-surface, #1a1a2e)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, fontSize: 12 }}
-                        formatter={(v: number) => formatBRL(v)}
+                        formatter={(v) => formatBRL(Number(v) || 0)}
                       />
                       <Legend wrapperStyle={{ fontSize: 12, color: '#8892b0' }} />
                       <Bar dataKey="receitaVendido" name="Receita Vendida" fill="#3B82F6" radius={[4, 4, 0, 0]} />
