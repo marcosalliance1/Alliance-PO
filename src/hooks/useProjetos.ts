@@ -218,7 +218,15 @@ export function useProjetos() {
 
   // ── Custos Adicionais ────────────────────────────────────────────────────────
   const atualizarCustosAdicionais = useCallback(async (projetoId: string, custosAdicionais: CustoAdicional[]) => {
-    await patchProjeto(projetoId, { custos_adicionais: custosAdicionais })
+    const now = new Date().toISOString()
+    const { error: err } = await supabase
+      .from('projetos')
+      .update({ custos_adicionais: custosAdicionais, atualizado_em: now })
+      .eq('id', projetoId)
+    if (err) throw new Error(err.message)
+    setProjetos((prev) => prev.map((p) =>
+      p.id === projetoId ? { ...p, custosAdicionais, atualizadoEm: now } : p
+    ))
   }, [])
 
   const getProjeto = useCallback(
