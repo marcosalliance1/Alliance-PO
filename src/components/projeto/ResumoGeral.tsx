@@ -1,12 +1,15 @@
 import { useState, useMemo } from 'react'
-import type { Projeto, Receitas, ReceitaLinha, ConciliacaoEverest, LinhaEverest } from '../../types'
+import { Plus, Trash2 } from 'lucide-react'
+import type { Projeto, Receitas, ReceitaLinha, ConciliacaoEverest, LinhaEverest, CustoAdicional } from '../../types'
 import { calcResumoProjeto } from '../../utils/calculos'
 import { formatBRL } from '../../utils/formatters'
+import { v4 as uuid } from '../../utils/uuid'
 
 interface ResumoGeralProps {
   projeto: Projeto
   onUpdateReceitas: (r: Receitas) => void
   onUpdateConciliacao: (c: ConciliacaoEverest) => void
+  onUpdateCustosAdicionais: (items: CustoAdicional[]) => void
 }
 
 // Input BRL inline: exibe formatado, clique para editar com vírgula decimal
@@ -75,10 +78,23 @@ function emptyLinhaEverest(secaoId: string, secaoNome: string): LinhaEverest {
   return { secaoId, secaoNome, valorEverest: 0, observacao: '' }
 }
 
-export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao }: ResumoGeralProps) {
+export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao, onUpdateCustosAdicionais }: ResumoGeralProps) {
   const resumo = calcResumoProjeto(projeto)
   const r = projeto.receitas
   const margemPositiva = resumo.margem.vendido >= 0
+  const custosAdicionais = projeto.custosAdicionais ?? []
+
+  function addCustoAdicional() {
+    onUpdateCustosAdicionais([...custosAdicionais, { id: uuid(), descricao: '', vendido: 0, orcado: 0, contratado: 0, pago: 0 }])
+  }
+
+  function removeCustoAdicional(id: string) {
+    onUpdateCustosAdicionais(custosAdicionais.filter((c) => c.id !== id))
+  }
+
+  function updateCustoAdicional(id: string, changes: Partial<CustoAdicional>) {
+    onUpdateCustosAdicionais(custosAdicionais.map((c) => c.id === id ? { ...c, ...changes } : c))
+  }
 
   // Conciliação Everest — sincroniza seções com o projeto atual
   const conciliacao: ConciliacaoEverest = useMemo(() => {
@@ -189,6 +205,71 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao }: 
                 <ValorCell value={c.faltaPagar} className={c.faltaPagar > 0 ? 'text-danger' : ''} />
               </tr>
             ))}
+
+            {/* ── CUSTOS ADICIONAIS ──────────────────────────────────────── */}
+            <tr>
+              <td colSpan={6} className="px-3 py-1 bg-surface border-t border-white/10">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-text-muted uppercase tracking-wide">Custos Adicionais</span>
+                  <button
+                    onClick={addCustoAdicional}
+                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <Plus size={12} /> Adicionar linha
+                  </button>
+                </div>
+              </td>
+            </tr>
+
+            {custosAdicionais.map((ca) => {
+              const faltaPagar = ca.contratado - ca.pago
+              return (
+                <tr key={ca.id} className="border-b border-white/5 hover:bg-white/5 group">
+                  <td className="px-2 py-0.5">
+                    <input
+                      type="text"
+                      value={ca.descricao}
+                      onChange={(e) => updateCustoAdicional(ca.id, { descricao: e.target.value })}
+                      placeholder="Descrição..."
+                      className="w-full text-sm bg-transparent border-b border-white/10 focus:border-primary focus:outline-none py-0.5 text-text-main placeholder:text-text-muted/40"
+                    />
+                  </td>
+                  <td className="px-2 py-0.5">
+                    <BRLInput value={ca.vendido}    onChange={(v) => updateCustoAdicional(ca.id, { vendido: v })} />
+                  </td>
+                  <td className="px-2 py-0.5">
+                    <BRLInput value={ca.orcado}     onChange={(v) => updateCustoAdicional(ca.id, { orcado: v })} />
+                  </td>
+                  <td className="px-2 py-0.5">
+                    <BRLInput value={ca.contratado} onChange={(v) => updateCustoAdicional(ca.id, { contratado: v })} />
+                  </td>
+                  <td className="px-2 py-0.5">
+                    <BRLInput value={ca.pago}       onChange={(v) => updateCustoAdicional(ca.id, { pago: v })} />
+                  </td>
+                  <td className="px-3 py-1 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <span className={`text-sm ${faltaPagar > 0 ? 'text-danger' : 'text-text-muted'}`}>
+                        {formatBRL(faltaPagar)}
+                      </span>
+                      <button
+                        onClick={() => removeCustoAdicional(ca.id)}
+                        className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-danger transition-all"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+
+            {custosAdicionais.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-1.5 text-center text-xs text-text-muted/50 italic">
+                  Nenhum custo adicional — clique em "Adicionar linha" para incluir
+                </td>
+              </tr>
+            )}
 
             {/* CUSTO TOTAL */}
             <tr className="bg-surface-2 border-t-2 border-white/20">

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { Projeto, ItemCusto, ItemCatalogo, TAP, Receitas, ConciliacaoEverest } from '../types'
+import type { Projeto, ItemCusto, ItemCatalogo, TAP, Receitas, ConciliacaoEverest, CustoAdicional } from '../types'
 import { TAPForm } from '../components/projeto/TAPForm'
 import { SecaoCusto } from '../components/projeto/SecaoCusto'
 import { ResumoGeral } from '../components/projeto/ResumoGeral'
@@ -15,6 +15,7 @@ interface ViewProjetoProps {
   onUpdateTAP: (tap: TAP) => void
   onUpdateReceitas: (r: Receitas) => void
   onUpdateConciliacao: (c: ConciliacaoEverest) => void
+  onUpdateCustosAdicionais: (items: CustoAdicional[]) => void
   onAddItem: (secaoId: string) => void
   onAddItemFromBanco: (secaoId: string, partial: Partial<ItemCusto>) => void
   onUpdateItem: (secaoId: string, itemId: string, changes: Partial<ItemCusto>) => void
@@ -31,6 +32,7 @@ export function ViewProjeto({
   onUpdateTAP,
   onUpdateReceitas,
   onUpdateConciliacao,
+  onUpdateCustosAdicionais,
   onAddItem,
   onAddItemFromBanco,
   onUpdateItem,
@@ -146,7 +148,12 @@ export function ViewProjeto({
       )}
 
       {abaAtiva === 'resumo' && (
-        <ResumoGeral projeto={projeto} onUpdateReceitas={onUpdateReceitas} onUpdateConciliacao={onUpdateConciliacao} />
+        <ResumoGeral
+          projeto={projeto}
+          onUpdateReceitas={onUpdateReceitas}
+          onUpdateConciliacao={onUpdateConciliacao}
+          onUpdateCustosAdicionais={onUpdateCustosAdicionais}
+        />
       )}
     </div>
   )

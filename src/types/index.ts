@@ -112,11 +112,21 @@ export interface ConciliacaoEverest {
   observacaoGeral: string
 }
 
+export interface CustoAdicional {
+  id: string
+  descricao: string
+  vendido: number
+  orcado: number
+  contratado: number
+  pago: number
+}
+
 export interface Projeto {
   id: string
   tap: TAP
   secoes: SecaoCusto[]
   receitas: Receitas
+  custosAdicionais?: CustoAdicional[]
   conciliacaoEverest?: ConciliacaoEverest
   criadoEm: string
   atualizadoEm: string

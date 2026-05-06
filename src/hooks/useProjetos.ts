@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Projeto, SecaoCusto, ItemCusto, TAP, Receitas, ConciliacaoEverest } from '../types'
+import type { Projeto, SecaoCusto, ItemCusto, TAP, Receitas, ConciliacaoEverest, CustoAdicional } from '../types'
 import type { SyncResult } from '../utils/sheetsSync'
 import { v4 as uuid } from '../utils/uuid'
 import { getSecoesPorTipo } from '../data/secoesPorTipo'
@@ -12,6 +12,7 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
     tap: row.tap as TAP,
     secoes: row.secoes as SecaoCusto[],
     receitas: migrateReceitas(row.receitas),
+    custosAdicionais: (row.custos_adicionais as CustoAdicional[]) ?? [],
     conciliacaoEverest: (row.conciliacao_everest as ConciliacaoEverest) ?? undefined,
     criadoEm: row.criado_em as string,
     atualizadoEm: row.atualizado_em as string,
@@ -68,6 +69,7 @@ export function useProjetos() {
         tap: projeto.tap,
         secoes: projeto.secoes,
         receitas: projeto.receitas,
+        custos_adicionais: projeto.custosAdicionais ?? [],
         conciliacao_everest: projeto.conciliacaoEverest ?? null,
         importado_de: projeto.importadoDe ?? null,
         atualizado_em: now,
@@ -85,6 +87,7 @@ export function useProjetos() {
         tap: projeto.tap,
         secoes: projeto.secoes,
         receitas: projeto.receitas,
+        custos_adicionais: projeto.custosAdicionais ?? [],
         conciliacao_everest: projeto.conciliacaoEverest ?? null,
         importado_de: projeto.importadoDe ?? null,
         atualizado_em: new Date().toISOString(),
@@ -124,7 +127,7 @@ export function useProjetos() {
   }, [])
 
   // ── Helpers internos para salvar seções ────────────────────────────────────
-  async function patchProjeto(id: string, patch: Partial<{ tap: TAP; secoes: SecaoCusto[]; receitas: Receitas; conciliacao_everest: unknown }>) {
+  async function patchProjeto(id: string, patch: Partial<{ tap: TAP; secoes: SecaoCusto[]; receitas: Receitas; conciliacao_everest: unknown; custos_adicionais: CustoAdicional[] }>) {
     const now = new Date().toISOString()
     const { error: err } = await supabase.from('projetos').update({ ...patch, atualizado_em: now }).eq('id', id)
     if (err) throw new Error(err.message)
@@ -213,6 +216,11 @@ export function useProjetos() {
     await patchProjeto(projetoId, { conciliacao_everest: conciliacaoEverest })
   }, [projetos]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Custos Adicionais ────────────────────────────────────────────────────────
+  const atualizarCustosAdicionais = useCallback(async (projetoId: string, custosAdicionais: CustoAdicional[]) => {
+    await patchProjeto(projetoId, { custos_adicionais: custosAdicionais })
+  }, [])
+
   const getProjeto = useCallback(
     (id: string) => projetos.find((p) => p.id === id),
     [projetos],
@@ -265,7 +273,8 @@ export function useProjetos() {
   return {
     projetos, loading, error,
     carregar, criarProjeto, salvarProjeto, importarProjeto, reimportarProjeto, excluirProjeto,
-    atualizarTAP, atualizarReceitas, atualizarConciliacao, adicionarItem, atualizarItem, excluirItem,
+    atualizarTAP, atualizarReceitas, atualizarConciliacao, atualizarCustosAdicionais,
+    adicionarItem, atualizarItem, excluirItem,
     getProjeto, sincronizarSecoes, atualizarSheetsUrl,
   }
 }

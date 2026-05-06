@@ -113,6 +113,14 @@ export function calcResumoProjeto(projeto: Projeto): ResumoProjeto {
     { vendido: 0, projetado: 0, orcado: 0, contratado: 0, pago: 0, faltaPagar: 0 },
   )
 
+  for (const ca of projeto.custosAdicionais ?? []) {
+    custoTotal.vendido += ca.vendido
+    custoTotal.orcado += ca.orcado
+    custoTotal.contratado += ca.contratado
+    custoTotal.pago += ca.pago
+    custoTotal.faltaPagar += ca.contratado - ca.pago
+  }
+
   const margem = {
     vendido: totReceitaBaile.vendido - custoTotal.vendido,
     orcado: totReceitaBaile.orcado - custoTotal.orcado,

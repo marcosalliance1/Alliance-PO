@@ -10,7 +10,7 @@ import { Configuracoes } from './pages/Configuracoes'
 import { useProjetos } from './hooks/useProjetos'
 import { useBancoItens } from './hooks/useBancoItens'
 import { useConfiguracoes } from './hooks/useConfiguracoes'
-import type { ItemCusto, TAP, Receitas, ConciliacaoEverest, Projeto, ConfiguracaoGlobal, ItemCatalogo } from './types'
+import type { ItemCusto, TAP, Receitas, ConciliacaoEverest, Projeto, ConfiguracaoGlobal, ItemCatalogo, CustoAdicional } from './types'
 import { supabase } from './lib/supabase'
 
 // ── Spinner simples ──────────────────────────────────────────────────────────
@@ -32,6 +32,7 @@ interface ProjetoPageProps {
   atualizarTAP: (id: string, tap: TAP) => Promise<void>
   atualizarReceitas: (id: string, r: Receitas) => Promise<void>
   atualizarConciliacao: (id: string, c: ConciliacaoEverest) => Promise<void>
+  atualizarCustosAdicionais: (id: string, items: CustoAdicional[]) => Promise<void>
   adicionarItem: (id: string, secaoId: string, partial: Partial<ItemCusto>) => Promise<void>
   atualizarItem: (id: string, secaoId: string, itemId: string, changes: Partial<ItemCusto>) => Promise<void>
   excluirItem: (id: string, secaoId: string, itemId: string) => Promise<void>
@@ -40,7 +41,7 @@ interface ProjetoPageProps {
 
 function ProjetoPage({
   projetos, loading, bancoItens, config,
-  atualizarTAP, atualizarReceitas, atualizarConciliacao,
+  atualizarTAP, atualizarReceitas, atualizarConciliacao, atualizarCustosAdicionais,
   adicionarItem, atualizarItem, excluirItem, salvarProjeto,
 }: ProjetoPageProps) {
   const { id } = useParams<{ id: string }>()
@@ -56,6 +57,7 @@ function ProjetoPage({
       onUpdateTAP={(tap: TAP) => atualizarTAP(projeto.id, tap)}
       onUpdateReceitas={(r: Receitas) => atualizarReceitas(projeto.id, r)}
       onUpdateConciliacao={(c) => atualizarConciliacao(projeto.id, c)}
+      onUpdateCustosAdicionais={(items) => atualizarCustosAdicionais(projeto.id, items)}
       onAddItem={(secaoId: string) => adicionarItem(projeto.id, secaoId, {})}
       onAddItemFromBanco={(secaoId: string, partial: Partial<ItemCusto>) => adicionarItem(projeto.id, secaoId, partial)}
       onUpdateItem={(secaoId: string, itemId: string, changes: Partial<ItemCusto>) =>
@@ -73,7 +75,7 @@ function AppRoutes() {
   const {
     projetos, loading: loadingProjetos, carregar,
     criarProjeto, importarProjeto, reimportarProjeto, excluirProjeto,
-    atualizarTAP, atualizarReceitas, atualizarConciliacao,
+    atualizarTAP, atualizarReceitas, atualizarConciliacao, atualizarCustosAdicionais,
     adicionarItem, atualizarItem, excluirItem, salvarProjeto,
     sincronizarSecoes, atualizarSheetsUrl,
   } = useProjetos()
@@ -173,6 +175,7 @@ function AppRoutes() {
               atualizarTAP={atualizarTAP}
               atualizarReceitas={atualizarReceitas}
               atualizarConciliacao={atualizarConciliacao}
+              atualizarCustosAdicionais={atualizarCustosAdicionais}
               adicionarItem={adicionarItem}
               atualizarItem={atualizarItem}
               excluirItem={excluirItem}
