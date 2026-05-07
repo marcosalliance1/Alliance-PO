@@ -125,7 +125,7 @@ function isLinhaIgnorar(row: unknown[]): boolean {
   return false
 }
 
-function lerAba(ws: XLSX.WorkSheet, secaoId: string, secaoNome: string, ipca: number, parcelas: number): SecaoCusto {
+function lerAba(ws: XLSX.WorkSheet, secaoId: string, secaoNome: string): SecaoCusto {
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
 
   let headerRow = -1
@@ -414,9 +414,6 @@ export function importarXlsx(buffer: ArrayBuffer, nomeArquivo: string): ImportRe
   const tipoEscola = detectarTipoEscola(wb.SheetNames, tapParcial as Record<string, unknown>)
   const definicoes = getSecoesPorTipo(tipoEscola)
 
-  const ipca = tapParcial.ipca ?? 0.0594
-  const parcelas = tapParcial.parcelas ?? 12
-
   // Mapear abas de custo
   const secoesMap: Map<string, SecaoCusto> = new Map()
 
@@ -451,7 +448,7 @@ export function importarXlsx(buffer: ArrayBuffer, nomeArquivo: string): ImportRe
     const defSecao = definicoes.find((d) => d.numero === numeroReal)
     const nome = defSecao?.nome ?? sheetName
 
-    const secao = lerAba(wb.Sheets[sheetName], numeroReal, nome, ipca, parcelas)
+    const secao = lerAba(wb.Sheets[sheetName], numeroReal, nome)
     secoesMap.set(numeroReal, secao)
   }
 

@@ -104,7 +104,7 @@ function parseTipoCusto(val: unknown): TipoCusto {
 }
 
 function parseItens(
-  values: unknown[][], _secaoNumero: string, secaoNome: string, ipca: number, parcelas: number,
+  values: unknown[][], _secaoNumero: string, secaoNome: string,
 ): { itens: ItemCusto[], avisos: string[] } {
   const itens: ItemCusto[] = []
   const avisos: string[] = []
@@ -455,9 +455,6 @@ export async function sincronizarComSheets(
   let resumoEncontrado = false
   const avisosItens: string[] = []
 
-  const ipca = projeto.tap.ipca
-  const parcelas = projeto.tap.parcelas
-
   for (const nomeAba of sheetNames) {
     const especial = encontrarAbaEspecial(nomeAba)
 
@@ -501,7 +498,7 @@ export async function sincronizarComSheets(
     try {
       const values = await fetchAba(spreadsheetId, nomeAba, accessToken)
       if (values) {
-        const { itens, avisos: avisosAba } = parseItens(values, secaoProjeto.numero, secaoProjeto.nome, ipca, parcelas)
+        const { itens, avisos: avisosAba } = parseItens(values, secaoProjeto.numero, secaoProjeto.nome)
         novasSecoes.set(secaoProjeto.numero, itens)
         avisosItens.push(...avisosAba)
       }
