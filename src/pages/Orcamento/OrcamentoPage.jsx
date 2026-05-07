@@ -339,15 +339,7 @@ function LinhaItem({ item, statusClass, onAtualizar, onEditar, onExcluir }) {
 
   return (
     <tr className={statusClass}>
-      <td style={{ fontSize: 11, color: '#64748B' }}>
-        {div.qualquer && (
-          <span
-            title="Valor total importado difere de Qtde × $ Unit. Verifique a P.O. original."
-            style={{ marginRight: 3, cursor: 'help', fontSize: 10 }}
-          >⚠️</span>
-        )}
-        {item.codigo || '—'}
-      </td>
+      <td style={{ fontSize: 11, color: '#64748B' }}>{item.codigo || '—'}</td>
       <td style={{ fontSize: 11 }}>{item.area || '—'}</td>
       <td style={{ fontSize: 11, textAlign: 'center' }}>{item.moscow || '—'}</td>
       <td><BadgeDefCusto tipo={item.defCusto} /></td>
@@ -407,9 +399,8 @@ function CelulaMoeda({ valor, divergente, tooltipDiv }) {
       <td
         className="valor"
         title={tooltipDiv}
-        style={{ background: '#FEF9C3', color: '#CA8A04', cursor: 'help' }}
+        style={{ color: '#EA580C', cursor: 'help', fontWeight: 600 }}
       >
-        <span style={{ fontSize: 9, marginRight: 3 }}>⚠️</span>
         {formatarMoeda(n)}
       </td>
     )
