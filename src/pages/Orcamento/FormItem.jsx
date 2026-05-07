@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Input, Select } from '../../components/UI/Input'
 import Btn from '../../components/UI/Btn'
-import { calcularProjetado } from '../../utils/calculadora'
 
 const MOSCOW_OPTIONS = ['M', 'S', 'C', 'W']
 const DEF_CUSTO_OPTIONS = ['Custo Fixo', 'Custo Variável']
@@ -33,15 +32,14 @@ export default function FormItem({ item, secao, projeto, onSalvar, onCancelar })
 
   function handleSubmit(e) {
     e.preventDefault()
-    const valorProjetado = calcularProjetado(form.valorUnitarioAtual, projeto?.ipcaAm, projeto?.tempoContrato)
     onSalvar({
       id: item?.id,
       ...form,
       qtde: Number(form.qtde) || 0,
       valorUnitarioAtual: Number(form.valorUnitarioAtual) || 0,
-      valorProjetado,
+      valorProjetado: item?.valorProjetado || 0,
       totalAtual: (Number(form.qtde) || 0) * (Number(form.valorUnitarioAtual) || 0),
-      totalProjetado: (Number(form.qtde) || 0) * valorProjetado,
+      totalProjetado: item?.totalProjetado || 0,
       qtdeOrcada: Number(form.qtdeOrcada) || 0,
       valorUnitarioOrcado: Number(form.valorUnitarioOrcado) || 0,
       valorOrcado: (Number(form.qtdeOrcada) || 0) * (Number(form.valorUnitarioOrcado) || 0),

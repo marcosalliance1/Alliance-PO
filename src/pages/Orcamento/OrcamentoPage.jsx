@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useItensProjeto, mapearProjetoDoDB } from '../../hooks/useProjetos'
 import { formatarMoeda, formatarPercentual } from '../../utils/formatters'
-import { calcularTotaisItens, calcularDesvio, calcularProjetado, calcularStatusPgto } from '../../utils/calculadora'
+import { calcularTotaisItens, calcularDesvio, calcularStatusPgto } from '../../utils/calculadora'
 import { NOMES_SECOES, ORDEM_SECOES } from '../../data/bancoItensDefault'
 import { ChevronDown, ChevronRight, Plus, ArrowLeft, Edit2, Trash2 } from 'lucide-react'
 import Btn from '../../components/UI/Btn'
@@ -55,8 +55,6 @@ export default function OrcamentoPage() {
   function recalcular(item) {
     const atualizado = { ...item }
     atualizado.totalAtual = (atualizado.qtde || 0) * (atualizado.valorUnitarioAtual || 0)
-    atualizado.valorProjetado = calcularProjetado(atualizado.valorUnitarioAtual, projeto.ipcaAm, projeto.tempoContrato)
-    atualizado.totalProjetado = (atualizado.qtde || 0) * atualizado.valorProjetado
     atualizado.valorOrcado = (atualizado.qtdeOrcada || 0) * (atualizado.valorUnitarioOrcado || 0)
     atualizado.valorContratado = (atualizado.qtdeContratada || 0) * (atualizado.valorUnitarioContratado || 0)
     atualizado.pgto = calcularStatusPgto(atualizado.valorPago, atualizado.valorContratado)

@@ -1,5 +1,4 @@
 import * as XLSX from 'xlsx'
-import { calcularProjetado } from './calculadora'
 import { uuidv4 } from './uuid'
 
 // Mapeamento de abas para seções
@@ -135,10 +134,9 @@ function lerItensSecao(sheet, secao, ipcaAm, tempoContrato) {
     const rawTotalAtual = getCel(9)                        // J — Total Atual (lido direto)
     const totalAtual = limparValor(rawTotalAtual)
 
-    // Projetado (unit price calculado; total lido da célula)
-    const valorProjetado = calcularProjetado(valorUnitarioAtual, ipcaAm, tempoContrato)
-    const rawTotalProjetado = getCel(11)                   // L — Total Projetado (lido direto)
-    const totalProjetado = limparValor(rawTotalProjetado)
+    // Projetado — lidos direto da PO (espelho)
+    const valorProjetado = limparValor(getCel(10))         // K — $ Projetado
+    const totalProjetado = limparValor(getCel(11))         // L — Total Projetado
 
     // Orçado
     const qtdeOrcada = limparValor(getCel(13))             // N — Qtde Orç.
