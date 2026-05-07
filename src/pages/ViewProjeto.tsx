@@ -107,17 +107,24 @@ export function ViewProjeto({
         {abas.map((aba) => {
           const secao = projeto.secoes.find((s) => s.id === aba.id)
           const label = secao ? `${secao.numero} ${secao.nome.split(' ').slice(1, 3).join(' ')}` : aba.label
+          const temDivergencia = secao?.itens.some((i) => i.divergenciaTotais)
           return (
             <button
               key={aba.id}
               onClick={() => setAbaAtiva(aba.id)}
-              className={`px-3 py-1.5 rounded-inner text-xs font-medium whitespace-nowrap transition-colors ${
+              className={`relative px-3 py-1.5 rounded-inner text-xs font-medium whitespace-nowrap transition-colors ${
                 abaAtiva === aba.id
                   ? 'bg-primary text-white'
                   : 'bg-surface text-text-muted hover:text-text-main hover:bg-surface-2'
               }`}
             >
               {label}
+              {temDivergencia && (
+                <span
+                  style={{ width: 6, height: 6, borderRadius: '50%', background: '#EA580C', display: 'inline-block', marginLeft: 5, verticalAlign: 'middle' }}
+                  title="Esta seção tem itens com divergência de totais"
+                />
+              )}
             </button>
           )
         })}
