@@ -317,8 +317,8 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
                             const pct = calcPercentFechados(p)
                             const temSheets = !!p.sheetsUrl && !!extrairSpreadsheetId(p.sheetsUrl)
                             const isSincronizando = !!sincronizando[p.id]
-                            const margemPct = resumo.receitaBaile.vendido > 0
-                              ? ((resumo.receitaBaile.vendido - resumo.custoTotal.orcado) / resumo.receitaBaile.vendido) * 100
+                            const margemPct = resumo.receitaBaile.orcado > 0
+                              ? ((resumo.receitaBaile.orcado - resumo.custoTotal.orcado) / resumo.receitaBaile.orcado) * 100
                               : 0
 
                             return (
