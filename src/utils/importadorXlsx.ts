@@ -414,6 +414,9 @@ export function importarXlsx(buffer: ArrayBuffer, nomeArquivo: string): ImportRe
   const tipoEscola = detectarTipoEscola(wb.SheetNames, tapParcial as Record<string, unknown>)
   const definicoes = getSecoesPorTipo(tipoEscola)
 
+  const ipca = tapParcial.ipca ?? 0.0594
+  const parcelas = tapParcial.parcelas ?? 12
+
   // Mapear abas de custo
   const secoesMap: Map<string, SecaoCusto> = new Map()
 
