@@ -345,10 +345,6 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
                                 {/* Dados financeiros — 4 campos, uma linha */}
                                 <div className="flex items-center gap-3 text-xs mb-2.5">
                                   <div>
-                                    <span className="text-text-muted">Receita</span>
-                                    <p className="font-semibold text-text-main">{formatBRL(resumo.receitaBaile.vendido)}</p>
-                                  </div>
-                                  <div>
                                     <span className="text-text-muted">Receita Orç.</span>
                                     <p className="font-semibold text-text-main">{formatBRL(resumo.receitaBaile.orcado)}</p>
                                   </div>
