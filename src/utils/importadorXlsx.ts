@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx'
 import type { Projeto, SecaoCusto, ItemCusto, TAP, TipoEscola, StatusItem, StatusPagamento, TipoCusto, DivergenciaDetalhe, Receitas } from '../types'
 import { v4 as uuid } from './uuid'
 import { getSecoesPorTipo } from '../data/secoesPorTipo'
-import { calcValorProjetado, emptyReceitas } from './calculos'
+import { emptyReceitas } from './calculos'
 
 const MAPA_SECOES: Record<string, string> = {
   'custo producao': '2.1',
@@ -155,8 +155,8 @@ function lerAba(ws: XLSX.WorkSheet, secaoId: string, secaoNome: string, ipca: nu
     const valorUnitarioAtual = parseNum(row[8])
     const rawTotalAtual = row[9]
     const totalAtual = parseNum(rawTotalAtual)
-    const valorProjetado = calcValorProjetado(valorUnitarioAtual, ipca, parcelas)
-    const totalProjetado = parseNum(row[11])
+    const valorProjetado = parseNum(row[10])  // K — $ Projetado no Tempo (espelho da PO)
+    const totalProjetado = parseNum(row[11])  // L — Total Projetado (espelho da PO)
     const qtdeOrcada = parseNum(row[13])
     const valorUnitarioOrcado = parseNum(row[14])
     const rawValorOrcado = row[15]

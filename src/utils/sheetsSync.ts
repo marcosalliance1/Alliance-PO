@@ -1,6 +1,6 @@
 import type { Projeto, SecaoCusto, ItemCusto, StatusItem, StatusPagamento, TipoCusto, TAP, TipoEscola, Receitas } from '../types'
 import { v4 as uuid } from './uuid'
-import { calcValorProjetado, emptyReceitas } from './calculos'
+import { emptyReceitas } from './calculos'
 
 export interface SyncResult {
   secoes: SecaoCusto[]
@@ -127,8 +127,8 @@ function parseItens(
     const qtdeVendida = parseNum(get(7))
     const valorUnitarioAtual = parseNum(get(8))
     const totalAtual = qtdeVendida * valorUnitarioAtual
-    const valorProjetado = calcValorProjetado(valorUnitarioAtual, ipca, parcelas)
-    const totalProjetado = qtdeVendida * valorProjetado
+    const valorProjetado = parseNum(get(10))  // K — $ Projetado no Tempo (espelho da PO)
+    const totalProjetado = parseNum(get(11))  // L — Total Projetado (espelho da PO)
 
     const qtdeOrcada = parseNum(get(13))
     const valorUnitarioOrcado = parseNum(get(14))
