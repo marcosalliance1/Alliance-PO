@@ -114,17 +114,7 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
 
   return (
     <tr style={getRowStyle(item)}>
-      <Td>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <TextInput value={item.codigo} onChange={(v) => upd({ codigo: v })} width="60px" />
-          {item.divergenciaTotais && (
-            <span
-              title={item.divergenciaDetalhe?.map((d) => `${d.coluna}: ${d.qtde}×${formatBRL(d.unitario)}=${formatBRL(d.totalCalculado)} | Planilha: ${formatBRL(d.totalPlanilha)}`).join('\n')}
-              style={{ fontSize: 10, cursor: 'help', userSelect: 'none' }}
-            >⚠️</span>
-          )}
-        </div>
-      </Td>
+      <Td><TextInput value={item.codigo} onChange={(v) => upd({ codigo: v })} width="60px" /></Td>
       <Td><TextInput value={item.area} onChange={(v) => upd({ area: v })} width="80px" /></Td>
       <Td>
         <select value={item.moscow} onChange={(e) => upd({ moscow: e.target.value })} style={{ width: '50px' }}>
@@ -162,7 +152,7 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
       <Td className="font-medium">
         {item.totalAtual ? (
           <span
-            style={isDivCol(item, 'Vendido') ? { background: '#FEF9C3', color: '#CA8A04', borderRadius: 3, padding: '1px 4px' } : undefined}
+            style={isDivCol(item, 'Vendido') ? { color: '#EA580C', fontWeight: 600 } : undefined}
             title={divTitle(item, 'Vendido') || undefined}
           >{formatBRL(item.totalAtual)}</span>
         ) : ''}
@@ -178,7 +168,7 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
       <Td className="font-medium">
         {item.valorOrcado ? (
           <span
-            style={isDivCol(item, 'Orçado') ? { background: '#FEF9C3', color: '#CA8A04', borderRadius: 3, padding: '1px 4px' } : undefined}
+            style={isDivCol(item, 'Orçado') ? { color: '#EA580C', fontWeight: 600 } : undefined}
             title={divTitle(item, 'Orçado') || undefined}
           >{formatBRL(item.valorOrcado)}</span>
         ) : ''}
@@ -192,7 +182,7 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
       <Td className="font-medium">
         {item.valorContratado ? (
           <span
-            style={isDivCol(item, 'Contratado') ? { background: '#FEF9C3', color: '#CA8A04', borderRadius: 3, padding: '1px 4px' } : undefined}
+            style={isDivCol(item, 'Contratado') ? { color: '#EA580C', fontWeight: 600 } : undefined}
             title={divTitle(item, 'Contratado') || undefined}
           >{formatBRL(item.valorContratado)}</span>
         ) : ''}
