@@ -53,7 +53,13 @@ function getCell(values: unknown[][], row: number, col: number): unknown {
 function parseNum(val: unknown): number {
   if (typeof val === 'number') return isNaN(val) ? 0 : val
   if (typeof val === 'string') {
-    const n = parseFloat(val.replace(',', '.').replace(/[^\d.-]/g, ''))
+    // Remove R$, espaços, pontos de milhar, converte vírgula decimal
+    const cleaned = val
+      .replace(/R\$\s*/g, '')
+      .replace(/\./g, '')
+      .replace(',', '.')
+      .replace(/[^\d.-]/g, '')
+    const n = parseFloat(cleaned)
     return isNaN(n) ? 0 : n
   }
   return 0
@@ -109,7 +115,7 @@ function parseItens(
   const itens: ItemCusto[] = []
   const avisos: string[] = []
   const INICIO = 8
-  const TOLERANCIA = 1.0 // R$ 1,00
+  const TOLERANCIA = 1.0
 
   for (let r = INICIO; r < values.length; r++) {
     const get = (c: number) => getCell(values, r, c)
@@ -124,30 +130,40 @@ function parseItens(
     const tipoCusto = parseTipoCusto(get(3))
     const fornecedor = parseStr(get(6))
 
+    // VENDIDO PELO COMERCIAL — espelho direto da planilha
     const qtdeVendida = parseNum(get(7))
     const valorUnitarioAtual = parseNum(get(8))
-    const totalAtual = qtdeVendida * valorUnitarioAtual
-    const valorProjetado = parseNum(get(10))  // K — $ Projetado no Tempo (espelho da PO)
-    const totalProjetado = parseNum(get(11))  // L — Total Projetado (espelho da PO)
+    const totalAtual = parseNum(get(9))           // ← lê direto da col J, não recalcula
 
+    const valorProjetado = parseNum(get(10))       // K
+    const totalProjetado = parseNum(get(11))       // L — lê direto
+
+    // ORÇADO — espelho direto da planilha
     const qtdeOrcada = parseNum(get(13))
     const valorUnitarioOrcado = parseNum(get(14))
-    const valorOrcado = qtdeOrcada * valorUnitarioOrcado
-    // Col 15 = "Valor Orçado" direto na planilha (pode ter fórmula com literais em vez de Qtde × VU)
-    const valorOrcadoPlanilha = parseNum(get(15))
-    if (valorOrcadoPlanilha > 0 && Math.abs(valorOrcadoPlanilha - valorOrcado) > TOLERANCIA) {
-      const nome = item || subcategoria
-      avisos.push(`${secaoNome} › ${nome} — Orçado: planilha R$${valorOrcadoPlanilha.toFixed(2).replace('.', ',')} ≠ Qtde×VU R$${valorOrcado.toFixed(2).replace('.', ',')}`)
+    const valorOrcado = parseNum(get(15))          // ← lê direto da col P, não recalcula
+
+    // Aviso de inconsistência: Qtde × VU ≠ Valor Orçado na planilha
+    if (valorOrcado > 0 && qtdeOrcada > 0 && valorUnitarioOrcado > 0) {
+      const calculado = qtdeOrcada * valorUnitarioOrcado
+      if (Math.abs(valorOrcado - calculado) > TOLERANCIA) {
+        const nome = item || subcategoria
+        avisos.push(`⚠️ ${secaoNome} › ${nome} — Orçado: planilha R$${valorOrcado.toFixed(2).replace('.', ',')} ≠ Qtde×VU R$${calculado.toFixed(2).replace('.', ',')}`)
+      }
     }
 
+    // CONTRATADO — espelho direto da planilha
     const qtdeContratada = parseNum(get(17))
     const valorUnitarioContratado = parseNum(get(18))
-    const valorContratado = qtdeContratada * valorUnitarioContratado
-    // Col 19 = "Valor Contratado" direto na planilha
-    const valorContratadoPlanilha = parseNum(get(19))
-    if (valorContratadoPlanilha > 0 && Math.abs(valorContratadoPlanilha - valorContratado) > TOLERANCIA) {
-      const nome = item || subcategoria
-      avisos.push(`${secaoNome} › ${nome} — Contratado: planilha R$${valorContratadoPlanilha.toFixed(2).replace('.', ',')} ≠ Qtde×VU R$${valorContratado.toFixed(2).replace('.', ',')}`)
+    const valorContratado = parseNum(get(19))      // ← lê direto da col T, não recalcula
+
+    // Aviso de inconsistência: Qtde × VU ≠ Valor Contratado na planilha
+    if (valorContratado > 0 && qtdeContratada > 0 && valorUnitarioContratado > 0) {
+      const calculado = qtdeContratada * valorUnitarioContratado
+      if (Math.abs(valorContratado - calculado) > TOLERANCIA) {
+        const nome = item || subcategoria
+        avisos.push(`⚠️ ${secaoNome} › ${nome} — Contratado: planilha R$${valorContratado.toFixed(2).replace('.', ',')} ≠ Qtde×VU R$${calculado.toFixed(2).replace('.', ',')}`)
+      }
     }
 
     const responsavel = parseStr(get(20))
@@ -155,7 +171,7 @@ function parseItens(
     const statusPagamento = parsePgto(get(24))
     const valorFinal = parseNum(get(26))
     const valorPago = parseNum(get(27))
-    const faltaPagar = valorFinal > 0 ? valorFinal - valorPago : parseNum(get(28))
+    const faltaPagar = parseNum(get(28))           // ← lê direto da col AC
 
     itens.push({
       id: uuid(), codigo, area, subcategoria, item, fornecedor, tipoCusto, moscow,
@@ -171,9 +187,6 @@ function parseItens(
   return { itens, avisos }
 }
 
-// ── TAP from Simulador / Informações Gerais tab ──────────────────────────────
-// Scans all cells dynamically — for each label cell, takes the next non-empty
-// value to the right (up to 5 columns). Handles any column layout.
 export function parseTAPFromSheet(values: unknown[][]): Partial<TAP> {
   const map = new Map<string, unknown>()
 
@@ -201,7 +214,6 @@ export function parseTAPFromSheet(values: unknown[][]): Partial<TAP> {
     return undefined
   }
 
-  // IPCA: sheet stores as percentage (8.0 = 8%), TAP stores as decimal (0.08)
   let ipca = parseNum(get(['ipca a a', 'ipca aa', 'ipca a.a', 'ipca anual', 'ipca']))
   if (ipca >= 1) ipca = ipca / 100
 
@@ -216,8 +228,6 @@ export function parseTAPFromSheet(values: unknown[][]): Partial<TAP> {
   if (tipoStr.includes('fundamental')) tipoEscola = 'FUNDAMENTAL'
   else if (tipoStr.includes('superior') || tipoStr.includes('faculdade') || tipoStr.includes('universidade')) tipoEscola = 'SUPERIOR'
 
-  // Only include fields that were actually found (non-zero, non-empty)
-  // so merging in the caller doesn't overwrite defaults with zeros/empty
   const found: Partial<TAP> = {}
 
   const instituicao = parseStr(get(['instituicao de ensino', 'instituicao', 'escola']))
@@ -256,15 +266,9 @@ export function parseTAPFromSheet(values: unknown[][]): Partial<TAP> {
   return found
 }
 
-// ── Receitas from Resumo Geral tab ───────────────────────────────────────────
-// Double header: row0=group ("Vendido pelo Comercial", "Orçado", etc.)
-//                row1=subcolumn ("Valor", "Qtde", "Falta Pagar", etc.)
-// Merged key: norm(group) + ' / ' + norm(subcolumn)
-// Stops at "RECEITA BAILE" row (calculated dynamically — not imported).
 function parseReceitasFromResumo(values: unknown[][]): Partial<Receitas> {
   type ReceitaKey = keyof Receitas
 
-  // More specific patterns must come before broader ones
   const MAPA: Array<[string, ReceitaKey]> = [
     ['faturamento adesoes', 'faturamentoAdesoes'],
     ['vendas convites extras', 'vendasConvitesExtras'],
@@ -278,7 +282,6 @@ function parseReceitasFromResumo(values: unknown[][]): Partial<Receitas> {
     ['outros', 'outros'],
   ]
 
-  // Step 1: find header rows — scan first 15 rows for group-header row
   let headerRow0 = -1
   for (let r = 0; r < Math.min(values.length, 15); r++) {
     const joined = ((values[r] as unknown[]) ?? []).map(c => norm(parseStr(c))).join(' ')
@@ -288,7 +291,6 @@ function parseReceitasFromResumo(values: unknown[][]): Partial<Receitas> {
     }
   }
 
-  // Step 2: build column map from merged (group / subcolumn) headers
   let colVendido = 2
   let colOrcado = 4
   let colContratado = 6
@@ -317,7 +319,6 @@ function parseReceitasFromResumo(values: unknown[][]): Partial<Receitas> {
     }
   }
 
-  // Step 3: parse data rows
   const parseCell = (r: number, col: number): number => {
     const v = getCell(values, r, col)
     const s = String(v ?? '').trim()
@@ -332,7 +333,6 @@ function parseReceitasFromResumo(values: unknown[][]): Partial<Receitas> {
     if (!label) label = norm(parseStr(getCell(values, r, 0)))
     if (!label) continue
 
-    // RECEITA BAILE marks the end of the receitas block — computed dynamically, not imported
     if (label.includes('receita baile')) break
 
     let chave: ReceitaKey | undefined
@@ -368,7 +368,8 @@ function parseReceitasFromResumo(values: unknown[][]): Partial<Receitas> {
 
 async function fetchAba(spreadsheetId: string, nomeAba: string, accessToken: string, rangeSpec?: string): Promise<unknown[][] | null> {
   const rangeParam = rangeSpec ?? nomeAba
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(rangeParam)}?valueRenderOption=UNFORMATTED_VALUE`
+  // FORMATTED_VALUE: espelha exatamente o que aparece na planilha (já calculado e formatado)
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(rangeParam)}?valueRenderOption=FORMATTED_VALUE`
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
 
   if (resp.status === 401) {
@@ -388,7 +389,6 @@ async function fetchAba(spreadsheetId: string, nomeAba: string, accessToken: str
   return data.values ?? []
 }
 
-// ── Ler apenas o TAP de uma planilha (usado no Novo Projeto) ─────────────────
 export async function lerTAPDeSheets(
   spreadsheetId: string,
   accessToken: string,
@@ -508,7 +508,6 @@ export async function sincronizarComSheets(
     }
   }
 
-  // Merge sections: preserve valorPago and items not found in sheet
   const secoesAtualizadas = projeto.secoes.map(secao => {
     const novosItens = novasSecoes.get(secao.numero)
     if (!novosItens) return secao
@@ -545,7 +544,6 @@ export async function sincronizarComSheets(
     return { ...secao, itens: itensFinais }
   })
 
-  // Merge receitas: only overwrite non-zero values from sheet
   const receitasBase = emptyReceitas()
   const receitasMerged = { ...receitasBase }
   for (const k of Object.keys(receitasMerged) as (keyof Receitas)[]) {
