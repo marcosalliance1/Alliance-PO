@@ -44,7 +44,7 @@ export function TotaisSecaoRow({ totais, nomeSecao }: TotaisSecaoProps) {
         <td />
         <td />
         <td>{formatBRL(totais.custoPorFormandoContratado)}</td>
-        <td colSpan={SPAN - 20} />
+        <td colSpan={7} />
       </tr>
     </>
   )
