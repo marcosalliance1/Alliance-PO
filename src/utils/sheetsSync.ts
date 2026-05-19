@@ -529,7 +529,7 @@ export async function sincronizarComSheets(
         itensFinais.push({
           ...novoItem,
           id: existente.id,
-          valorPago: existente.valorPago > 0 ? existente.valorPago : novoItem.valorPago,
+          valorPago: novoItem.valorPago,
           jotform: existente.jotform,
         })
       } else {
