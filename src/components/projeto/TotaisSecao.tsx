@@ -6,7 +6,6 @@ interface TotaisSecaoProps {
   nomeSecao: string
 }
 
-const SPAN = 26
 
 export function TotaisSecaoRow({ totais, nomeSecao }: TotaisSecaoProps) {
   return (
@@ -27,9 +26,10 @@ export function TotaisSecaoRow({ totais, nomeSecao }: TotaisSecaoProps) {
         <td />
         <td className="font-bold">{formatBRL(totais.totalContratado)}</td>
         <td colSpan={3} />
+        <td />
         <td className="font-bold">{formatBRL(totais.totalPago)}</td>
         <td className="font-bold">{formatBRL(totais.totalFaltaPagar)}</td>
-        <td colSpan={SPAN - 24} />
+        <td colSpan={3} />
       </tr>
       <tr className="row-cpf">
         <td colSpan={9}>Custo por formando</td>
