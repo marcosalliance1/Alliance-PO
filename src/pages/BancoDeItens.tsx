@@ -4,7 +4,27 @@ import { Header } from '../components/layout/Header'
 import { Modal } from '../components/ui/Modal'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { formatBRL } from '../utils/formatters'
-import { Plus, Pencil, EyeOff, Eye } from 'lucide-react'
+import { Plus, Pencil, EyeOff, Eye, Search } from 'lucide-react'
+
+// ── Busca fuzzy ───────────────────────────────────────────────────────────────
+
+function normText(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')   // remove acentos
+    .replace(/[-_]/g, ' ')             // hífens/underscores → espaço
+    .replace(/\s+/g, ' ')             // colapsa espaços
+    .trim()
+}
+
+function fuzzyMatch(query: string, item: ItemCatalogo): boolean {
+  const alvo = normText(
+    [item.item, item.subcategoria, item.area, item.fornecedorPadrao].join(' '),
+  )
+  const palavras = normText(query).split(' ').filter(Boolean)
+  return palavras.every((p) => alvo.includes(p))
+}
 
 interface BancoDeItensProps {
   itens: ItemCatalogo[]
@@ -102,6 +122,7 @@ export function BancoDeItens({ itens, onAdicionar, onAtualizar, onDesativar, onR
   const [filtroSecao, setFiltroSecao] = useState('')
   const [filtroTipo, setFiltroTipo] = useState<TipoEscola | ''>('')
   const [showInativos, setShowInativos] = useState(false)
+  const [busca, setBusca] = useState('')
   const [modalNovo, setModalNovo] = useState(false)
   const [editando, setEditando] = useState<ItemCatalogo | null>(null)
   const [desativando, setDesativando] = useState<string | null>(null)
@@ -117,9 +138,10 @@ export function BancoDeItens({ itens, onAdicionar, onAtualizar, onDesativar, onR
       if (!showInativos && !i.ativo) return false
       if (filtroSecao && !i.secaoAplicavel.includes(filtroSecao)) return false
       if (filtroTipo && !i.tiposEscolaAplicavel.includes(filtroTipo)) return false
+      if (busca && !fuzzyMatch(busca, i)) return false
       return true
     })
-  }, [itens, filtroSecao, filtroTipo, showInativos])
+  }, [itens, filtroSecao, filtroTipo, showInativos, busca])
 
   const SELECT = 'bg-surface border border-white/10 rounded-inner px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary'
 
@@ -135,7 +157,27 @@ export function BancoDeItens({ itens, onAdicionar, onAtualizar, onDesativar, onR
         }
       />
 
-      <div className="flex gap-3 mb-5 flex-wrap">
+      <div className="flex gap-3 mb-5 flex-wrap items-center">
+        {/* Campo de busca fuzzy */}
+        <div className="relative flex-1 min-w-[220px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Buscar item, sub cat., área... (ignora acentos e hífens)"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="w-full bg-surface border border-white/10 rounded-inner pl-8 pr-3 py-2 text-sm text-text-main placeholder:text-text-muted/50 focus:outline-none focus:border-primary"
+          />
+          {busca && (
+            <button
+              onClick={() => setBusca('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main text-xs"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
         <select className={SELECT} value={filtroSecao} onChange={(e) => setFiltroSecao(e.target.value)}>
           <option value="">Todas as seções</option>
           {secoes.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -150,6 +192,12 @@ export function BancoDeItens({ itens, onAdicionar, onAtualizar, onDesativar, onR
           <input type="checkbox" checked={showInativos} onChange={(e) => setShowInativos(e.target.checked)} className="accent-primary" />
           Mostrar inativos
         </label>
+
+        {busca && (
+          <span className="text-xs text-text-muted">
+            {filtrados.length} resultado{filtrados.length !== 1 ? 's' : ''} para <span className="text-primary">"{busca}"</span>
+          </span>
+        )}
       </div>
 
       <div className="card p-0 overflow-hidden">

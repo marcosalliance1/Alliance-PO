@@ -1,5 +1,31 @@
 import { fetchAba, fetchSheetNames, extrairSpreadsheetId } from './sheetsSync'
 
+// ── Rate limiting helpers ─────────────────────────────────────────────────────
+
+/** Pausa entre requisições para evitar "Quota exceeded" (60 req/min no Google Sheets API). */
+const DELAY_ENTRE_REQS_MS = 1200
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+async function comRetry<T>(
+  fn: () => Promise<T>,
+  maxTentativas = 3,
+): Promise<T> {
+  for (let i = 0; i < maxTentativas; i++) {
+    try {
+      return await fn()
+    } catch (e) {
+      if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
+      if (i === maxTentativas - 1) throw e
+      // Backoff exponencial: 5s, 10s
+      await sleep(5000 * Math.pow(2, i))
+    }
+  }
+  throw new Error('Máximo de tentativas atingido')
+}
+
 export interface VerbasItem {
   projeto_id: string
   projeto_nome: string
@@ -71,7 +97,9 @@ export async function sincronizarVerbas(
   const segmento = derivarSegmento(tapCurso)
   onProgress(`[${projetoNome}] Lendo estrutura...`)
 
-  const sheetNames = await fetchSheetNames(spreadsheetId, accessToken)
+  const sheetNames = await comRetry(() => fetchSheetNames(spreadsheetId, accessToken))
+  await sleep(DELAY_ENTRE_REQS_MS)
+
   const abas2 = sheetNames.filter(name => name.startsWith('2.'))
 
   const itens: VerbasItem[] = []
@@ -82,7 +110,8 @@ export async function sincronizarVerbas(
 
     onProgress(`[${projetoNome}] Lendo ${nomeAba}...`)
 
-    const values = await fetchAba(spreadsheetId, nomeAba, accessToken)
+    const values = await comRetry(() => fetchAba(spreadsheetId, nomeAba, accessToken))
+    await sleep(DELAY_ENTRE_REQS_MS)
     if (!values) continue
 
     // Row 8 (index 7) = cabeçalho, dados a partir da linha 9 (index 8)

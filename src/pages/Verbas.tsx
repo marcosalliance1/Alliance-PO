@@ -5,7 +5,7 @@ import {
 import { RefreshCw, AlertCircle, CheckCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useGoogleAuth } from '../contexts/GoogleAuthContext'
-import { sincronizarVerbas } from '../utils/verbasSync'
+import { sincronizarVerbas, sleep } from '../utils/verbasSync'
 import { formatBRL } from '../utils/formatters'
 
 // ── Tipos locais ─────────────────────────────────────────────────────────────
@@ -181,12 +181,16 @@ export function Verbas() {
       const idsProcessados: string[] = []
       const erros: string[] = []
 
-      for (const row of comUrl) {
+      for (let idx = 0; idx < comUrl.length; idx++) {
+        const row = comUrl[idx]
         const nome =
           (row.tap.nome as string | undefined) ??
           (row.tap.instituicao as string | undefined) ??
           row.id
         const curso = row.tap.curso as string | undefined
+
+        // Delay entre projetos para evitar quota do Google Sheets API
+        if (idx > 0) await sleep(2000)
 
         try {
           const itensProj = await sincronizarVerbas(
