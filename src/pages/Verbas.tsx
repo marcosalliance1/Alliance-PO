@@ -329,6 +329,7 @@ export function Verbas() {
                   fontSize: 12,
                 }}
                 labelStyle={{ color: '#f0f0f0', marginBottom: 4 }}
+                itemStyle={{ color: '#8892b0' }}
                 formatter={(value) => [formatBRL(Number(value ?? 0)), 'Total Orçado']}
               />
               <Bar dataKey="total" radius={[4, 4, 0, 0]} maxBarSize={56}>

@@ -19,6 +19,8 @@ export function GraficoLinha({ data }: { data: DataItem[] }) {
         <Tooltip
           formatter={(v) => formatBRL(Number(v))}
           contentStyle={{ background: '#1a1a2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+          labelStyle={{ color: '#f0f0f0' }}
+          itemStyle={{ color: '#8892b0' }}
         />
         <Legend wrapperStyle={{ fontSize: 12, color: '#8892b0' }} />
         <Line type="monotone" dataKey="receita" name="Receita" stroke="#00b894" strokeWidth={2} dot={{ fill: '#00b894' }} />

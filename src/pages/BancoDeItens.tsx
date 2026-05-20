@@ -6,15 +6,15 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { formatBRL } from '../utils/formatters'
 import { Plus, Pencil, EyeOff, Eye, Search } from 'lucide-react'
 
-// ── Busca fuzzy ───────────────────────────────────────────────────────────────
+// -- Busca fuzzy ------------------------------------------------------------------
 
 function normText(s: string): string {
   return s
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')   // remove acentos
-    .replace(/[-_]/g, ' ')             // hífens/underscores → espaço
-    .replace(/\s+/g, ' ')             // colapsa espaços
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[-_]/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
 }
 
@@ -63,7 +63,7 @@ function ItemForm({ inicial, onSave, onCancel }: {
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs text-text-muted mb-1 block">Área</label>
+          <label className="text-xs text-text-muted mb-1 block">Area</label>
           <input className={INPUT} value={d.area} onChange={(e) => setD({ ...d, area: e.target.value })} />
         </div>
         <div>
@@ -75,14 +75,14 @@ function ItemForm({ inicial, onSave, onCancel }: {
           <input className={INPUT} value={d.item} onChange={(e) => setD({ ...d, item: e.target.value })} />
         </div>
         <div>
-          <label className="text-xs text-text-muted mb-1 block">Fornecedor Padrão</label>
+          <label className="text-xs text-text-muted mb-1 block">Fornecedor Padrao</label>
           <input className={INPUT} value={d.fornecedorPadrao} onChange={(e) => setD({ ...d, fornecedorPadrao: e.target.value })} />
         </div>
         <div>
           <label className="text-xs text-text-muted mb-1 block">Tipo de Custo</label>
           <select className={INPUT} value={d.tipoCusto} onChange={(e) => setD({ ...d, tipoCusto: e.target.value as ItemCatalogo['tipoCusto'] })}>
             <option>Custo Fixo</option>
-            <option>Custo Variável</option>
+            <option>Custo Variavel</option>
           </select>
         </div>
         <div>
@@ -90,7 +90,7 @@ function ItemForm({ inicial, onSave, onCancel }: {
           <input type="number" className={INPUT} value={d.valorUnitarioReferencia || ''} onChange={(e) => setD({ ...d, valorUnitarioReferencia: parseFloat(e.target.value) || 0 })} />
         </div>
         <div>
-          <label className="text-xs text-text-muted mb-1 block">Seções (ex: 2.1, 2.3)</label>
+          <label className="text-xs text-text-muted mb-1 block">Secoes (ex: 2.1, 2.3)</label>
           <input className={INPUT} value={d.secaoAplicavel.join(', ')} onChange={(e) => setD({ ...d, secaoAplicavel: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} />
         </div>
       </div>
@@ -158,12 +158,11 @@ export function BancoDeItens({ itens, onAdicionar, onAtualizar, onDesativar, onR
       />
 
       <div className="flex gap-3 mb-5 flex-wrap items-center">
-        {/* Campo de busca fuzzy */}
         <div className="relative flex-1 min-w-[220px]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
           <input
             type="text"
-            placeholder="Buscar item, sub cat., área... (ignora acentos e hífens)"
+            placeholder="Buscar item, sub cat., area... (ignora acentos e hifens)"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             className="w-full bg-surface border border-white/10 rounded-inner pl-8 pr-3 py-2 text-sm text-text-main placeholder:text-text-muted/50 focus:outline-none focus:border-primary"
@@ -173,19 +172,19 @@ export function BancoDeItens({ itens, onAdicionar, onAtualizar, onDesativar, onR
               onClick={() => setBusca('')}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main text-xs"
             >
-              ✕
+              x
             </button>
           )}
         </div>
 
         <select className={SELECT} value={filtroSecao} onChange={(e) => setFiltroSecao(e.target.value)}>
-          <option value="">Todas as seções</option>
+          <option value="">Todas as secoes</option>
           {secoes.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <select className={SELECT} value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value as TipoEscola | '')}>
           <option value="">Todos os tipos</option>
           <option value="FUNDAMENTAL">Fundamental</option>
-          <option value="MEDIO">Médio</option>
+          <option value="MEDIO">Medio</option>
           <option value="SUPERIOR">Superior</option>
         </select>
         <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer">
@@ -204,14 +203,14 @@ export function BancoDeItens({ itens, onAdicionar, onAtualizar, onDesativar, onR
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-surface-2 border-b border-white/10">
-              <th className="text-left px-4 py-2.5 text-text-muted font-medium text-xs">Área</th>
+              <th className="text-left px-4 py-2.5 text-text-muted font-medium text-xs">Area</th>
               <th className="text-left px-4 py-2.5 text-text-muted font-medium text-xs">Sub Cat.</th>
               <th className="text-left px-4 py-2.5 text-text-muted font-medium text-xs">Item</th>
               <th className="text-left px-4 py-2.5 text-text-muted font-medium text-xs">Fornecedor</th>
               <th className="text-left px-4 py-2.5 text-text-muted font-medium text-xs">Tipo</th>
               <th className="text-right px-4 py-2.5 text-text-muted font-medium text-xs">Vlr. Ref.</th>
-              <th className="text-left px-4 py-2.5 text-text-muted font-medium text-xs">Seções</th>
-              <th className="text-center px-4 py-2.5 text-text-muted font-medium text-xs">Ações</th>
+              <th className="text-left px-4 py-2.5 text-text-muted font-medium text-xs">Secoes</th>
+              <th className="text-center px-4 py-2.5 text-text-muted font-medium text-xs">Acoes</th>
             </tr>
           </thead>
           <tbody>
@@ -223,10 +222,10 @@ export function BancoDeItens({ itens, onAdicionar, onAtualizar, onDesativar, onR
                 <td className="px-4 py-2 text-text-muted text-xs">{item.area}</td>
                 <td className="px-4 py-2 text-text-muted text-xs">{item.subcategoria}</td>
                 <td className="px-4 py-2 text-text-main">{item.item}</td>
-                <td className="px-4 py-2 text-text-muted text-xs">{item.fornecedorPadrao || '—'}</td>
+                <td className="px-4 py-2 text-text-muted text-xs">{item.fornecedorPadrao || '-'}</td>
                 <td className="px-4 py-2 text-xs text-text-muted">{item.tipoCusto}</td>
                 <td className="px-4 py-2 text-right text-xs text-text-muted">
-                  {item.valorUnitarioReferencia ? formatBRL(item.valorUnitarioReferencia) : '—'}
+                  {item.valorUnitarioReferencia ? formatBRL(item.valorUnitarioReferencia) : '-'}
                 </td>
                 <td className="px-4 py-2 text-xs text-text-muted">{item.secaoAplicavel.join(', ')}</td>
                 <td className="px-4 py-2 text-center">
@@ -275,7 +274,7 @@ export function BancoDeItens({ itens, onAdicionar, onAtualizar, onDesativar, onR
       <ConfirmDialog
         open={!!desativando}
         title="Desativar item"
-        message="O item será ocultado do banco. Você pode reativá-lo depois."
+        message="O item sera ocultado do banco. Voce pode reativa-lo depois."
         confirmLabel="Desativar"
         onConfirm={() => { if (desativando) { onDesativar(desativando); setDesativando(null) } }}
         onCancel={() => setDesativando(null)}
