@@ -168,17 +168,15 @@ export function Verbas() {
         return
       }
 
-      const todosItens: Parameters<typeof supabase.from>[0] extends string
-        ? never
-        : {
-            projeto_id: string
-            projeto_nome: string
-            segmento: string
-            categoria: string
-            sub_categoria: string
-            item: string
-            valor_orcado: number
-          }[] = []
+      const todosItens: {
+        projeto_id: string
+        projeto_nome: string
+        segmento: string
+        categoria: string
+        sub_categoria: string
+        item: string
+        valor_orcado: number
+      }[] = []
 
       const idsProcessados: string[] = []
       const erros: string[] = []
@@ -327,7 +325,7 @@ export function Verbas() {
                   fontSize: 12,
                 }}
                 labelStyle={{ color: '#f0f0f0', marginBottom: 4 }}
-                formatter={(value: number) => [formatBRL(value), 'Total Orçado']}
+                formatter={(value) => [formatBRL(Number(value ?? 0)), 'Total Orçado']}
               />
               <Bar dataKey="total" radius={[4, 4, 0, 0]} maxBarSize={56}>
                 {dadosGrafico.map((entry, idx) => (
