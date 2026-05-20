@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, FolderOpen, BookOpen, Settings, Globe, CheckCircle, LogOut, Loader } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, BookOpen, BarChart2, Settings, Globe, CheckCircle, LogOut, Loader } from 'lucide-react'
 import { useGoogleAuth } from '../../contexts/GoogleAuthContext'
 
 const links = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/projetos', icon: FolderOpen, label: 'Projetos' },
   { to: '/banco-de-itens', icon: BookOpen, label: 'Banco de Itens' },
+  { to: '/verbas', icon: BarChart2, label: 'Verbas' },
   { to: '/configuracoes', icon: Settings, label: 'Configurações' },
 ]
 

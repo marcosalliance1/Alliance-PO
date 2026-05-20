@@ -6,6 +6,7 @@ import { ListaProjetos } from './pages/ListaProjetos'
 import { NovoProjeto } from './pages/NovoProjeto'
 import { ViewProjeto } from './pages/ViewProjeto'
 import { BancoDeItens } from './pages/BancoDeItens'
+import { Verbas } from './pages/Verbas'
 import { Configuracoes } from './pages/Configuracoes'
 import { useProjetos } from './hooks/useProjetos'
 import { useBancoItens } from './hooks/useBancoItens'
@@ -196,6 +197,10 @@ function AppRoutes() {
               />
             )
           }
+        />
+        <Route
+          path="/verbas"
+          element={<Verbas />}
         />
         <Route
           path="/configuracoes"

@@ -3,7 +3,7 @@ import type { SecaoCusto as TSecao, ItemCusto, ItemCatalogo } from '../../types'
 import { LinhaItem } from './LinhaItem'
 import { TotaisSecaoRow } from './TotaisSecao'
 import { ModalBancoItens } from './ModalBancoItens'
-import { calcTotaisSecao } from '../../utils/calculos'
+import { calcTotaisSecao, filtrarItensCalculo } from '../../utils/calculos'
 import { formatBRL } from '../../utils/formatters'
 import { Plus, BookOpen } from 'lucide-react'
 
@@ -50,7 +50,13 @@ export function SecaoCusto({
       if (!map.has(area)) map.set(area, [])
       map.get(area)!.push(item)
     }
-    return Array.from(map.entries())
+    // IDs dos itens válidos para cálculo (exclui N/A e agrupadores)
+    const idsCalculo = new Set(filtrarItensCalculo(secao.itens).map((i) => i.id))
+    return Array.from(map.entries()).map(([area, itens]) => ({
+      area,
+      itens,
+      itensCalculo: itens.filter((i) => idsCalculo.has(i.id)),
+    }))
   }, [secao.itens])
 
   const handleUpdate = useCallback(
@@ -84,7 +90,7 @@ export function SecaoCusto({
           </tr>
         </thead>
         <tbody>
-          {grupos.map(([area, itens]) => (
+          {grupos.map(({ area, itens, itensCalculo }) => (
             <>
               {/* Linha separadora de área */}
               <tr key={`area-${area}`} className="row-area">
@@ -92,9 +98,9 @@ export function SecaoCusto({
                   {area}
                   <span className="ml-3 text-xs font-normal text-gray-500">
                     {itens.length} {itens.length === 1 ? 'item' : 'itens'} —{' '}
-                    Vendido: {formatBRL(itens.reduce((s, i) => s + i.totalAtual, 0))} |{' '}
-                    Orçado: {formatBRL(itens.reduce((s, i) => s + i.valorOrcado, 0))} |{' '}
-                    Contratado: {formatBRL(itens.reduce((s, i) => s + i.valorContratado, 0))}
+                    Vendido: {formatBRL(itensCalculo.reduce((s, i) => s + i.totalAtual, 0))} |{' '}
+                    Orçado: {formatBRL(itensCalculo.reduce((s, i) => s + i.valorOrcado, 0))} |{' '}
+                    Contratado: {formatBRL(itensCalculo.reduce((s, i) => s + i.valorContratado, 0))}
                   </span>
                 </td>
               </tr>

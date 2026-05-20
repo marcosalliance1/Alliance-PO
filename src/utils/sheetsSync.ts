@@ -366,7 +366,25 @@ function parseReceitasFromResumo(values: unknown[][]): Partial<Receitas> {
   return result
 }
 
-async function fetchAba(spreadsheetId: string, nomeAba: string, accessToken: string, rangeSpec?: string): Promise<unknown[][] | null> {
+export async function fetchSheetNames(spreadsheetId: string, accessToken: string): Promise<string[]> {
+  const resp = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties.title`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+  if (resp.status === 401) {
+    const err = new Error('Token do Google expirado. Reconecte o Google Drive e tente novamente.')
+    ;(err as Error & { tipo?: string }).tipo = 'TOKEN_EXPIRADO'
+    throw err
+  }
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({})) as { error?: { message?: string } }
+    throw new Error(body.error?.message ?? `Erro ao acessar planilha (HTTP ${resp.status})`)
+  }
+  const meta = await resp.json() as { sheets: { properties: { title: string } }[] }
+  return meta.sheets.map(s => s.properties.title)
+}
+
+export async function fetchAba(spreadsheetId: string, nomeAba: string, accessToken: string, rangeSpec?: string): Promise<unknown[][] | null> {
   const rangeParam = rangeSpec ?? nomeAba
   // FORMATTED_VALUE: espelha exatamente o que aparece na planilha (já calculado e formatado)
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(rangeParam)}?valueRenderOption=FORMATTED_VALUE`

@@ -5,7 +5,7 @@ import { KPICard } from '../components/dashboard/KPICard'
 import { GraficoBarras } from '../components/dashboard/GraficoBarras'
 import { GraficoLinha } from '../components/dashboard/GraficoLinha'
 import { Header } from '../components/layout/Header'
-import { calcResumoProjeto, calcPercentFechados } from '../utils/calculos'
+import { calcResumoProjeto, calcPercentFechados, filtrarItensCalculo } from '../utils/calculos'
 import { formatBRL, formatPercent } from '../utils/formatters'
 import { FolderOpen, TrendingUp, DollarSign, CheckCircle, SlidersHorizontal, Package, Award, ChevronDown, ChevronRight } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
@@ -84,7 +84,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
       const resumo = calcResumoProjeto(p)
       const custo = filtroFornecedor
         ? p.secoes.reduce((s, sec) =>
-            s + sec.itens
+            s + filtrarItensCalculo(sec.itens)
               .filter(i => i.fornecedor?.trim() === filtroFornecedor)
               .reduce((ss, i) => ss + (i.valorOrcado ?? 0), 0), 0)
         : resumo.custoTotal.orcado
@@ -100,7 +100,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
     if (!filtroFornecedor) return 0
     return projetosFiltrados.reduce((total, p) =>
       total + p.secoes.reduce((s, sec) =>
-        s + sec.itens
+        s + filtrarItensCalculo(sec.itens)
           .filter(i => i.fornecedor?.trim() === filtroFornecedor)
           .reduce((ss, i) => ss + (i.valorOrcado ?? 0), 0), 0), 0)
   }, [projetosFiltrados, filtroFornecedor])
@@ -125,7 +125,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
     const map = new Map<string, { orcado: number; pago: number }>()
     for (const p of projetosFiltrados) {
       for (const sec of p.secoes) {
-        for (const item of sec.itens) {
+        for (const item of filtrarItensCalculo(sec.itens)) {
           const key = item.fornecedor?.trim() || 'Sem fornecedor'
           if (!item.valorOrcado && !item.valorPago) continue
           const prev = map.get(key) ?? { orcado: 0, pago: 0 }

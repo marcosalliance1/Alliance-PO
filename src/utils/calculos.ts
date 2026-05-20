@@ -17,8 +17,32 @@ export function calcItemTotais(item: ItemCusto, ipca: number, parcelas: number):
   return { totalAtual, valorProjetado, totalProjetado, valorOrcado, valorContratado, faltaPagar }
 }
 
+/**
+ * Retorna true se o item é uma linha agrupadora (pai com filhas).
+ * Detecta pelo código hierárquico: "2.7.23" é pai de "2.7.23.1".
+ */
+function isLinhaAgrupadora(item: ItemCusto, todosItens: ItemCusto[]): boolean {
+  const cod = item.codigo?.trim()
+  if (!cod) return false
+  const prefix = cod + '.'
+  return todosItens.some((other) => other.id !== item.id && (other.codigo ?? '').startsWith(prefix))
+}
+
+/**
+ * Filtra itens para cálculos financeiros:
+ * - Exclui linhas com statusPagamento === 'N/A' (itens cancelados/desconsiderados)
+ * - Exclui linhas agrupadoras (subtotais automáticos que somam as filhas)
+ */
+export function filtrarItensCalculo(itens: ItemCusto[]): ItemCusto[] {
+  return itens.filter(
+    (item) =>
+      item.statusPagamento !== 'N/A' &&
+      !isLinhaAgrupadora(item, itens),
+  )
+}
+
 export function calcTotaisSecao(secao: SecaoCusto, qtdFormandos: number): TotaisSecao {
-  const itens = secao.itens
+  const itens = filtrarItensCalculo(secao.itens)
   const totalVendido = itens.reduce((s, i) => s + (i.totalAtual ?? 0), 0)
   const totalProjetado = itens.reduce((s, i) => s + (i.totalProjetado ?? 0), 0)
   const totalOrcado = itens.reduce((s, i) => s + (i.valorOrcado ?? 0), 0)
