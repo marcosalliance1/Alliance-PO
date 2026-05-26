@@ -176,6 +176,8 @@ function ResultadoProjetos({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] })
 // ─── Aba 2: Fluxo de Caixa ────────────────────────────────────────
 function FluxoCaixa({ cap }: { cap: CAPRecord[] }) {
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
+  const [expandidosProjetos, setExpandidosProjetos] = useState<Record<string, boolean>>({})
+  const [expandidosContas, setExpandidosContas] = useState<Record<string, boolean>>({})
   const hoje = new Date().toISOString().slice(0, 10)
   const em7  = new Date(Date.now() + 7  * 86400000).toISOString().slice(0, 10)
   const em30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
@@ -194,13 +196,23 @@ function FluxoCaixa({ cap }: { cap: CAPRecord[] }) {
   }
   const dadosMes = Object.values(porMes).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
-  const pagPorMes: Record<string, { mes: string; sortKey: string; total: number; vencido: boolean; projetos: Record<string, number> }> = {}
+  type FornMap = Record<string, number>
+  type ContaFC = { total: number; fornecedores: FornMap }
+  type ProjFC  = { total: number; contas: Record<string, ContaFC> }
+  type MesFC   = { mes: string; sortKey: string; total: number; vencido: boolean; projetos: Record<string, ProjFC> }
+  const pagPorMes: Record<string, MesFC> = {}
   for (const i of capAtivo) {
-    const key = mesAno(i.d_vencimento); if (!key || !i.d_vencimento) continue
+    const key  = mesAno(i.d_vencimento); if (!key || !i.d_vencimento) continue
+    const proj = i.desc_centro_custo     || '(sem projeto)'
+    const g    = i.desc_conta_gerencial  || '(sem categoria)'
+    const forn = i.fantasia_fornecedor   || '(sem fornecedor)'
     pagPorMes[key] ??= { mes: key, sortKey: i.d_vencimento.slice(0, 7), total: 0, vencido: i.d_vencimento < hoje, projetos: {} }
     pagPorMes[key].total += i.v_titulo ?? 0
-    const p = i.desc_centro_custo || '(sem projeto)'
-    pagPorMes[key].projetos[p] = (pagPorMes[key].projetos[p] ?? 0) + (i.v_titulo ?? 0)
+    pagPorMes[key].projetos[proj] ??= { total: 0, contas: {} }
+    pagPorMes[key].projetos[proj].total += i.v_titulo ?? 0
+    pagPorMes[key].projetos[proj].contas[g] ??= { total: 0, fornecedores: {} }
+    pagPorMes[key].projetos[proj].contas[g].total += i.v_titulo ?? 0
+    pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] = (pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_titulo ?? 0)
   }
   const linhasPag = Object.values(pagPorMes).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
@@ -241,12 +253,42 @@ function FluxoCaixa({ cap }: { cap: CAPRecord[] }) {
               {vencido && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 mr-2">VENCIDO</span>}
               <span className={`font-semibold ${vencido ? 'text-danger' : 'text-text-main'}`}>{fmtCompact(total)}</span>
             </button>
-            {expandidos[mes] && Object.entries(projetos).sort((a, b) => b[1] - a[1]).map(([proj, val]) => (
-              <div key={proj} className="flex justify-between px-5 py-2 pl-10 text-xs text-text-muted border-b border-white/5 bg-black/20">
-                <span>{proj}</span>
-                <span className={`font-medium ${vencido ? 'text-red-400' : 'text-text-main'}`}>{fmtCompact(val)}</span>
-              </div>
-            ))}
+            {expandidos[mes] && Object.entries(projetos).sort((a, b) => b[1].total - a[1].total).map(([proj, { total: pTotal, contas }]) => {
+              const pk = `${mes}::${proj}`
+              return (
+                <div key={proj}>
+                  <button
+                    onClick={() => setExpandidosProjetos(p => ({ ...p, [pk]: !p[pk] }))}
+                    className="w-full flex items-center gap-2 px-5 py-2 pl-10 text-left text-xs text-text-muted hover:bg-white/5 transition-colors border-b border-white/5 bg-black/20"
+                  >
+                    {expandidosProjetos[pk] ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                    <span className="flex-1 truncate">{proj}</span>
+                    <span className={`font-medium ${vencido ? 'text-red-400' : 'text-text-main'}`}>{fmtCompact(pTotal)}</span>
+                  </button>
+                  {expandidosProjetos[pk] && Object.entries(contas).sort((a, b) => b[1].total - a[1].total).map(([conta, { total: cTotal, fornecedores }]) => {
+                    const ck = `${mes}::${proj}::${conta}`
+                    return (
+                      <div key={conta}>
+                        <button
+                          onClick={() => setExpandidosContas(c => ({ ...c, [ck]: !c[ck] }))}
+                          className="w-full flex items-center gap-2 px-5 py-2 pl-14 text-left text-xs text-text-muted hover:bg-white/5 transition-colors border-b border-white/5 bg-black/25"
+                        >
+                          {expandidosContas[ck] ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                          <span className="flex-1 truncate">{conta}</span>
+                          <span>{fmtCompact(cTotal)}</span>
+                        </button>
+                        {expandidosContas[ck] && Object.entries(fornecedores).sort((a, b) => b[1] - a[1]).map(([forn, fVal]) => (
+                          <div key={forn} className="flex justify-between px-5 py-1.5 pl-20 text-xs text-text-muted border-b border-white/5 bg-black/35">
+                            <span className="truncate flex-1 pr-3">{forn}</span>
+                            <span className="shrink-0">{fmtCompact(fVal)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
           </div>
         )) : <div className="px-5 py-8 text-center text-text-muted text-sm">Nenhum título em aberto</div>}
       </div>
