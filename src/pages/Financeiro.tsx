@@ -112,7 +112,7 @@ function ResultadoProjetos({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] })
                   <Pie data={donut} innerRadius={45} outerRadius={70} paddingAngle={3} dataKey="value" label={({ percent }: { percent?: number }) => percent ? `${(percent * 100).toFixed(1)}%` : ''} labelLine={false}>
                     {donut.map((_, i) => <Cell key={i} fill={CORES_ENSINO[i % CORES_ENSINO.length]} />)}
                   </Pie>
-                  <Tooltip formatter={(v: number) => fmtCompact(v)} contentStyle={{ background: '#1e2235', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }} />
+                  <Tooltip formatter={(v) => fmtCompact(Number(v))} contentStyle={{ background: '#1e2235', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="space-y-2 mt-2">
