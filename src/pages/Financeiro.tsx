@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts'
-import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight, Table2, Search, ChevronLeft } from 'lucide-react'
 import { useFinanceiro, type CAPRecord, type CARRecord } from '../hooks/useFinanceiro'
 import { fmtCompact, tempoDesde, mesAno, nivelEnsino } from '../utils/parseFinanceiro'
 import { Toast } from '../components/ui/Toast'
@@ -20,6 +20,7 @@ const ABAS = [
   { id: 'resultado', label: 'Resultado Projetos', Icon: TrendingUp },
   { id: 'fluxo',    label: 'Fluxo de Caixa',      Icon: CreditCard },
   { id: 'despesas', label: 'Controle de Despesas', Icon: BarChart2 },
+  { id: 'dados',    label: 'Dados',                Icon: Table2 },
 ] as const
 type AbaId = typeof ABAS[number]['id']
 
@@ -333,6 +334,192 @@ function ControleDespesas({ cap }: { cap: CAPRecord[] }) {
   )
 }
 
+// ─── Aba 4: Dados (tabelas brutas) ────────────────────────────────
+const PAGE_SIZE = 100
+
+function TabelaDados({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] }) {
+  const [tabela, setTabela] = useState<'CAP' | 'CAR'>('CAP')
+  const [filtro, setFiltro] = useState('')
+  const [pagina, setPagina] = useState(0)
+
+  const filtradas = useMemo(() => {
+    const f = filtro.toLowerCase().trim()
+    if (tabela === 'CAP') {
+      return f
+        ? cap.filter(r => r.desc_centro_custo.toLowerCase().includes(f) || r.fantasia_fornecedor.toLowerCase().includes(f) || r.desc_conta_gerencial.toLowerCase().includes(f))
+        : cap
+    } else {
+      return f
+        ? car.filter(r => r.desc_centro_custo.toLowerCase().includes(f) || r.desc_conta_gerencial.toLowerCase().includes(f) || r.categoria.toLowerCase().includes(f))
+        : car
+    }
+  }, [cap, car, tabela, filtro])
+
+  const totalPaginas = Math.max(1, Math.ceil(filtradas.length / PAGE_SIZE))
+  const paginaAtual  = Math.min(pagina, totalPaginas - 1)
+  const inicio       = paginaAtual * PAGE_SIZE
+  const pagina_dados = filtradas.slice(inicio, inicio + PAGE_SIZE)
+
+  function trocarTabela(t: 'CAP' | 'CAR') { setTabela(t); setFiltro(''); setPagina(0) }
+  function trocarFiltro(v: string)          { setFiltro(v); setPagina(0) }
+
+  const totalFiltrado = tabela === 'CAP'
+    ? (filtradas as CAPRecord[]).reduce((s, r) => s + (r.v_titulo ?? 0), 0)
+    : (filtradas as CARRecord[]).reduce((s, r) => s + (r.v_lancamento ?? 0), 0)
+
+  return (
+    <div className="space-y-4">
+      {/* Seletor CAP / CAR */}
+      <div className="flex gap-2">
+        {(['CAP', 'CAR'] as const).map(t => (
+          <button
+            key={t}
+            onClick={() => trocarTabela(t)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+              tabela === t
+                ? 'bg-primary/20 border-primary/40 text-primary'
+                : 'bg-white/5 border-white/10 text-text-muted hover:text-text-main'
+            }`}
+          >
+            {t === 'CAP' ? 'Contas a Pagar (CAP)' : 'Contas a Receber (CAR)'}
+          </button>
+        ))}
+      </div>
+
+      {/* Barra de busca + totalizador */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input
+            value={filtro}
+            onChange={e => trocarFiltro(e.target.value)}
+            placeholder={tabela === 'CAP' ? 'Filtrar por fornecedor, c. custo ou gerencial…' : 'Filtrar por c. custo, gerencial ou categoria…'}
+            className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:border-primary/50"
+          />
+        </div>
+        <div className="text-xs text-text-muted shrink-0">
+          <span className="text-text-main font-semibold">{filtradas.length.toLocaleString('pt-BR')}</span> linhas
+          {filtro && <span className="ml-1">(filtrado)</span>}
+          {' · '}
+          <span className="text-text-main font-semibold">{fmtCompact(totalFiltrado)}</span>
+          {' · '}pág. {paginaAtual + 1}/{totalPaginas}
+        </div>
+      </div>
+
+      {/* Tabela CAP */}
+      {tabela === 'CAP' && (
+        <div className="card p-0 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/5">
+                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Fornecedor</th>
+                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">C. Custo</th>
+                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">C. Gerencial</th>
+                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Portador</th>
+                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Vencimento</th>
+                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Competência</th>
+                  <th className="text-right px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">V. Título</th>
+                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Situação</th>
+                  <th className="text-right px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Dias Atraso</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(pagina_dados as CAPRecord[]).map((r, i) => (
+                  <tr key={r.id ?? i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                    <td className="px-3 py-2 text-text-main max-w-[160px] truncate" title={r.fantasia_fornecedor}>{r.fantasia_fornecedor || '—'}</td>
+                    <td className="px-3 py-2 text-text-main max-w-[180px] truncate" title={r.desc_centro_custo}>{r.desc_centro_custo || '—'}</td>
+                    <td className="px-3 py-2 text-text-muted max-w-[160px] truncate" title={r.desc_conta_gerencial}>{r.desc_conta_gerencial || '—'}</td>
+                    <td className="px-3 py-2 text-text-muted max-w-[120px] truncate" title={r.portador}>{r.portador || '—'}</td>
+                    <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.d_vencimento ?? '—'}</td>
+                    <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.d_competencia ?? '—'}</td>
+                    <td className="px-3 py-2 text-right font-medium text-text-main whitespace-nowrap">{r.v_titulo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                    <td className="px-3 py-2">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${r.situacao === 'LIQUIDADO' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
+                        {r.situacao}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right text-text-muted">{r.dias_atraso > 0 ? r.dias_atraso : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tabela CAR */}
+      {tabela === 'CAR' && (
+        <div className="card p-0 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/5">
+                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">C. Custo</th>
+                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">C. Gerencial</th>
+                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Categoria</th>
+                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Competência</th>
+                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Liquidação</th>
+                  <th className="text-right px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">V. Lançamento</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(pagina_dados as CARRecord[]).map((r, i) => (
+                  <tr key={r.id ?? i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                    <td className="px-3 py-2 text-text-main max-w-[200px] truncate" title={r.desc_centro_custo}>{r.desc_centro_custo || '—'}</td>
+                    <td className="px-3 py-2 text-text-muted max-w-[160px] truncate" title={r.desc_conta_gerencial}>{r.desc_conta_gerencial || '—'}</td>
+                    <td className="px-3 py-2 text-text-muted max-w-[140px] truncate" title={r.categoria}>{r.categoria || '—'}</td>
+                    <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.competencia ?? '—'}</td>
+                    <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.liquidacao ?? '—'}</td>
+                    <td className="px-3 py-2 text-right font-medium text-text-main whitespace-nowrap">{r.v_lancamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Paginação */}
+      {totalPaginas > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => setPagina(p => Math.max(0, p - 1))}
+            disabled={paginaAtual === 0}
+            className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-text-muted hover:text-text-main disabled:opacity-30 transition-colors"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          {Array.from({ length: Math.min(7, totalPaginas) }, (_, i) => {
+            const offset = Math.max(0, Math.min(paginaAtual - 3, totalPaginas - 7))
+            const pg = i + offset
+            return (
+              <button
+                key={pg}
+                onClick={() => setPagina(pg)}
+                className={`w-7 h-7 rounded-lg text-xs transition-colors ${
+                  pg === paginaAtual
+                    ? 'bg-primary text-white'
+                    : 'bg-white/5 border border-white/10 text-text-muted hover:text-text-main'
+                }`}
+              >
+                {pg + 1}
+              </button>
+            )
+          })}
+          <button
+            onClick={() => setPagina(p => Math.min(totalPaginas - 1, p + 1))}
+            disabled={paginaAtual >= totalPaginas - 1}
+            className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-text-muted hover:text-text-main disabled:opacity-30 transition-colors"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Empty state genérico ─────────────────────────────────────────
 function EmptyChart({ label = 'Sem dados' }: { label?: string }) {
   return <div className="flex items-center justify-center h-40 text-text-muted text-sm">{label}</div>
@@ -450,6 +637,7 @@ export function Financeiro() {
           {abaAtiva === 'resultado' && <ResultadoProjetos cap={cap} car={car} />}
           {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} />}
           {abaAtiva === 'despesas' && <ControleDespesas cap={cap} />}
+          {abaAtiva === 'dados'    && <TabelaDados cap={cap} car={car} />}
         </>
       )}
 

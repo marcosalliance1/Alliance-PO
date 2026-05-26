@@ -31,8 +31,8 @@ export function useFinanceiro() {
   const carregar = useCallback(async () => {
     setCarregando(true)
     const [capRes, carRes, ulpRes] = await Promise.all([
-      supabase.from('financeiro_cap').select('*'),
-      supabase.from('financeiro_car').select('*'),
+      supabase.from('financeiro_cap').select('*').limit(100000),
+      supabase.from('financeiro_car').select('*').limit(100000),
       supabase.from('financeiro_uploads').select('*').order('uploaded_at', { ascending: false }).limit(20),
     ])
     if (!capRes.error) setCap((capRes.data ?? []) as CAPRecord[])

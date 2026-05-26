@@ -92,6 +92,11 @@ export async function parseCAPArquivo(arquivo: File): Promise<{ linhas: CAPRow[]
   const headerIdx = encontrarHeaderIdx(rows, 'vencimento')
   const headers = ((rows[headerIdx] ?? []) as unknown[]).map(c => c != null ? String(c) : '')
 
+  console.log("CAP aba:", abaNome, "| headerIdx:", headerIdx)
+  console.log("CAP headers:", headers)
+  console.log("CAP total linhas:", rows.length)
+  console.log("CAP primeira linha dados:", rows[headerIdx + 1])
+
   const col = {
     fantasia:    findCol(headers, 'fantasia fornecedor', 'fantasia'),
     gerencial:   findCol(headers, 'descricao c gerencial', 'c gerencial', 'gerencial'),
@@ -135,6 +140,11 @@ export async function parseCARArquivo(arquivo: File): Promise<{ linhas: CARRow[]
   const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[abaNome], { header: 1, defval: null, raw: true }) as unknown[][]
   const headerIdx = encontrarHeaderIdx(rows, 'lancamento')
   const headers = ((rows[headerIdx] ?? []) as unknown[]).map(c => c != null ? String(c) : '')
+
+  console.log("CAR aba:", abaNome, "| headerIdx:", headerIdx)
+  console.log("CAR headers:", headers)
+  console.log("CAR total linhas:", rows.length)
+  console.log("CAR primeira linha dados:", rows[headerIdx + 1])
 
   const col = {
     centroCusto: findCol(headers, 'descricao c custo', 'c custo', 'centro custo'),
