@@ -350,7 +350,7 @@ function TabelaDados({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] }) {
         : cap
     } else {
       return f
-        ? car.filter(r => r.desc_centro_custo.toLowerCase().includes(f) || r.desc_conta_gerencial.toLowerCase().includes(f) || r.categoria.toLowerCase().includes(f))
+        ? car.filter(r => r.desc_centro_custo.toLowerCase().includes(f) || r.desc_conta_gerencial.toLowerCase().includes(f))
         : car
     }
   }, [cap, car, tabela, filtro])
@@ -393,7 +393,7 @@ function TabelaDados({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] }) {
           <input
             value={filtro}
             onChange={e => trocarFiltro(e.target.value)}
-            placeholder={tabela === 'CAP' ? 'Filtrar por fornecedor, c. custo ou gerencial…' : 'Filtrar por c. custo, gerencial ou categoria…'}
+            placeholder={tabela === 'CAP' ? 'Filtrar por fornecedor, c. custo ou gerencial…' : 'Filtrar por c. custo ou gerencial…'}
             className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:border-primary/50"
           />
         </div>
@@ -457,7 +457,6 @@ function TabelaDados({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] }) {
                 <tr className="border-b border-white/10 bg-white/5">
                   <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">C. Custo</th>
                   <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">C. Gerencial</th>
-                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Categoria</th>
                   <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Competência</th>
                   <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Liquidação</th>
                   <th className="text-right px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">V. Lançamento</th>
@@ -467,8 +466,7 @@ function TabelaDados({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] }) {
                 {(pagina_dados as CARRecord[]).map((r, i) => (
                   <tr key={r.id ?? i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                     <td className="px-3 py-2 text-text-main max-w-[200px] truncate" title={r.desc_centro_custo}>{r.desc_centro_custo || '—'}</td>
-                    <td className="px-3 py-2 text-text-muted max-w-[160px] truncate" title={r.desc_conta_gerencial}>{r.desc_conta_gerencial || '—'}</td>
-                    <td className="px-3 py-2 text-text-muted max-w-[140px] truncate" title={r.categoria}>{r.categoria || '—'}</td>
+                    <td className="px-3 py-2 text-text-muted max-w-[180px] truncate" title={r.desc_conta_gerencial}>{r.desc_conta_gerencial || '—'}</td>
                     <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.competencia ?? '—'}</td>
                     <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.liquidacao ?? '—'}</td>
                     <td className="px-3 py-2 text-right font-medium text-text-main whitespace-nowrap">{r.v_lancamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>

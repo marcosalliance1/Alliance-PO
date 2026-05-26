@@ -11,7 +11,7 @@ function findCol(headers: string[], ...termos: string[]): number {
   const normed = headers.map(norm)
   for (const t of termos) {
     const nt = norm(t)
-    const idx = normed.findIndex(h => h.includes(nt) || nt.includes(h))
+    const idx = normed.findIndex(h => h.includes(nt))
     if (idx >= 0) return idx
   }
   return -1
@@ -98,14 +98,14 @@ export async function parseCAPArquivo(arquivo: File): Promise<{ linhas: CAPRow[]
   console.log("CAP primeira linha dados:", rows[headerIdx + 1])
 
   const col = {
-    fantasia:    findCol(headers, 'fantasia fornecedor', 'fantasia'),
-    gerencial:   findCol(headers, 'descricao c gerencial', 'c gerencial', 'gerencial'),
-    centroCusto: findCol(headers, 'descricao c custo', 'c custo', 'centro custo'),
+    fantasia:    findCol(headers, 'fantasia fornecedor', 'fantasia', 'nome fantasia', 'nome fornecedor', 'nome'),
+    gerencial:   findCol(headers, 'desc c gerencial', 'descricao c gerencial', 'desc conta gerencial', 'c gerencial', 'gerencial'),
+    centroCusto: findCol(headers, 'desc c custo', 'descricao c custo', 'desc centro custo', 'centro custo', 'c custo'),
     vencimento:  findCol(headers, 'd vencimento', 'vencimento'),
     competencia: findCol(headers, 'd competencia', 'competencia'),
-    vTitulo:     findCol(headers, 'v titulo', 'v. titulo', 'valor titulo'),
+    vTitulo:     findCol(headers, 'v titulo', 'valor titulo'),
     situacao:    findCol(headers, 'situacao'),
-    portador:    findCol(headers, 'descricao portador', 'portador'),
+    portador:    findCol(headers, 'desc portador', 'descricao portador', 'nome portador', 'portador'),
     diasAtraso:  findCol(headers, 'dias atraso', 'atraso'),
   }
 
@@ -147,10 +147,10 @@ export async function parseCARArquivo(arquivo: File): Promise<{ linhas: CARRow[]
   console.log("CAR primeira linha dados:", rows[headerIdx + 1])
 
   const col = {
-    centroCusto: findCol(headers, 'descricao c custo', 'c custo', 'centro custo'),
-    gerencial:   findCol(headers, 'descricao c gerencial', 'c gerencial', 'gerencial'),
+    centroCusto: findCol(headers, 'desc c custo', 'descricao c custo', 'desc centro custo', 'centro custo', 'c custo'),
+    gerencial:   findCol(headers, 'desc c gerencial', 'descricao c gerencial', 'desc conta gerencial', 'c gerencial', 'gerencial'),
     categoria:   findCol(headers, 'categoria'),
-    vLancamento: findCol(headers, 'v lancamento', 'v. lancamento', 'lancamento'),
+    vLancamento: findCol(headers, 'v lancamento', 'valor lancamento', 'lancamento'),
     vOriginal:   findCol(headers, 'v original', 'original'),
     competencia: findCol(headers, 'competencia'),
     liquidacao:  findCol(headers, 'liquidacao'),

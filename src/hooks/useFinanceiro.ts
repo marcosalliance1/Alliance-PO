@@ -4,6 +4,21 @@ import { parseCAPArquivo, parseCARArquivo, type CAPRow, type CARRow } from '../u
 
 const BATCH = 500
 
+async function fetchAll<T>(tabela: string): Promise<T[]> {
+  const PAGE = 1000
+  const all: T[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await supabase.from(tabela).select('*').range(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = (data ?? []) as T[]
+    all.push(...rows)
+    if (rows.length < PAGE) break
+    from += PAGE
+  }
+  return all
+}
+
 export interface UploadMeta {
   id: string
   tipo: string
@@ -30,13 +45,13 @@ export function useFinanceiro() {
 
   const carregar = useCallback(async () => {
     setCarregando(true)
-    const [capRes, carRes, ulpRes] = await Promise.all([
-      supabase.from('financeiro_cap').select('*').limit(100000),
-      supabase.from('financeiro_car').select('*').limit(100000),
+    const [capData, carData, ulpRes] = await Promise.all([
+      fetchAll<CAPRecord>('financeiro_cap').catch(() => [] as CAPRecord[]),
+      fetchAll<CARRecord>('financeiro_car').catch(() => [] as CARRecord[]),
       supabase.from('financeiro_uploads').select('*').order('uploaded_at', { ascending: false }).limit(20),
     ])
-    if (!capRes.error) setCap((capRes.data ?? []) as CAPRecord[])
-    if (!carRes.error) setCar((carRes.data ?? []) as CARRecord[])
+    setCap(capData)
+    setCar(carData)
     if (!ulpRes.error) {
       const lista = (ulpRes.data ?? []) as UploadMeta[]
       setUploads({
