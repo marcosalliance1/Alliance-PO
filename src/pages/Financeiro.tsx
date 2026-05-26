@@ -39,18 +39,24 @@ function TTip({ active, payload, label }: { active?: boolean; payload?: { name: 
 
 // ─── Aba 1: Resultado Projetos ────────────────────────────────────
 function ResultadoProjetos({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] }) {
-  const totalReceitas = car.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
-  const totalDespesas = cap.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+  const [filtroProj, setFiltroProj] = useState('')
+
+  const fp = filtroProj.toLowerCase()
+  const capF = fp ? cap.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : cap
+  const carF = fp ? car.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : car
+
+  const totalReceitas = carF.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const totalDespesas = capF.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
   const resultado = totalReceitas - totalDespesas
   const margem = totalReceitas > 0 ? (resultado / totalReceitas) * 100 : 0
 
   const porAno: Record<string, { ano: string; receitas: number; despesas: number }> = {}
-  for (const i of car) {
+  for (const i of carF) {
     const ano = i.competencia?.slice(0, 4); if (!ano) continue
     porAno[ano] ??= { ano, receitas: 0, despesas: 0 }
     porAno[ano].receitas += i.v_lancamento ?? 0
   }
-  for (const i of cap) {
+  for (const i of capF) {
     const ano = i.d_competencia?.slice(0, 4); if (!ano) continue
     porAno[ano] ??= { ano, receitas: 0, despesas: 0 }
     porAno[ano].despesas += i.v_titulo ?? 0
@@ -58,7 +64,7 @@ function ResultadoProjetos({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] })
   const dadosAnos = Object.values(porAno).sort((a, b) => a.ano.localeCompare(b.ano))
 
   const porNivel: Record<string, number> = {}
-  for (const i of car) {
+  for (const i of carF) {
     const n = nivelEnsino(i.desc_centro_custo)
     porNivel[n] = (porNivel[n] ?? 0) + (i.v_lancamento ?? 0)
   }
@@ -68,8 +74,8 @@ function ResultadoProjetos({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] })
   }))
 
   const projMap: Record<string, { receita: number; despesa: number }> = {}
-  for (const i of car) { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].receita += i.v_lancamento ?? 0 }
-  for (const i of cap) { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].despesa += i.v_titulo ?? 0 }
+  for (const i of carF) { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].receita += i.v_lancamento ?? 0 }
+  for (const i of capF) { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].despesa += i.v_titulo ?? 0 }
   const top10 = Object.entries(projMap)
     .filter(([n]) => n)
     .map(([nome, { receita, despesa }]) => ({ nome, resultado: receita - despesa }))
@@ -79,6 +85,17 @@ function ResultadoProjetos({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] })
 
   return (
     <div className="space-y-5">
+      <div className="flex justify-end">
+        <div className="relative w-60">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input
+            value={filtroProj}
+            onChange={e => setFiltroProj(e.target.value)}
+            placeholder="Filtrar por projeto…"
+            className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-text-main placeholder:text-text-muted focus:outline-none focus:border-primary/50"
+          />
+        </div>
+      </div>
       <div className="grid grid-cols-4 gap-4">
         <KPICard title="Receitas Totais"  value={fmtCompact(totalReceitas)} color={C_RECEITA} />
         <KPICard title="Despesas Totais"  value={fmtCompact(totalDespesas)} color={C_DESPESA} />
@@ -240,6 +257,7 @@ function FluxoCaixa({ cap }: { cap: CAPRecord[] }) {
 // ─── Aba 3: Controle de Despesas ──────────────────────────────────
 function ControleDespesas({ cap }: { cap: CAPRecord[] }) {
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
+  const [expandidosContas, setExpandidosContas] = useState<Record<string, boolean>>({})
 
   const totalDespesas  = cap.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
   const totalLiquidado = cap.filter(i => i.situacao === 'LIQUIDADO').reduce((s, i) => s + (i.v_titulo ?? 0), 0)
@@ -253,13 +271,16 @@ function ControleDespesas({ cap }: { cap: CAPRecord[] }) {
   for (const i of cap) { const ano = i.d_competencia?.slice(0, 4); if (!ano) continue; porAno[ano] = (porAno[ano] ?? 0) + (i.v_titulo ?? 0) }
   const dadosAno = Object.entries(porAno).sort((a, b) => a[0].localeCompare(b[0])).map(([ano, valor]) => ({ ano, valor }))
 
-  const porProj: Record<string, { total: number; contas: Record<string, number> }> = {}
+  const porProj: Record<string, { total: number; contas: Record<string, { total: number; fornecedores: Record<string, number> }> }> = {}
   for (const i of cap) {
     const proj = i.desc_centro_custo || '(sem projeto)'
+    const g    = i.desc_conta_gerencial || '(sem categoria)'
+    const forn = i.fantasia_fornecedor || '(sem fornecedor)'
     porProj[proj] ??= { total: 0, contas: {} }
     porProj[proj].total += i.v_titulo ?? 0
-    const g = i.desc_conta_gerencial || '(sem categoria)'
-    porProj[proj].contas[g] = (porProj[proj].contas[g] ?? 0) + (i.v_titulo ?? 0)
+    porProj[proj].contas[g] ??= { total: 0, fornecedores: {} }
+    porProj[proj].contas[g].total += i.v_titulo ?? 0
+    porProj[proj].contas[g].fornecedores[forn] = (porProj[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_titulo ?? 0)
   }
   const projetos = Object.entries(porProj).sort((a, b) => b[1].total - a[1].total)
 
@@ -321,12 +342,27 @@ function ControleDespesas({ cap }: { cap: CAPRecord[] }) {
               <span className="flex-1 truncate">{proj}</span>
               <span className="font-semibold text-text-main">{fmtCompact(total)}</span>
             </button>
-            {expandidos[proj] && Object.entries(contas).sort((a, b) => b[1] - a[1]).map(([conta, val]) => (
-              <div key={conta} className="flex justify-between px-5 py-2 pl-10 text-xs text-text-muted border-b border-white/5 bg-black/20">
-                <span>{conta}</span>
-                <span>{fmtCompact(val)}</span>
-              </div>
-            ))}
+            {expandidos[proj] && Object.entries(contas).sort((a, b) => b[1].total - a[1].total).map(([conta, { total: cTotal, fornecedores }]) => {
+              const ck = `${proj}::${conta}`
+              return (
+                <div key={conta}>
+                  <button
+                    onClick={() => setExpandidosContas(p => ({ ...p, [ck]: !p[ck] }))}
+                    className="w-full flex items-center gap-2 px-5 py-2.5 pl-10 text-left text-xs text-text-muted hover:bg-white/5 transition-colors border-b border-white/5 bg-black/20"
+                  >
+                    {expandidosContas[ck] ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                    <span className="flex-1 truncate">{conta}</span>
+                    <span className="font-medium">{fmtCompact(cTotal)}</span>
+                  </button>
+                  {expandidosContas[ck] && Object.entries(fornecedores).sort((a, b) => b[1] - a[1]).map(([forn, fVal]) => (
+                    <div key={forn} className="flex justify-between px-5 py-1.5 pl-16 text-xs text-text-muted border-b border-white/5 bg-black/30">
+                      <span className="truncate flex-1 pr-3">{forn}</span>
+                      <span className="shrink-0">{fmtCompact(fVal)}</span>
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
           </div>
         )) : <div className="px-5 py-8 text-center text-text-muted text-sm">Nenhum dado disponível</div>}
       </div>

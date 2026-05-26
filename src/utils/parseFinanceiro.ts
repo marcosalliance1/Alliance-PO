@@ -206,7 +206,7 @@ const ESCOLAS_MEDIO = ['BERNOULLI', 'LOYOLA', 'MARISTA', 'CSAG', 'EABH', 'ESTA',
 export function nivelEnsino(nome: string): string {
   if (!nome) return 'Superior'
   const n = nome.toUpperCase()
-  if (n.includes('FUNDAMENTAL')) return 'Fundamental'
+  if (n.includes('FUNDAMENTAL') || n.includes('NONA SERIE') || n.includes('NONA SÉRIE')) return 'Fundamental'
   if (ESCOLAS_MEDIO.some(e => n.includes(e))) return 'Médio'
   return 'Superior'
 }
