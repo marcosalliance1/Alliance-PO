@@ -194,16 +194,15 @@ function FluxoCaixa({ cap }: { cap: CAPRecord[] }) {
   }
   const dadosMes = Object.values(porMes).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
-  const vencidos = capAtivo.filter(i => i.d_vencimento && i.d_vencimento < hoje)
-  const vencPorMes: Record<string, { mes: string; sortKey: string; total: number; projetos: Record<string, number> }> = {}
-  for (const i of vencidos) {
+  const pagPorMes: Record<string, { mes: string; sortKey: string; total: number; vencido: boolean; projetos: Record<string, number> }> = {}
+  for (const i of capAtivo) {
     const key = mesAno(i.d_vencimento); if (!key || !i.d_vencimento) continue
-    vencPorMes[key] ??= { mes: key, sortKey: i.d_vencimento.slice(0, 7), total: 0, projetos: {} }
-    vencPorMes[key].total += i.v_titulo ?? 0
+    pagPorMes[key] ??= { mes: key, sortKey: i.d_vencimento.slice(0, 7), total: 0, vencido: i.d_vencimento < hoje, projetos: {} }
+    pagPorMes[key].total += i.v_titulo ?? 0
     const p = i.desc_centro_custo || '(sem projeto)'
-    vencPorMes[key].projetos[p] = (vencPorMes[key].projetos[p] ?? 0) + (i.v_titulo ?? 0)
+    pagPorMes[key].projetos[p] = (pagPorMes[key].projetos[p] ?? 0) + (i.v_titulo ?? 0)
   }
-  const linhasVenc = Object.values(vencPorMes).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+  const linhasPag = Object.values(pagPorMes).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
   return (
     <div className="space-y-5">
@@ -230,8 +229,8 @@ function FluxoCaixa({ cap }: { cap: CAPRecord[] }) {
       </div>
 
       <div className="card p-0 overflow-hidden">
-        <div className="px-5 py-3 border-b border-white/10 text-text-main text-sm font-semibold">Vencidos por Mês</div>
-        {linhasVenc.length > 0 ? linhasVenc.map(({ mes, total, projetos }) => (
+        <div className="px-5 py-3 border-b border-white/10 text-text-main text-sm font-semibold">Pagamentos em Aberto por Mês</div>
+        {linhasPag.length > 0 ? linhasPag.map(({ mes, total, vencido, projetos }) => (
           <div key={mes}>
             <button
               onClick={() => setExpandidos(p => ({ ...p, [mes]: !p[mes] }))}
@@ -239,16 +238,17 @@ function FluxoCaixa({ cap }: { cap: CAPRecord[] }) {
             >
               {expandidos[mes] ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
               <span className="flex-1">{mes}</span>
-              <span className="font-semibold text-danger">{fmtCompact(total)}</span>
+              {vencido && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 mr-2">VENCIDO</span>}
+              <span className={`font-semibold ${vencido ? 'text-danger' : 'text-text-main'}`}>{fmtCompact(total)}</span>
             </button>
             {expandidos[mes] && Object.entries(projetos).sort((a, b) => b[1] - a[1]).map(([proj, val]) => (
               <div key={proj} className="flex justify-between px-5 py-2 pl-10 text-xs text-text-muted border-b border-white/5 bg-black/20">
                 <span>{proj}</span>
-                <span className="text-red-400 font-medium">{fmtCompact(val)}</span>
+                <span className={`font-medium ${vencido ? 'text-red-400' : 'text-text-main'}`}>{fmtCompact(val)}</span>
               </div>
             ))}
           </div>
-        )) : <div className="px-5 py-8 text-center text-text-muted text-sm">Nenhum título vencido</div>}
+        )) : <div className="px-5 py-8 text-center text-text-muted text-sm">Nenhum título em aberto</div>}
       </div>
     </div>
   )
