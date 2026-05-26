@@ -6,6 +6,7 @@ import OrcamentoPage from './pages/Orcamento/OrcamentoPage'
 import DashboardProjetoPage from './pages/Dashboard/DashboardProjetoPage'
 import DashboardGeralPage from './pages/DashboardGeral/DashboardGeralPage'
 import BancoItensPage from './pages/BancoItens/BancoItensPage'
+import FinanceiroPage from './pages/Financeiro/FinanceiroPage'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="dashboard/:id" element={<DashboardProjetoPage />} />
           <Route path="dashboard-geral" element={<DashboardGeralPage />} />
           <Route path="banco-itens" element={<BancoItensPage />} />
+          <Route path="financeiro" element={<FinanceiroPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
