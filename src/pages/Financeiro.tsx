@@ -6,7 +6,7 @@ import {
 import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight } from 'lucide-react'
 import { useFinanceiro, type CAPRecord, type CARRecord } from '../hooks/useFinanceiro'
 import { fmtCompact, tempoDesde, mesAno, nivelEnsino } from '../utils/parseFinanceiro'
-import { Toast } from '../components/UI/Toast'
+import { Toast } from '../components/ui/Toast'
 import { KPICard } from '../components/dashboard/KPICard'
 
 // ─── Constantes visuais ───────────────────────────────────────────
@@ -109,7 +109,7 @@ function ResultadoProjetos({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] })
             <>
               <ResponsiveContainer width="100%" height={160}>
                 <PieChart>
-                  <Pie data={donut} innerRadius={45} outerRadius={70} paddingAngle={3} dataKey="value" label={({ pct }: { pct: string }) => `${pct}%`} labelLine={false}>
+                  <Pie data={donut} innerRadius={45} outerRadius={70} paddingAngle={3} dataKey="value" label={({ percent }: { percent?: number }) => percent ? `${(percent * 100).toFixed(1)}%` : ''} labelLine={false}>
                     {donut.map((_, i) => <Cell key={i} fill={CORES_ENSINO[i % CORES_ENSINO.length]} />)}
                   </Pie>
                   <Tooltip formatter={(v: number) => fmtCompact(v)} contentStyle={{ background: '#1e2235', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }} />
