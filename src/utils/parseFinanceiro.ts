@@ -200,9 +200,11 @@ export function parseTarifasBuffer(buffer: ArrayBuffer): { linhas: TarifasRow[];
 
   // Linha 0 = cabeçalho de seção (ignorar); Linha 1 = headers reais
   const headers = (rows[1] as unknown[]).map(c => c != null ? String(c) : '')
+  const normedH = headers.map(norm)
 
   const col = {
-    empresa:      findCol(headers, 'empresa'),
+    // Match exato para evitar confundir "Empresa" com "Fantasia Empresa"
+    empresa:      normedH.findIndex(h => h === 'empresa'),
     fantasia:     findCol(headers, 'fantasia empresa', 'fantasia'),
     dMovimento:   findCol(headers, 'd movimento', 'movimento'),
     vencimento:   findCol(headers, 'vencimento'),
