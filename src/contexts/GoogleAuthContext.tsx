@@ -23,7 +23,7 @@ export function GoogleAuthProvider({ children }: { children: ReactNode }) {
   const [logando, setLogando] = useState(false)
 
   const _login = useGoogleLogin({
-    scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
+    scope: 'https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.readonly',
     onSuccess: (resp) => {
       setAccessToken(resp.access_token)
       setLogando(false)

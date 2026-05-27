@@ -115,9 +115,12 @@ export async function parseCAPArquivo(arquivo: File): Promise<{ linhas: CAPRow[]
     if (!r || r.every(c => c == null)) continue
     const get = (c: number) => (c >= 0 ? r[c] : null)
     const venc = parseDate(get(col.vencimento))
+    const gerencial = String(get(col.gerencial) ?? '').trim()
+    // Tarifas bancárias têm fonte própria — ignorar no CAP
+    if (gerencial.toUpperCase() === 'TARIFAS BANCARIAS') continue
     linhas.push({
       fantasia_fornecedor:  String(get(col.fantasia) ?? '').trim(),
-      desc_conta_gerencial: String(get(col.gerencial) ?? '').trim(),
+      desc_conta_gerencial: gerencial,
       desc_centro_custo:    String(get(col.centroCusto) ?? '').trim(),
       d_vencimento:         venc,
       d_competencia:        parseDate(get(col.competencia)),
@@ -173,6 +176,67 @@ export async function parseCARArquivo(arquivo: File): Promise<{ linhas: CARRow[]
     })
   }
   return { linhas, totalLinhas: linhas.length }
+}
+
+export interface TarifasRow {
+  fantasia_empresa: string
+  desc_conta_gerencial: string
+  desc_centro_custo: string
+  d_movimento: string | null
+  d_vencimento: string | null
+  d_competencia: string | null
+  v_lancamento: number
+  origem: string
+  razao_social: string
+}
+
+export function parseTarifasBuffer(buffer: ArrayBuffer): { linhas: TarifasRow[]; totalLinhas: number; totalValor: number } {
+  const wb = XLSX.read(buffer, { type: 'array', cellDates: false })
+  const abaNome = wb.SheetNames[0]
+  if (!abaNome) throw new Error('Arquivo inválido — nenhuma aba encontrada')
+
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[abaNome], { header: 1, defval: null, raw: true }) as unknown[][]
+  if (rows.length < 2) throw new Error('Arquivo inválido — dados insuficientes')
+
+  // Linha 0 = cabeçalho de seção (ignorar); Linha 1 = headers reais
+  const headers = (rows[1] as unknown[]).map(c => c != null ? String(c) : '')
+
+  const col = {
+    empresa:      findCol(headers, 'empresa'),
+    fantasia:     findCol(headers, 'fantasia empresa', 'fantasia'),
+    dMovimento:   findCol(headers, 'd movimento', 'movimento'),
+    vencimento:   findCol(headers, 'vencimento'),
+    competencia:  findCol(headers, 'competencia'),
+    vLancamento:  findCol(headers, 'v lancamento', 'lancamento'),
+    origem:       findCol(headers, 'origem'),
+    razaoSocial:  findCol(headers, 'razao social', 'descricao'),
+    gerencial:    findCol(headers, 'desc c gerencial', 'descricao c gerencial', 'desc conta gerencial', 'c gerencial', 'gerencial'),
+    centroCusto:  findCol(headers, 'desc c custo', 'descricao c custo', 'desc centro custo', 'centro custo', 'c custo'),
+  }
+
+  const linhas: TarifasRow[] = []
+  for (let i = 2; i < rows.length; i++) {
+    const r = rows[i] as unknown[]
+    if (!r || r.every(c => c == null)) continue
+    const get = (c: number) => (c >= 0 ? r[c] : null)
+    const empresa = get(col.empresa)
+    // Última linha é somatório geral — Empresa null
+    if (empresa == null || String(empresa).trim() === '') continue
+    linhas.push({
+      fantasia_empresa:     String(get(col.fantasia) ?? '').trim(),
+      desc_conta_gerencial: String(get(col.gerencial) ?? '').trim(),
+      desc_centro_custo:    String(get(col.centroCusto) ?? '').trim(),
+      d_movimento:          parseDate(get(col.dMovimento)),
+      d_vencimento:         parseDate(get(col.vencimento)),
+      d_competencia:        parseDate(get(col.competencia)),
+      v_lancamento:         Math.abs(limparNumero(get(col.vLancamento))),
+      origem:               String(get(col.origem) ?? '').trim(),
+      razao_social:         String(get(col.razaoSocial) ?? '').trim(),
+    })
+  }
+
+  const totalValor = linhas.reduce((s, l) => s + l.v_lancamento, 0)
+  return { linhas, totalLinhas: linhas.length, totalValor }
 }
 
 // ─── Utilitários de apresentação ──────────────────────────────────

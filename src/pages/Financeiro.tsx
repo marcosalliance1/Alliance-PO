@@ -3,9 +3,10 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts'
-import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight, Table2, Search, ChevronLeft } from 'lucide-react'
-import { useFinanceiro, type CAPRecord, type CARRecord } from '../hooks/useFinanceiro'
+import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight, Table2, Search, ChevronLeft, RefreshCw } from 'lucide-react'
+import { useFinanceiro, type CAPRecord, type CARRecord, type TarifasRecord } from '../hooks/useFinanceiro'
 import { fmtCompact, tempoDesde, mesAno, nivelEnsino } from '../utils/parseFinanceiro'
+import { useGoogleAuth } from '../contexts/GoogleAuthContext'
 import { Toast } from '../components/ui/Toast'
 import { KPICard } from '../components/dashboard/KPICard'
 
@@ -38,15 +39,17 @@ function TTip({ active, payload, label }: { active?: boolean; payload?: { name: 
 }
 
 // ─── Aba 1: Resultado Projetos ────────────────────────────────────
-function ResultadoProjetos({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] }) {
+function ResultadoProjetos({ cap, car, tarifas }: { cap: CAPRecord[]; car: CARRecord[]; tarifas: TarifasRecord[] }) {
   const [filtroProj, setFiltroProj] = useState('')
 
   const fp = filtroProj.toLowerCase()
-  const capF = fp ? cap.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : cap
-  const carF = fp ? car.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : car
+  const capF     = fp ? cap.filter(r => r.desc_centro_custo.toLowerCase().includes(fp))     : cap
+  const carF     = fp ? car.filter(r => r.desc_centro_custo.toLowerCase().includes(fp))     : car
+  const tarifasF = fp ? tarifas.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : tarifas
 
   const totalReceitas = carF.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const totalDespesas = capF.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+                      + tarifasF.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const resultado = totalReceitas - totalDespesas
   const margem = totalReceitas > 0 ? (resultado / totalReceitas) * 100 : 0
 
@@ -61,6 +64,11 @@ function ResultadoProjetos({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] })
     porAno[ano] ??= { ano, receitas: 0, despesas: 0 }
     porAno[ano].despesas += i.v_titulo ?? 0
   }
+  for (const i of tarifasF) {
+    const ano = i.d_competencia?.slice(0, 4); if (!ano) continue
+    porAno[ano] ??= { ano, receitas: 0, despesas: 0 }
+    porAno[ano].despesas += i.v_lancamento ?? 0
+  }
   const dadosAnos = Object.values(porAno).sort((a, b) => a.ano.localeCompare(b.ano))
 
   const porNivel: Record<string, number> = {}
@@ -74,8 +82,9 @@ function ResultadoProjetos({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] })
   }))
 
   const projMap: Record<string, { receita: number; despesa: number }> = {}
-  for (const i of carF) { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].receita += i.v_lancamento ?? 0 }
-  for (const i of capF) { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].despesa += i.v_titulo ?? 0 }
+  for (const i of carF)     { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].receita += i.v_lancamento ?? 0 }
+  for (const i of capF)     { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].despesa += i.v_titulo ?? 0 }
+  for (const i of tarifasF) { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].despesa += i.v_lancamento ?? 0 }
   const top10 = Object.entries(projMap)
     .filter(([n]) => n)
     .map(([nome, { receita, despesa }]) => ({ nome, resultado: receita - despesa }))
@@ -297,20 +306,24 @@ function FluxoCaixa({ cap }: { cap: CAPRecord[] }) {
 }
 
 // ─── Aba 3: Controle de Despesas ──────────────────────────────────
-function ControleDespesas({ cap }: { cap: CAPRecord[] }) {
+function ControleDespesas({ cap, tarifas }: { cap: CAPRecord[]; tarifas: TarifasRecord[] }) {
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const [expandidosContas, setExpandidosContas] = useState<Record<string, boolean>>({})
 
-  const totalDespesas  = cap.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-  const totalLiquidado = cap.filter(i => i.situacao === 'LIQUIDADO').reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-  const totalAberto    = cap.filter(i => i.situacao === 'ATIVO').reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+  const totalDespesasCap    = cap.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+  const totalDespesasTar    = tarifas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const totalDespesas       = totalDespesasCap + totalDespesasTar
+  const totalLiquidado      = cap.filter(i => i.situacao === 'LIQUIDADO').reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+  const totalAberto         = cap.filter(i => i.situacao === 'ATIVO').reduce((s, i) => s + (i.v_titulo ?? 0), 0)
 
   const porGerencial: Record<string, number> = {}
-  for (const i of cap) { const g = i.desc_conta_gerencial || '(sem categoria)'; porGerencial[g] = (porGerencial[g] ?? 0) + (i.v_titulo ?? 0) }
+  for (const i of cap)     { const g = i.desc_conta_gerencial || '(sem categoria)'; porGerencial[g] = (porGerencial[g] ?? 0) + (i.v_titulo ?? 0) }
+  for (const i of tarifas) { const g = i.desc_conta_gerencial || 'TARIFAS BANCARIAS'; porGerencial[g] = (porGerencial[g] ?? 0) + (i.v_lancamento ?? 0) }
   const top10Ger = Object.entries(porGerencial).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, value]) => ({ name, value }))
 
   const porAno: Record<string, number> = {}
-  for (const i of cap) { const ano = i.d_competencia?.slice(0, 4); if (!ano) continue; porAno[ano] = (porAno[ano] ?? 0) + (i.v_titulo ?? 0) }
+  for (const i of cap)     { const ano = i.d_competencia?.slice(0, 4); if (!ano) continue; porAno[ano] = (porAno[ano] ?? 0) + (i.v_titulo ?? 0) }
+  for (const i of tarifas) { const ano = i.d_competencia?.slice(0, 4); if (!ano) continue; porAno[ano] = (porAno[ano] ?? 0) + (i.v_lancamento ?? 0) }
   const dadosAno = Object.entries(porAno).sort((a, b) => a[0].localeCompare(b[0])).map(([ano, valor]) => ({ ano, valor }))
 
   const porProj: Record<string, { total: number; contas: Record<string, { total: number; fornecedores: Record<string, number> }> }> = {}
@@ -323,6 +336,16 @@ function ControleDespesas({ cap }: { cap: CAPRecord[] }) {
     porProj[proj].contas[g] ??= { total: 0, fornecedores: {} }
     porProj[proj].contas[g].total += i.v_titulo ?? 0
     porProj[proj].contas[g].fornecedores[forn] = (porProj[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_titulo ?? 0)
+  }
+  for (const i of tarifas) {
+    const proj = i.desc_centro_custo || '(sem projeto)'
+    const g    = i.desc_conta_gerencial || 'TARIFAS BANCARIAS'
+    const forn = i.fantasia_empresa || i.razao_social || '(tarifa bancária)'
+    porProj[proj] ??= { total: 0, contas: {} }
+    porProj[proj].total += i.v_lancamento ?? 0
+    porProj[proj].contas[g] ??= { total: 0, fornecedores: {} }
+    porProj[proj].contas[g].total += i.v_lancamento ?? 0
+    porProj[proj].contas[g].fornecedores[forn] = (porProj[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_lancamento ?? 0)
   }
   const projetos = Object.entries(porProj).sort((a, b) => b[1].total - a[1].total)
 
@@ -603,9 +626,10 @@ function EmptyChart({ label = 'Sem dados' }: { label?: string }) {
 
 // ─── Página principal ─────────────────────────────────────────────
 export function Financeiro() {
-  const { cap, car, uploads, carregando, uploadCAP, uploadCAR } = useFinanceiro()
+  const { cap, car, tarifas, uploads, carregando, uploadCAP, uploadCAR, atualizarTarifas } = useFinanceiro()
+  const { accessToken, conectado, logando, conectar } = useGoogleAuth()
   const [abaAtiva, setAbaAtiva] = useState<AbaId>('resultado')
-  const [processando, setProcessando] = useState({ CAP: false, CAR: false })
+  const [processando, setProcessando] = useState({ CAP: false, CAR: false, TARIFAS: false })
   const [toast, setToast] = useState<{ mensagem: string; tipo: 'sucesso' | 'erro' } | null>(null)
   const capRef = useRef<HTMLInputElement>(null)
   const carRef = useRef<HTMLInputElement>(null)
@@ -633,16 +657,34 @@ export function Financeiro() {
     }
   }
 
+  async function handleAtualizarTarifas() {
+    if (!conectado || !accessToken) { conectar(); return }
+    setProcessando(p => ({ ...p, TARIFAS: true }))
+    try {
+      const { totalLinhas, totalValor } = await atualizarTarifas(accessToken)
+      setToast({
+        mensagem: `Tarifas atualizadas — ${totalLinhas.toLocaleString('pt-BR')} registros · ${fmtCompact(totalValor)}`,
+        tipo: 'sucesso',
+      })
+    } catch (err: unknown) {
+      const e = err as { message?: string; tipo?: string }
+      if (e.tipo === 'TOKEN_EXPIRADO') { conectar(); return }
+      setToast({ mensagem: `Erro ao importar Tarifas: ${e.message}`, tipo: 'erro' })
+    } finally {
+      setProcessando(p => ({ ...p, TARIFAS: false }))
+    }
+  }
+
   return (
     <div className="p-6 max-w-screen-xl mx-auto">
       {/* Header */}
       <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div>
           <h1 className="text-text-main text-xl font-bold">Financeiro</h1>
-          <p className="text-text-muted text-xs mt-0.5">Contas a Pagar (CAP) e Contas a Receber (CAR)</p>
+          <p className="text-text-muted text-xs mt-0.5">Contas a Pagar (CAP), Contas a Receber (CAR) e Tarifas Bancárias</p>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           {(['CAP', 'CAR'] as const).map(tipo => {
             const ref = tipo === 'CAP' ? capRef : carRef
             const uploado = tipo === 'CAP' ? uploads.CAP : uploads.CAR
@@ -671,6 +713,23 @@ export function Financeiro() {
               </div>
             )
           })}
+
+          {/* Botão Atualizar Tarifas */}
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={handleAtualizarTarifas}
+              disabled={processando.TARIFAS || logando}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
+            >
+              {processando.TARIFAS || logando ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              {!conectado ? 'Conectar Google' : 'Atualizar Tarifas'}
+            </button>
+            {uploads.TARIFAS && (
+              <span className="text-xs text-text-muted">
+                Atualizado {tempoDesde(uploads.TARIFAS.uploaded_at)} · {(uploads.TARIFAS.total_linhas ?? 0).toLocaleString('pt-BR')} linhas
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -710,9 +769,9 @@ export function Financeiro() {
         </div>
       ) : (
         <>
-          {abaAtiva === 'resultado' && <ResultadoProjetos cap={cap} car={car} />}
+          {abaAtiva === 'resultado' && <ResultadoProjetos cap={cap} car={car} tarifas={tarifas} />}
           {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} />}
-          {abaAtiva === 'despesas' && <ControleDespesas cap={cap} />}
+          {abaAtiva === 'despesas' && <ControleDespesas cap={cap} tarifas={tarifas} />}
           {abaAtiva === 'dados'    && <TabelaDados cap={cap} car={car} />}
         </>
       )}

@@ -32,12 +32,14 @@ function isLinhaAgrupadora(item: ItemCusto, todosItens: ItemCusto[]): boolean {
  * Filtra itens para cálculos financeiros:
  * - Exclui linhas com status === 'N/A' (itens cancelados/riscados em vermelho)
  * - Exclui linhas agrupadoras (subtotais automáticos que somam as filhas)
+ * - Exclui linhas de somatório pai (Sub Cat. vazia — linha pai que agrega filhas)
  */
 export function filtrarItensCalculo(itens: ItemCusto[]): ItemCusto[] {
   return itens.filter(
     (item) =>
       item.status !== 'N/A' &&
-      !isLinhaAgrupadora(item, itens),
+      !isLinhaAgrupadora(item, itens) &&
+      (item.subcategoria?.trim() ?? '') !== '',
   )
 }
 
