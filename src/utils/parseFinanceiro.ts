@@ -216,13 +216,21 @@ export function parseTarifasBuffer(buffer: ArrayBuffer): { linhas: TarifasRow[];
     centroCusto:  findCol(headers, 'desc c custo', 'descricao c custo', 'desc centro custo', 'centro custo', 'c custo'),
   }
 
+  // Localiza o índice da última linha com dados (somatório geral — sempre a última)
+  let idxUltima = -1
+  for (let i = rows.length - 1; i >= 2; i--) {
+    const r = rows[i] as unknown[]
+    if (r && r.some(c => c != null)) { idxUltima = i; break }
+  }
+
   const linhas: TarifasRow[] = []
   for (let i = 2; i < rows.length; i++) {
+    if (i === idxUltima) continue  // somatório geral — ignorar sempre
     const r = rows[i] as unknown[]
     if (!r || r.every(c => c == null)) continue
     const get = (c: number) => (c >= 0 ? r[c] : null)
+    // Segurança extra: pula também se Empresa for nulo/vazio
     const empresa = get(col.empresa)
-    // Última linha é somatório geral — Empresa null
     if (empresa == null || String(empresa).trim() === '') continue
     linhas.push({
       fantasia_empresa:     String(get(col.fantasia) ?? '').trim(),
