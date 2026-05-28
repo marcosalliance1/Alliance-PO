@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import type { ItemCusto, StatusItem, StatusPagamento, TipoCusto } from '../../types'
 import { Trash2 } from 'lucide-react'
 import { formatBRL } from '../../utils/formatters'
+import { useAuth } from '../../contexts/AuthContext'
 
 interface LinhaItemProps {
   item: ItemCusto
@@ -15,15 +16,24 @@ const PGTO_OPTS: StatusPagamento[] = ['N/A', 'em aberto', 'parcial', 'pago']
 const TIPO_CUSTO_OPTS: TipoCusto[] = ['Custo Fixo', 'Custo Variável']
 const MOSCOW_OPTS = ['', 'M', 'S', 'C', 'W']
 
-function Td({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <td className={className}>{children}</td>
+function Td({ children, className = '', style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
+  return <td className={className} style={style}>{children}</td>
 }
 
-function NumInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function getStickyBg(item: ItemCusto): string {
+  if (item.statusPagamento === 'pago') return '#e6faf5'
+  if (item.status === 'fechado' || item.statusPagamento === 'parcial') return '#f0fdf4'
+  if (item.status === 'estimado' || item.status === 'orçando') return '#fffbeb'
+  if (item.qtdeVendida > 0 && item.valorUnitarioAtual > 0) return '#eff6ff'
+  return '#ffffff'
+}
+
+function NumInput({ value, onChange, readOnly }: { value: number; onChange: (v: number) => void; readOnly?: boolean }) {
   const [editing, setEditing] = useState(false)
   const [raw, setRaw] = useState('')
 
   function startEdit() {
+    if (readOnly) return
     setEditing(true)
     setRaw(value === 0 ? '' : String(value).replace('.', ','))
   }
@@ -48,7 +58,7 @@ function NumInput({ value, onChange }: { value: number; onChange: (v: number) =>
   }
   return (
     <span
-      className="cursor-pointer block w-full hover:bg-blue-50 rounded px-1"
+      className={`block w-full rounded px-1 ${readOnly ? '' : 'cursor-pointer hover:bg-blue-50'}`}
       onClick={startEdit}
     >
       {value === 0 ? '' : formatBRL(value)}
@@ -56,19 +66,21 @@ function NumInput({ value, onChange }: { value: number; onChange: (v: number) =>
   )
 }
 
-function QtyInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function QtyInput({ value, onChange, readOnly }: { value: number; onChange: (v: number) => void; readOnly?: boolean }) {
   return (
     <input
       type="number"
       value={value || ''}
       onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
       style={{ width: '50px' }}
+      readOnly={readOnly}
+      disabled={readOnly}
     />
   )
 }
 
-function TextInput({ value, onChange, placeholder = '', width = '100px' }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; width?: string
+function TextInput({ value, onChange, placeholder = '', width = '100px', readOnly }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; width?: string; readOnly?: boolean
 }) {
   return (
     <input
@@ -76,6 +88,8 @@ function TextInput({ value, onChange, placeholder = '', width = '100px' }: {
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       style={{ width }}
+      readOnly={readOnly}
+      disabled={readOnly}
     />
   )
 }
@@ -107,37 +121,45 @@ function getRowStyle(item: ItemCusto): React.CSSProperties {
 }
 
 export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = [] }: LinhaItemProps) {
+  const { isAdmin } = useAuth()
+  const ro = !isAdmin
+
   const upd = useCallback(
     (changes: Partial<ItemCusto>) => onChange(changes),
     [onChange],
   )
 
+  const bg = getStickyBg(item)
+  const fixed = (cls: string) => ({ className: `col-fixed ${cls}`, style: { backgroundColor: bg } })
+
   return (
     <tr style={getRowStyle(item)}>
-      <Td><TextInput value={item.codigo} onChange={(v) => upd({ codigo: v })} width="60px" /></Td>
-      <Td><TextInput value={item.area} onChange={(v) => upd({ area: v })} width="80px" /></Td>
-      <Td>
-        <select value={item.moscow} onChange={(e) => upd({ moscow: e.target.value })} style={{ width: '50px' }}>
+      <Td {...fixed('col-0')}><TextInput value={item.codigo} onChange={(v) => upd({ codigo: v })} width="60px" readOnly={ro} /></Td>
+      <Td {...fixed('col-1')}><TextInput value={item.area} onChange={(v) => upd({ area: v })} width="80px" readOnly={ro} /></Td>
+      <Td {...fixed('col-2')}>
+        <select value={item.moscow} onChange={(e) => upd({ moscow: e.target.value })} style={{ width: '50px' }} disabled={ro}>
           {MOSCOW_OPTS.map((o) => <option key={o} value={o}>{o || '—'}</option>)}
         </select>
       </Td>
-      <Td>
-        <select value={item.tipoCusto} onChange={(e) => upd({ tipoCusto: e.target.value as TipoCusto })} style={{ width: '90px' }}>
+      <Td {...fixed('col-3')}>
+        <select value={item.tipoCusto} onChange={(e) => upd({ tipoCusto: e.target.value as TipoCusto })} style={{ width: '90px' }} disabled={ro}>
           {TIPO_CUSTO_OPTS.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
       </Td>
-      <Td><TextInput value={item.subcategoria} onChange={(v) => upd({ subcategoria: v })} width="90px" /></Td>
-      <Td><TextInput value={item.item} onChange={(v) => upd({ item: v })} width="120px" /></Td>
-      <Td>
+      <Td {...fixed('col-4')}><TextInput value={item.subcategoria} onChange={(v) => upd({ subcategoria: v })} width="90px" readOnly={ro} /></Td>
+      <Td {...fixed('col-5')}><TextInput value={item.item} onChange={(v) => upd({ item: v })} width="120px" readOnly={ro} /></Td>
+      <Td {...fixed('col-6')}>
         {fornecedoresSugeridos.length > 0 ? (
           <input
             list={`forn-${item.id}`}
             value={item.fornecedor}
             onChange={(e) => upd({ fornecedor: e.target.value })}
             style={{ width: '100px' }}
+            readOnly={ro}
+            disabled={ro}
           />
         ) : (
-          <TextInput value={item.fornecedor} onChange={(v) => upd({ fornecedor: v })} width="100px" />
+          <TextInput value={item.fornecedor} onChange={(v) => upd({ fornecedor: v })} width="100px" readOnly={ro} />
         )}
         {fornecedoresSugeridos.length > 0 && (
           <datalist id={`forn-${item.id}`}>
@@ -147,8 +169,8 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
       </Td>
 
       {/* VENDIDO */}
-      <Td><QtyInput value={item.qtdeVendida} onChange={(v) => upd({ qtdeVendida: v })} /></Td>
-      <Td><NumInput value={item.valorUnitarioAtual} onChange={(v) => upd({ valorUnitarioAtual: v })} /></Td>
+      <Td><QtyInput value={item.qtdeVendida} onChange={(v) => upd({ qtdeVendida: v })} readOnly={ro} /></Td>
+      <Td><NumInput value={item.valorUnitarioAtual} onChange={(v) => upd({ valorUnitarioAtual: v })} readOnly={ro} /></Td>
       <Td className="font-medium">
         {item.totalAtual ? (
           <span
@@ -160,11 +182,11 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
       <Td className="text-blue-600">{item.valorProjetado ? formatBRL(item.valorProjetado) : ''}</Td>
       <Td className="text-blue-600">{item.totalProjetado ? formatBRL(item.totalProjetado) : ''}</Td>
 
-      <Td className="text-gray-300 select-none">|</Td>
+      <td className="col-sep" />
 
       {/* ORÇADO */}
-      <Td><QtyInput value={item.qtdeOrcada} onChange={(v) => upd({ qtdeOrcada: v })} /></Td>
-      <Td><NumInput value={item.valorUnitarioOrcado} onChange={(v) => upd({ valorUnitarioOrcado: v })} /></Td>
+      <Td><QtyInput value={item.qtdeOrcada} onChange={(v) => upd({ qtdeOrcada: v })} readOnly={ro} /></Td>
+      <Td><NumInput value={item.valorUnitarioOrcado} onChange={(v) => upd({ valorUnitarioOrcado: v })} readOnly={ro} /></Td>
       <Td className="font-medium">
         {item.valorOrcado ? (
           <span
@@ -174,11 +196,11 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
         ) : ''}
       </Td>
 
-      <Td className="text-gray-300 select-none">|</Td>
+      <td className="col-sep" />
 
       {/* CONTRATADO */}
-      <Td><QtyInput value={item.qtdeContratada} onChange={(v) => upd({ qtdeContratada: v })} /></Td>
-      <Td><NumInput value={item.valorUnitarioContratado} onChange={(v) => upd({ valorUnitarioContratado: v })} /></Td>
+      <Td><QtyInput value={item.qtdeContratada} onChange={(v) => upd({ qtdeContratada: v })} readOnly={ro} /></Td>
+      <Td><NumInput value={item.valorUnitarioContratado} onChange={(v) => upd({ valorUnitarioContratado: v })} readOnly={ro} /></Td>
       <Td className="font-medium">
         {item.valorContratado ? (
           <span
@@ -188,33 +210,35 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
         ) : ''}
       </Td>
 
-      <Td><TextInput value={item.responsavel} onChange={(v) => upd({ responsavel: v })} width="80px" /></Td>
+      <Td><TextInput value={item.responsavel} onChange={(v) => upd({ responsavel: v })} width="80px" readOnly={ro} /></Td>
       <Td>
-        <select value={item.status} onChange={(e) => upd({ status: e.target.value as StatusItem })} style={{ width: '80px' }}>
+        <select value={item.status} onChange={(e) => upd({ status: e.target.value as StatusItem })} style={{ width: '80px' }} disabled={ro}>
           {STATUS_OPTS.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
       </Td>
       <Td>
-        <select value={item.statusPagamento} onChange={(e) => upd({ statusPagamento: e.target.value as StatusPagamento })} style={{ width: '80px' }}>
+        <select value={item.statusPagamento} onChange={(e) => upd({ statusPagamento: e.target.value as StatusPagamento })} style={{ width: '80px' }} disabled={ro}>
           {PGTO_OPTS.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
       </Td>
-      <Td><NumInput value={item.valorFinal} onChange={(v) => upd({ valorFinal: v })} /></Td>
-      <Td><NumInput value={item.valorPago} onChange={(v) => upd({ valorPago: v })} /></Td>
+      <Td><NumInput value={item.valorFinal} onChange={(v) => upd({ valorFinal: v })} readOnly={ro} /></Td>
+      <Td><NumInput value={item.valorPago} onChange={(v) => upd({ valorPago: v })} readOnly={ro} /></Td>
       <Td className={item.faltaPagar > 0 ? 'text-red-600 font-medium' : ''}>
         {item.faltaPagar ? formatBRL(item.faltaPagar) : ''}
       </Td>
-      <Td><NumInput value={item.totalProgramado} onChange={(v) => upd({ totalProgramado: v })} /></Td>
+      <Td><NumInput value={item.totalProgramado} onChange={(v) => upd({ totalProgramado: v })} readOnly={ro} /></Td>
       <Td>{item.emAberto ? formatBRL(item.emAberto) : ''}</Td>
 
       <Td>
-        <button
-          onClick={onDelete}
-          className="text-gray-300 hover:text-red-500 transition-colors"
-          title="Excluir item"
-        >
-          <Trash2 size={13} />
-        </button>
+        {isAdmin && (
+          <button
+            onClick={onDelete}
+            className="text-gray-300 hover:text-red-500 transition-colors"
+            title="Excluir item"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </Td>
     </tr>
   )

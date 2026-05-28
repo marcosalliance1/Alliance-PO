@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import type { Projeto, Receitas, ReceitaLinha, ConciliacaoEverest, LinhaEverest, CustoAdicional } from '../../types'
+// Receitas is Record<string, ReceitaLinha> — keys are human-readable labels
 import { calcResumoProjeto } from '../../utils/calculos'
 import { formatBRL } from '../../utils/formatters'
 import { v4 as uuid } from '../../utils/uuid'
+import { useAuth } from '../../contexts/AuthContext'
 
 interface ResumoGeralProps {
   projeto: Projeto
@@ -13,11 +15,12 @@ interface ResumoGeralProps {
 }
 
 // Input BRL inline: exibe formatado, clique para editar com vírgula decimal
-function BRLInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function BRLInput({ value, onChange, readOnly }: { value: number; onChange: (v: number) => void; readOnly?: boolean }) {
   const [editing, setEditing] = useState(false)
   const [raw, setRaw] = useState('')
 
   function startEdit() {
+    if (readOnly) return
     setEditing(true)
     setRaw(value === 0 ? '' : String(value).replace('.', ','))
   }
@@ -45,8 +48,8 @@ function BRLInput({ value, onChange }: { value: number; onChange: (v: number) =>
   return (
     <span
       onClick={startEdit}
-      title="Clique para editar"
-      className="block w-full text-right cursor-pointer hover:bg-blue-50 rounded px-1 py-0.5 text-sm transition-colors select-none"
+      title={readOnly ? undefined : 'Clique para editar'}
+      className={`block w-full text-right rounded px-1 py-0.5 text-sm transition-colors select-none ${readOnly ? '' : 'cursor-pointer hover:bg-blue-50'}`}
     >
       {value
         ? <span className="text-text-main">{formatBRL(value)}</span>
@@ -64,21 +67,13 @@ function ValorCell({ value, className = '' }: { value: number; className?: strin
   )
 }
 
-const RECEITA_CAMPOS: { label: string; key: keyof Receitas }[] = [
-  { label: 'Faturamento Adesões',  key: 'faturamentoAdesoes' },
-  { label: 'Vendas Convites Extras', key: 'vendasConvitesExtras' },
-  { label: 'Vendas Mesas Extras',  key: 'vendasMesasExtras' },
-  { label: 'Arrecadação Extra',    key: 'arrecadacaoExtra' },
-  { label: 'Receita Vendas Baile', key: 'receitaVendasBaile' },
-  { label: 'Outros',               key: 'outros' },
-  { label: 'Receita Rescisões',    key: 'receitaRescisoes' },
-]
 
 function emptyLinhaEverest(secaoId: string, secaoNome: string): LinhaEverest {
   return { secaoId, secaoNome, valorEverest: 0, observacao: '' }
 }
 
 export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao, onUpdateCustosAdicionais }: ResumoGeralProps) {
+  const { isAdmin } = useAuth()
   const resumo = calcResumoProjeto(projeto)
   const r = projeto.receitas
   const margemPositiva = resumo.margem.vendido >= 0
@@ -106,7 +101,7 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao, on
     return { linhas, observacaoGeral: base.observacaoGeral ?? '' }
   }, [projeto])
 
-  function updateLinha(key: keyof Receitas, field: keyof ReceitaLinha, valor: number) {
+  function updateLinha(key: string, field: keyof ReceitaLinha, valor: number) {
     onUpdateReceitas({ ...r, [key]: { ...r[key], [field]: valor } })
   }
 
@@ -130,7 +125,7 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao, on
       <div className="card overflow-x-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-text-main">Resumo Geral</h3>
-          <span className="text-text-muted text-xs italic">Clique em qualquer célula para editar</span>
+          {isAdmin && <span className="text-text-muted text-xs italic">Clique em qualquer célula para editar</span>}
         </div>
 
         <table className="w-full border-collapse text-sm">
@@ -152,23 +147,22 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao, on
               </td>
             </tr>
 
-            {RECEITA_CAMPOS.map(({ label, key }) => {
-              const linha = r[key]
+            {Object.entries(r).map(([key, linha]) => {
               const faltaPagar = linha.contratado - linha.pago
               return (
                 <tr key={key} className="border-b border-white/5 hover:bg-white/5">
-                  <td className="px-3 py-1 text-text-main text-sm">{label}</td>
+                  <td className="px-3 py-1 text-text-main text-sm">{key}</td>
                   <td className="px-2 py-0.5">
-                    <BRLInput value={linha.vendido}    onChange={(v) => updateLinha(key, 'vendido', v)} />
+                    <BRLInput value={linha.vendido}    onChange={(v) => updateLinha(key, 'vendido', v)} readOnly={!isAdmin} />
                   </td>
                   <td className="px-2 py-0.5">
-                    <BRLInput value={linha.orcado}     onChange={(v) => updateLinha(key, 'orcado', v)} />
+                    <BRLInput value={linha.orcado}     onChange={(v) => updateLinha(key, 'orcado', v)} readOnly={!isAdmin} />
                   </td>
                   <td className="px-2 py-0.5">
-                    <BRLInput value={linha.contratado} onChange={(v) => updateLinha(key, 'contratado', v)} />
+                    <BRLInput value={linha.contratado} onChange={(v) => updateLinha(key, 'contratado', v)} readOnly={!isAdmin} />
                   </td>
                   <td className="px-2 py-0.5">
-                    <BRLInput value={linha.pago}       onChange={(v) => updateLinha(key, 'pago', v)} />
+                    <BRLInput value={linha.pago}       onChange={(v) => updateLinha(key, 'pago', v)} readOnly={!isAdmin} />
                   </td>
                   <td className="text-right px-3 py-1 text-sm">
                     <span className={faltaPagar > 0 ? 'text-danger font-medium' : faltaPagar < 0 ? 'text-success' : 'text-text-muted'}>
@@ -211,12 +205,14 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao, on
               <td colSpan={6} className="px-3 py-1 bg-surface border-t border-white/10">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-text-muted uppercase tracking-wide">Custos Adicionais</span>
-                  <button
-                    onClick={addCustoAdicional}
-                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
-                  >
-                    <Plus size={12} /> Adicionar linha
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={addCustoAdicional}
+                      className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                    >
+                      <Plus size={12} /> Adicionar linha
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>
@@ -232,31 +228,34 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao, on
                       onChange={(e) => updateCustoAdicional(ca.id, { descricao: e.target.value })}
                       placeholder="Descrição..."
                       className="w-full text-sm bg-transparent border-b border-white/10 focus:border-primary focus:outline-none py-0.5 text-text-main placeholder:text-text-muted/40"
+                      disabled={!isAdmin}
                     />
                   </td>
                   <td className="px-2 py-0.5">
-                    <BRLInput value={ca.vendido}    onChange={(v) => updateCustoAdicional(ca.id, { vendido: v })} />
+                    <BRLInput value={ca.vendido}    onChange={(v) => updateCustoAdicional(ca.id, { vendido: v })} readOnly={!isAdmin} />
                   </td>
                   <td className="px-2 py-0.5">
-                    <BRLInput value={ca.orcado}     onChange={(v) => updateCustoAdicional(ca.id, { orcado: v })} />
+                    <BRLInput value={ca.orcado}     onChange={(v) => updateCustoAdicional(ca.id, { orcado: v })} readOnly={!isAdmin} />
                   </td>
                   <td className="px-2 py-0.5">
-                    <BRLInput value={ca.contratado} onChange={(v) => updateCustoAdicional(ca.id, { contratado: v })} />
+                    <BRLInput value={ca.contratado} onChange={(v) => updateCustoAdicional(ca.id, { contratado: v })} readOnly={!isAdmin} />
                   </td>
                   <td className="px-2 py-0.5">
-                    <BRLInput value={ca.pago}       onChange={(v) => updateCustoAdicional(ca.id, { pago: v })} />
+                    <BRLInput value={ca.pago}       onChange={(v) => updateCustoAdicional(ca.id, { pago: v })} readOnly={!isAdmin} />
                   </td>
                   <td className="px-3 py-1 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <span className={`text-sm ${faltaPagar > 0 ? 'text-danger' : 'text-text-muted'}`}>
                         {formatBRL(faltaPagar)}
                       </span>
-                      <button
-                        onClick={() => removeCustoAdicional(ca.id)}
-                        className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-danger transition-all"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => removeCustoAdicional(ca.id)}
+                          className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-danger transition-all"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -331,6 +330,7 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao, on
                     <BRLInput
                       value={linha.valorEverest}
                       onChange={(v) => updateEverest(linha.secaoId, 'valorEverest', v)}
+                      readOnly={!isAdmin}
                     />
                   </td>
                   <td className={`text-right px-3 py-1.5 text-sm font-medium ${dif === 0 ? 'text-text-muted' : dif > 0 ? 'text-warning' : 'text-danger'}`}>
@@ -343,6 +343,7 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao, on
                       onChange={(e) => updateEverest(linha.secaoId, 'observacao', e.target.value)}
                       placeholder="Observação..."
                       className="w-full text-xs bg-transparent border-b border-white/10 focus:border-primary focus:outline-none py-0.5 text-text-main placeholder:text-text-muted/40"
+                      disabled={!isAdmin}
                     />
                   </td>
                 </tr>
@@ -364,6 +365,7 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao, on
                   onChange={(e) => updateObsGeral(e.target.value)}
                   placeholder="Observação geral..."
                   className="w-full text-xs bg-transparent border-b border-white/10 focus:border-primary focus:outline-none py-0.5 text-text-main placeholder:text-text-muted/40"
+                  disabled={!isAdmin}
                 />
               </td>
             </tr>

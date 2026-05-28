@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Navigate } from 'react-router-dom'
 import type { TAP, TipoEscola } from '../types'
 import { TAPForm } from '../components/projeto/TAPForm'
 import { Header } from '../components/layout/Header'
 import { ArrowLeft, Cloud, Loader, Link } from 'lucide-react'
 import { useGoogleAuth } from '../contexts/GoogleAuthContext'
+import { useAuth } from '../contexts/AuthContext'
 import { lerTAPDeSheets, extrairSpreadsheetId } from '../utils/sheetsSync'
 
 interface NovoProjetoProps {
@@ -38,7 +39,10 @@ function tapInicial(ipca: number): TAP {
 
 export function NovoProjeto({ onCriar, ipcaPadrao }: NovoProjetoProps) {
   const navigate = useNavigate()
+  const { isAdmin } = useAuth()
   const { accessToken, conectar, logando } = useGoogleAuth()
+
+  if (!isAdmin) return <Navigate to="/projetos" replace />
 
   const [tap, setTap] = useState<TAP>(tapInicial(ipcaPadrao))
   const [tapVersion, setTapVersion] = useState(0)  // muda ao carregar do Sheets → força remount do TAPForm

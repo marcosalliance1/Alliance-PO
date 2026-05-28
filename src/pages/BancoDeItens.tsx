@@ -4,6 +4,7 @@ import { Header } from '../components/layout/Header'
 import { Modal } from '../components/ui/Modal'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { formatBRL } from '../utils/formatters'
+import { useAuth } from '../contexts/AuthContext'
 import { Plus, Pencil, EyeOff, Eye, Search } from 'lucide-react'
 
 // -- Busca fuzzy ------------------------------------------------------------------
@@ -119,6 +120,7 @@ function ItemForm({ inicial, onSave, onCancel }: {
 }
 
 export function BancoDeItens({ itens, onAdicionar, onAtualizar, onDesativar, onReativar }: BancoDeItensProps) {
+  const { isAdmin } = useAuth()
   const [filtroSecao, setFiltroSecao] = useState('')
   const [filtroTipo, setFiltroTipo] = useState<TipoEscola | ''>('')
   const [showInativos, setShowInativos] = useState(false)
@@ -151,9 +153,11 @@ export function BancoDeItens({ itens, onAdicionar, onAtualizar, onDesativar, onR
         title="Banco de Itens"
         subtitle={`${itens.filter((i) => i.ativo).length} itens ativos`}
         actions={
-          <button className="btn-primary flex items-center gap-2" onClick={() => setModalNovo(true)}>
-            <Plus size={15} /> Novo Item
-          </button>
+          isAdmin ? (
+            <button className="btn-primary flex items-center gap-2" onClick={() => setModalNovo(true)}>
+              <Plus size={15} /> Novo Item
+            </button>
+          ) : undefined
         }
       />
 
@@ -228,20 +232,22 @@ export function BancoDeItens({ itens, onAdicionar, onAtualizar, onDesativar, onR
                   {item.valorUnitarioReferencia ? formatBRL(item.valorUnitarioReferencia) : '-'}
                 </td>
                 <td className="px-4 py-2 text-xs text-text-muted">{item.secaoAplicavel.join(', ')}</td>
-                <td className="px-4 py-2 text-center">
-                  <div className="flex items-center justify-center gap-2">
-                    <button className="text-text-muted hover:text-primary" onClick={() => setEditando(item)} title="Editar">
-                      <Pencil size={13} />
-                    </button>
-                    <button
-                      className={`text-text-muted ${item.ativo ? 'hover:text-danger' : 'hover:text-success'}`}
-                      onClick={() => item.ativo ? setDesativando(item.id) : onReativar(item.id)}
-                      title={item.ativo ? 'Desativar' : 'Reativar'}
-                    >
-                      {item.ativo ? <EyeOff size={13} /> : <Eye size={13} />}
-                    </button>
-                  </div>
-                </td>
+                {isAdmin && (
+                  <td className="px-4 py-2 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <button className="text-text-muted hover:text-primary" onClick={() => setEditando(item)} title="Editar">
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        className={`text-text-muted ${item.ativo ? 'hover:text-danger' : 'hover:text-success'}`}
+                        onClick={() => item.ativo ? setDesativando(item.id) : onReativar(item.id)}
+                        title={item.ativo ? 'Desativar' : 'Reativar'}
+                      >
+                        {item.ativo ? <EyeOff size={13} /> : <Eye size={13} />}
+                      </button>
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
             {filtrados.length === 0 && (
@@ -253,23 +259,27 @@ export function BancoDeItens({ itens, onAdicionar, onAtualizar, onDesativar, onR
         </table>
       </div>
 
-      <Modal open={modalNovo} onClose={() => setModalNovo(false)} title="Novo Item">
-        <ItemForm
-          inicial={{}}
-          onSave={(d) => { onAdicionar(d); setModalNovo(false) }}
-          onCancel={() => setModalNovo(false)}
-        />
-      </Modal>
-
-      <Modal open={!!editando} onClose={() => setEditando(null)} title="Editar Item">
-        {editando && (
+      {isAdmin && (
+        <Modal open={modalNovo} onClose={() => setModalNovo(false)} title="Novo Item">
           <ItemForm
-            inicial={editando}
-            onSave={(d) => { onAtualizar(editando.id, d); setEditando(null) }}
-            onCancel={() => setEditando(null)}
+            inicial={{}}
+            onSave={(d) => { onAdicionar(d); setModalNovo(false) }}
+            onCancel={() => setModalNovo(false)}
           />
-        )}
-      </Modal>
+        </Modal>
+      )}
+
+      {isAdmin && (
+        <Modal open={!!editando} onClose={() => setEditando(null)} title="Editar Item">
+          {editando && (
+            <ItemForm
+              inicial={editando}
+              onSave={(d) => { onAtualizar(editando.id, d); setEditando(null) }}
+              onCancel={() => setEditando(null)}
+            />
+          )}
+        </Modal>
+      )}
 
       <ConfirmDialog
         open={!!desativando}

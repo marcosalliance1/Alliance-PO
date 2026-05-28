@@ -7,6 +7,7 @@ import { ResumoGeral } from '../components/projeto/ResumoGeral'
 import { ProjectDashboard } from '../components/projeto/ProjectDashboard'
 import { Header } from '../components/layout/Header'
 import { BadgeEscola } from '../components/ui/Badge'
+import { useAuth } from '../contexts/AuthContext'
 import { ArrowLeft, Save, Check, Loader } from 'lucide-react'
 
 interface ViewProjetoProps {
@@ -41,6 +42,7 @@ export function ViewProjeto({
   fornecedoresSugeridos = [],
 }: ViewProjetoProps) {
   const navigate = useNavigate()
+  const { isAdmin } = useAuth()
   const [abaAtiva, setAbaAtiva] = useState<string>('tap')
   const [salvarEstado, setSalvarEstado] = useState<SalvarEstado>('idle')
 
@@ -90,14 +92,16 @@ export function ViewProjeto({
             <button className="btn-secondary flex items-center gap-2" onClick={() => navigate('/projetos')}>
               <ArrowLeft size={15} /> Projetos
             </button>
-            <button
-              className={`flex items-center gap-2 ${salvarBtn.cls}`}
-              onClick={handleSalvar}
-              disabled={salvarEstado === 'saving'}
-            >
-              {salvarBtn.icon}
-              {salvarBtn.label}
-            </button>
+            {isAdmin && (
+              <button
+                className={`flex items-center gap-2 ${salvarBtn.cls}`}
+                onClick={handleSalvar}
+                disabled={salvarEstado === 'saving'}
+              >
+                {salvarBtn.icon}
+                {salvarBtn.label}
+              </button>
+            )}
           </>
         }
       />

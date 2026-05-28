@@ -4,9 +4,10 @@ import {
   Tooltip, Legend, PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts'
 import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight, Table2, Search, ChevronLeft, RefreshCw } from 'lucide-react'
-import { useFinanceiro, type CAPRecord, type CARRecord, type TarifasRecord } from '../hooks/useFinanceiro'
+import { useFinanceiro, type CAPRecord, type CARRecord, type TarifasRecord, type DimensaoProjetoRecord } from '../hooks/useFinanceiro'
 import { fmtCompact, tempoDesde, mesAno, nivelEnsino } from '../utils/parseFinanceiro'
 import { useGoogleAuth } from '../contexts/GoogleAuthContext'
+import { useAuth } from '../contexts/AuthContext'
 import { Toast } from '../components/ui/Toast'
 import { KPICard } from '../components/dashboard/KPICard'
 
@@ -183,7 +184,7 @@ function ResultadoProjetos({ cap, car, tarifas }: { cap: CAPRecord[]; car: CARRe
 }
 
 // ─── Aba 2: Fluxo de Caixa ────────────────────────────────────────
-function FluxoCaixa({ cap }: { cap: CAPRecord[] }) {
+function FluxoCaixa({ cap, tarifas }: { cap: CAPRecord[]; tarifas: TarifasRecord[] }) {
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const [expandidosProjetos, setExpandidosProjetos] = useState<Record<string, boolean>>({})
   const [expandidosContas, setExpandidosContas] = useState<Record<string, boolean>>({})
@@ -193,15 +194,24 @@ function FluxoCaixa({ cap }: { cap: CAPRecord[] }) {
 
   const capAtivo = cap.filter(i => i.situacao === 'ATIVO')
   const totalAberto  = capAtivo.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+                     + tarifas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const totalVencido = capAtivo.filter(i => i.d_vencimento && i.d_vencimento < hoje).reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+                     + tarifas.filter(i => i.d_vencimento && i.d_vencimento < hoje).reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const aVencer7     = capAtivo.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em7).reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+                     + tarifas.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em7).reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const aVencer30    = capAtivo.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em30).reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+                     + tarifas.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em30).reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
 
   const porMes: Record<string, { mes: string; sortKey: string; valor: number }> = {}
   for (const i of capAtivo) {
     const key = mesAno(i.d_vencimento); if (!key || !i.d_vencimento) continue
     porMes[key] ??= { mes: key, sortKey: i.d_vencimento.slice(0, 7), valor: 0 }
     porMes[key].valor += i.v_titulo ?? 0
+  }
+  for (const i of tarifas) {
+    const key = mesAno(i.d_vencimento); if (!key || !i.d_vencimento) continue
+    porMes[key] ??= { mes: key, sortKey: i.d_vencimento.slice(0, 7), valor: 0 }
+    porMes[key].valor += i.v_lancamento ?? 0
   }
   const dadosMes = Object.values(porMes).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
@@ -222,6 +232,19 @@ function FluxoCaixa({ cap }: { cap: CAPRecord[] }) {
     pagPorMes[key].projetos[proj].contas[g] ??= { total: 0, fornecedores: {} }
     pagPorMes[key].projetos[proj].contas[g].total += i.v_titulo ?? 0
     pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] = (pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_titulo ?? 0)
+  }
+  for (const i of tarifas) {
+    const key  = mesAno(i.d_vencimento); if (!key || !i.d_vencimento) continue
+    const proj = i.desc_centro_custo    || '(sem projeto)'
+    const g    = i.desc_conta_gerencial || 'TARIFAS BANCÁRIAS'
+    const forn = i.fantasia_empresa     || i.razao_social || '(sem fornecedor)'
+    pagPorMes[key] ??= { mes: key, sortKey: i.d_vencimento.slice(0, 7), total: 0, vencido: i.d_vencimento < hoje, projetos: {} }
+    pagPorMes[key].total += i.v_lancamento ?? 0
+    pagPorMes[key].projetos[proj] ??= { total: 0, contas: {} }
+    pagPorMes[key].projetos[proj].total += i.v_lancamento ?? 0
+    pagPorMes[key].projetos[proj].contas[g] ??= { total: 0, fornecedores: {} }
+    pagPorMes[key].projetos[proj].contas[g].total += i.v_lancamento ?? 0
+    pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] = (pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_lancamento ?? 0)
   }
   const linhasPag = Object.values(pagPorMes).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
@@ -306,15 +329,37 @@ function FluxoCaixa({ cap }: { cap: CAPRecord[] }) {
 }
 
 // ─── Aba 3: Controle de Despesas ──────────────────────────────────
-function ControleDespesas({ cap, tarifas }: { cap: CAPRecord[]; tarifas: TarifasRecord[] }) {
+const NIVEL_CORES: Record<string, { forte: string; claro: string }> = {
+  'Superior':    { forte: '#185FA5', claro: '#B5D4F4' },
+  'Médio':       { forte: '#3B6D11', claro: '#C0DD97' },
+  'Fundamental': { forte: '#854F0B', claro: '#FAC775' },
+  'Outros':      { forte: '#5F5E5A', claro: '#94A3B8' },
+}
+const ORDEM_ENSINO = ['Superior', 'Médio', 'Fundamental', 'Outros']
+
+function normalizeEnsino(raw: string): string {
+  const s = raw.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  if (s.includes('superior')) return 'Superior'
+  if (s.includes('medio')) return 'Médio'
+  if (s.includes('fundament')) return 'Fundamental'
+  return raw.trim() || 'Outros'
+}
+
+function ControleDespesas({ cap, tarifas, dimensaoProjetos }: {
+  cap: CAPRecord[]
+  tarifas: TarifasRecord[]
+  dimensaoProjetos: DimensaoProjetoRecord[]
+}) {
+  const [expandidosEnsino, setExpandidosEnsino] = useState<Record<string, boolean>>({})
+  const [expandidosInst, setExpandidosInst] = useState<Record<string, boolean>>({})
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const [expandidosContas, setExpandidosContas] = useState<Record<string, boolean>>({})
 
-  const totalDespesasCap    = cap.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-  const totalDespesasTar    = tarifas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
-  const totalDespesas       = totalDespesasCap + totalDespesasTar
-  const totalLiquidado      = cap.filter(i => i.situacao === 'LIQUIDADO').reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-  const totalAberto         = cap.filter(i => i.situacao === 'ATIVO').reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+  const totalDespesasCap = cap.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+  const totalDespesasTar = tarifas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const totalDespesas    = totalDespesasCap + totalDespesasTar
+  const totalLiquidado   = cap.filter(i => i.situacao === 'LIQUIDADO').reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+  const totalAberto      = cap.filter(i => i.situacao === 'ATIVO').reduce((s, i) => s + (i.v_titulo ?? 0), 0)
 
   const porGerencial: Record<string, number> = {}
   for (const i of cap)     { const g = i.desc_conta_gerencial || '(sem categoria)'; porGerencial[g] = (porGerencial[g] ?? 0) + (i.v_titulo ?? 0) }
@@ -326,28 +371,60 @@ function ControleDespesas({ cap, tarifas }: { cap: CAPRecord[]; tarifas: Tarifas
   for (const i of tarifas) { const ano = i.d_competencia?.slice(0, 4); if (!ano) continue; porAno[ano] = (porAno[ano] ?? 0) + (i.v_lancamento ?? 0) }
   const dadosAno = Object.entries(porAno).sort((a, b) => a[0].localeCompare(b[0])).map(([ano, valor]) => ({ ano, valor }))
 
-  const porProj: Record<string, { total: number; contas: Record<string, { total: number; fornecedores: Record<string, number> }> }> = {}
-  for (const i of cap) {
-    const proj = i.desc_centro_custo || '(sem projeto)'
-    const g    = i.desc_conta_gerencial || '(sem categoria)'
-    const forn = i.fantasia_fornecedor || '(sem fornecedor)'
-    porProj[proj] ??= { total: 0, contas: {} }
-    porProj[proj].total += i.v_titulo ?? 0
-    porProj[proj].contas[g] ??= { total: 0, fornecedores: {} }
-    porProj[proj].contas[g].total += i.v_titulo ?? 0
-    porProj[proj].contas[g].fornecedores[forn] = (porProj[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_titulo ?? 0)
-  }
-  for (const i of tarifas) {
-    const proj = i.desc_centro_custo || '(sem projeto)'
-    const g    = i.desc_conta_gerencial || 'TARIFAS BANCARIAS'
-    const forn = i.fantasia_empresa || i.razao_social || '(tarifa bancária)'
-    porProj[proj] ??= { total: 0, contas: {} }
-    porProj[proj].total += i.v_lancamento ?? 0
-    porProj[proj].contas[g] ??= { total: 0, fornecedores: {} }
-    porProj[proj].contas[g].total += i.v_lancamento ?? 0
-    porProj[proj].contas[g].fornecedores[forn] = (porProj[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_lancamento ?? 0)
-  }
-  const projetos = Object.entries(porProj).sort((a, b) => b[1].total - a[1].total)
+  const dimMap = useMemo(() => {
+    const m: Record<string, { ensino: string; instituicao: string }> = {}
+    for (const d of dimensaoProjetos) {
+      if (d.nome_projeto) m[d.nome_projeto.trim()] = { ensino: normalizeEnsino(d.ensino), instituicao: d.instituicao.trim() }
+    }
+    return m
+  }, [dimensaoProjetos])
+
+  type ProjData = { total: number; contas: Record<string, { total: number; fornecedores: Record<string, number> }> }
+  type GrupoInst = { total: number; projetos: Record<string, ProjData> }
+  type GrupoEnsino = { total: number; instituicoes: Record<string, GrupoInst> }
+
+  const grupos = useMemo(() => {
+    const porProj: Record<string, ProjData> = {}
+    for (const i of cap) {
+      const proj = i.desc_centro_custo || '(sem projeto)'
+      const g    = i.desc_conta_gerencial || '(sem categoria)'
+      const forn = i.fantasia_fornecedor || '(sem fornecedor)'
+      porProj[proj] ??= { total: 0, contas: {} }
+      porProj[proj].total += i.v_titulo ?? 0
+      porProj[proj].contas[g] ??= { total: 0, fornecedores: {} }
+      porProj[proj].contas[g].total += i.v_titulo ?? 0
+      porProj[proj].contas[g].fornecedores[forn] = (porProj[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_titulo ?? 0)
+    }
+    for (const i of tarifas) {
+      const proj = i.desc_centro_custo || '(sem projeto)'
+      const g    = i.desc_conta_gerencial || 'TARIFAS BANCARIAS'
+      const forn = i.fantasia_empresa || i.razao_social || '(tarifa bancária)'
+      porProj[proj] ??= { total: 0, contas: {} }
+      porProj[proj].total += i.v_lancamento ?? 0
+      porProj[proj].contas[g] ??= { total: 0, fornecedores: {} }
+      porProj[proj].contas[g].total += i.v_lancamento ?? 0
+      porProj[proj].contas[g].fornecedores[forn] = (porProj[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_lancamento ?? 0)
+    }
+
+    const result: Record<string, GrupoEnsino> = {}
+    for (const [proj, data] of Object.entries(porProj)) {
+      if (!proj) continue
+      const dim    = dimMap[proj]
+      const ensino = dim?.ensino    || 'Outros'
+      const inst   = dim?.instituicao || 'Outros'
+      result[ensino] ??= { total: 0, instituicoes: {} }
+      result[ensino].total += data.total
+      result[ensino].instituicoes[inst] ??= { total: 0, projetos: {} }
+      result[ensino].instituicoes[inst].total += data.total
+      result[ensino].instituicoes[inst].projetos[proj] = data
+    }
+    return result
+  }, [cap, tarifas, dimMap])
+
+  const gruposOrdenados: [string, GrupoEnsino][] = [
+    ...ORDEM_ENSINO.filter(e => grupos[e]).map(e => [e, grupos[e]] as [string, GrupoEnsino]),
+    ...Object.entries(grupos).filter(([e]) => !ORDEM_ENSINO.includes(e)),
+  ]
 
   return (
     <div className="space-y-5">
@@ -397,39 +474,139 @@ function ControleDespesas({ cap, tarifas }: { cap: CAPRecord[]; tarifas: Tarifas
 
       <div className="card p-0 overflow-hidden">
         <div className="px-5 py-3 border-b border-white/10 text-text-main text-sm font-semibold">Despesas por Projeto</div>
-        {projetos.length > 0 ? projetos.map(([proj, { total, contas }]) => (
-          <div key={proj}>
+        {gruposOrdenados.length > 0 ? gruposOrdenados.map(([ensino, { total: ensinoTotal, instituicoes }]) => {
+          const cores = NIVEL_CORES[ensino] ?? NIVEL_CORES['Outros']
+          const instSort = Object.entries(instituicoes).sort((a, b) => b[1].total - a[1].total)
+
+          // ── Cabeçalho de nível Ensino (comum a todos) ──
+          const ensinoHeader = (
             <button
-              onClick={() => setExpandidos(p => ({ ...p, [proj]: !p[proj] }))}
-              className="w-full flex items-center gap-2 px-5 py-3 text-left text-sm text-text-muted hover:bg-white/5 transition-colors border-b border-white/5"
+              onClick={() => setExpandidosEnsino(p => ({ ...p, [ensino]: !p[ensino] }))}
+              className="w-full flex items-center gap-2 px-5 py-3 text-left text-sm font-bold border-b border-white/10 hover:opacity-80 transition-opacity"
+              style={{ background: `${cores.forte}26`, borderLeft: `3px solid ${cores.forte}`, color: cores.claro }}
             >
-              {expandidos[proj] ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-              <span className="flex-1 truncate">{proj}</span>
-              <span className="font-semibold text-text-main">{fmtCompact(total)}</span>
+              {expandidosEnsino[ensino] ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              <span className="flex-1 uppercase tracking-wider">{ensino}</span>
+              <span>{fmtCompact(ensinoTotal)}</span>
             </button>
-            {expandidos[proj] && Object.entries(contas).sort((a, b) => b[1].total - a[1].total).map(([conta, { total: cTotal, fornecedores }]) => {
-              const ck = `${proj}::${conta}`
-              return (
-                <div key={conta}>
-                  <button
-                    onClick={() => setExpandidosContas(p => ({ ...p, [ck]: !p[ck] }))}
-                    className="w-full flex items-center gap-2 px-5 py-2.5 pl-10 text-left text-xs text-text-muted hover:bg-white/5 transition-colors border-b border-white/5 bg-black/20"
-                  >
-                    {expandidosContas[ck] ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                    <span className="flex-1 truncate">{conta}</span>
-                    <span className="font-medium">{fmtCompact(cTotal)}</span>
-                  </button>
-                  {expandidosContas[ck] && Object.entries(fornecedores).sort((a, b) => b[1] - a[1]).map(([forn, fVal]) => (
-                    <div key={forn} className="flex justify-between px-5 py-1.5 pl-16 text-xs text-text-muted border-b border-white/5 bg-black/30">
-                      <span className="truncate flex-1 pr-3">{forn}</span>
-                      <span className="shrink-0">{fmtCompact(fVal)}</span>
-                    </div>
-                  ))}
-                </div>
-              )
-            })}
-          </div>
-        )) : <div className="px-5 py-8 text-center text-text-muted text-sm">Nenhum dado disponível</div>}
+          )
+
+          // ── Outros: projetos direto, sem sub-nível de instituição ──
+          if (ensino === 'Outros') {
+            const projMap: Record<string, ProjData> = {}
+            for (const { projetos } of Object.values(instituicoes)) {
+              for (const [proj, data] of Object.entries(projetos)) {
+                projMap[proj] ??= { total: 0, contas: {} }
+                projMap[proj].total += data.total
+                for (const [conta, cData] of Object.entries(data.contas)) {
+                  projMap[proj].contas[conta] ??= { total: 0, fornecedores: {} }
+                  projMap[proj].contas[conta].total += cData.total
+                  for (const [forn, fVal] of Object.entries(cData.fornecedores)) {
+                    projMap[proj].contas[conta].fornecedores[forn] = (projMap[proj].contas[conta].fornecedores[forn] ?? 0) + fVal
+                  }
+                }
+              }
+            }
+            const projSort = Object.entries(projMap).sort((a, b) => b[1].total - a[1].total)
+            return (
+              <div key={ensino}>
+                {ensinoHeader}
+                {expandidosEnsino[ensino] && projSort.map(([proj, { total: projTotal, contas }]) => (
+                  <div key={proj}>
+                    <button
+                      onClick={() => setExpandidos(p => ({ ...p, [proj]: !p[proj] }))}
+                      className="w-full flex items-center gap-2 px-5 py-2.5 pl-10 text-left text-xs text-text-muted hover:bg-white/5 transition-colors border-b border-white/5 bg-black/15"
+                    >
+                      {expandidos[proj] ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                      <span className="flex-1 truncate">{proj}</span>
+                      <span className="font-medium text-text-main">{fmtCompact(projTotal)}</span>
+                    </button>
+                    {expandidos[proj] && Object.entries(contas).sort((a, b) => b[1].total - a[1].total).map(([conta, { total: cTotal, fornecedores }]) => {
+                      const ck = `${proj}::${conta}`
+                      return (
+                        <div key={conta}>
+                          <button
+                            onClick={() => setExpandidosContas(p => ({ ...p, [ck]: !p[ck] }))}
+                            className="w-full flex items-center gap-2 px-5 py-2 pl-14 text-left text-xs text-text-muted hover:bg-white/5 transition-colors border-b border-white/5 bg-black/20"
+                          >
+                            {expandidosContas[ck] ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                            <span className="flex-1 truncate">{conta}</span>
+                            <span>{fmtCompact(cTotal)}</span>
+                          </button>
+                          {expandidosContas[ck] && Object.entries(fornecedores).sort((a, b) => b[1] - a[1]).map(([forn, fVal]) => (
+                            <div key={forn} className="flex justify-between px-5 py-1.5 pl-20 text-xs text-text-muted border-b border-white/5 bg-black/30">
+                              <span className="truncate flex-1 pr-3">{forn}</span>
+                              <span className="shrink-0">{fmtCompact(fVal)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            )
+          }
+
+          // ── Superior / Médio / Fundamental: 3 níveis ──
+          return (
+            <div key={ensino}>
+              {ensinoHeader}
+              {expandidosEnsino[ensino] && instSort.map(([inst, { total: instTotal, projetos }]) => {
+                const ik = `${ensino}::${inst}`
+                const projSort = Object.entries(projetos).sort((a, b) => b[1].total - a[1].total)
+                return (
+                  <div key={inst}>
+                    {/* Nível 2: Instituição */}
+                    <button
+                      onClick={() => setExpandidosInst(p => ({ ...p, [ik]: !p[ik] }))}
+                      className="w-full flex items-center gap-2 px-5 py-2.5 pl-10 text-left text-xs font-semibold border-b border-white/5 hover:opacity-80 transition-opacity"
+                      style={{ background: `${cores.claro}12`, borderLeft: `2px solid ${cores.claro}`, color: cores.claro }}
+                    >
+                      {expandidosInst[ik] ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                      <span className="flex-1 uppercase tracking-wide">{inst}</span>
+                      <span>{fmtCompact(instTotal)}</span>
+                    </button>
+                    {expandidosInst[ik] && projSort.map(([proj, { total: projTotal, contas }]) => (
+                      <div key={proj}>
+                        {/* Nível 3: Projeto */}
+                        <button
+                          onClick={() => setExpandidos(p => ({ ...p, [proj]: !p[proj] }))}
+                          className="w-full flex items-center gap-2 px-5 py-2.5 pl-16 text-left text-xs text-text-muted hover:bg-white/5 transition-colors border-b border-white/5 bg-black/15"
+                        >
+                          {expandidos[proj] ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                          <span className="flex-1 truncate">{proj}</span>
+                          <span className="font-medium text-text-main">{fmtCompact(projTotal)}</span>
+                        </button>
+                        {expandidos[proj] && Object.entries(contas).sort((a, b) => b[1].total - a[1].total).map(([conta, { total: cTotal, fornecedores }]) => {
+                          const ck = `${proj}::${conta}`
+                          return (
+                            <div key={conta}>
+                              <button
+                                onClick={() => setExpandidosContas(p => ({ ...p, [ck]: !p[ck] }))}
+                                className="w-full flex items-center gap-2 px-5 py-2 pl-20 text-left text-xs text-text-muted hover:bg-white/5 transition-colors border-b border-white/5 bg-black/20"
+                              >
+                                {expandidosContas[ck] ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                                <span className="flex-1 truncate">{conta}</span>
+                                <span>{fmtCompact(cTotal)}</span>
+                              </button>
+                              {expandidosContas[ck] && Object.entries(fornecedores).sort((a, b) => b[1] - a[1]).map(([forn, fVal]) => (
+                                <div key={forn} className="flex justify-between px-5 py-1.5 pl-24 text-xs text-text-muted border-b border-white/5 bg-black/30">
+                                  <span className="truncate flex-1 pr-3">{forn}</span>
+                                  <span className="shrink-0">{fmtCompact(fVal)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+          )
+        }) : <div className="px-5 py-8 text-center text-text-muted text-sm">Nenhum dado disponível</div>}
       </div>
     </div>
   )
@@ -626,8 +803,9 @@ function EmptyChart({ label = 'Sem dados' }: { label?: string }) {
 
 // ─── Página principal ─────────────────────────────────────────────
 export function Financeiro() {
-  const { cap, car, tarifas, uploads, carregando, uploadCAP, uploadCAR, atualizarTarifas } = useFinanceiro()
+  const { cap, car, tarifas, dimensaoProjetos, uploads, carregando, uploadCAP, uploadCAR, atualizarTarifas } = useFinanceiro()
   const { accessToken, conectado, logando, conectar } = useGoogleAuth()
+  const { isAdmin } = useAuth()
   const [abaAtiva, setAbaAtiva] = useState<AbaId>('resultado')
   const [processando, setProcessando] = useState({ CAP: false, CAR: false, TARIFAS: false })
   const [toast, setToast] = useState<{ mensagem: string; tipo: 'sucesso' | 'erro' } | null>(null)
@@ -684,53 +862,55 @@ export function Financeiro() {
           <p className="text-text-muted text-xs mt-0.5">Contas a Pagar (CAP), Contas a Receber (CAR) e Tarifas Bancárias</p>
         </div>
 
-        <div className="flex gap-3 flex-wrap">
-          {(['CAP', 'CAR'] as const).map(tipo => {
-            const ref = tipo === 'CAP' ? capRef : carRef
-            const uploado = tipo === 'CAP' ? uploads.CAP : uploads.CAR
-            const busy = processando[tipo]
-            return (
-              <div key={tipo} className="flex flex-col items-end gap-1">
-                <input ref={ref} type="file" accept=".xlsx" className="hidden"
-                  onChange={e => handleArquivo(tipo, e.target.files?.[0])} />
-                <button
-                  onClick={() => ref.current?.click()}
-                  disabled={busy}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
-                    tipo === 'CAP'
-                      ? 'bg-white/5 border border-white/10 text-text-muted hover:text-text-main hover:bg-white/10'
-                      : 'bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20'
-                  }`}
-                >
-                  {busy ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
-                  Atualizar {tipo}
-                </button>
-                {uploado && (
-                  <span className="text-xs text-text-muted">
-                    Atualizado {tempoDesde(uploado.uploaded_at)} · {(uploado.total_linhas ?? 0).toLocaleString('pt-BR')} linhas
-                  </span>
-                )}
-              </div>
-            )
-          })}
+        {isAdmin && (
+          <div className="flex gap-3 flex-wrap">
+            {(['CAP', 'CAR'] as const).map(tipo => {
+              const ref = tipo === 'CAP' ? capRef : carRef
+              const uploado = tipo === 'CAP' ? uploads.CAP : uploads.CAR
+              const busy = processando[tipo]
+              return (
+                <div key={tipo} className="flex flex-col items-end gap-1">
+                  <input ref={ref} type="file" accept=".xlsx" className="hidden"
+                    onChange={e => handleArquivo(tipo, e.target.files?.[0])} />
+                  <button
+                    onClick={() => ref.current?.click()}
+                    disabled={busy}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                      tipo === 'CAP'
+                        ? 'bg-white/5 border border-white/10 text-text-muted hover:text-text-main hover:bg-white/10'
+                        : 'bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20'
+                    }`}
+                  >
+                    {busy ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
+                    Atualizar {tipo}
+                  </button>
+                  {uploado && (
+                    <span className="text-xs text-text-muted">
+                      Atualizado {tempoDesde(uploado.uploaded_at)} · {(uploado.total_linhas ?? 0).toLocaleString('pt-BR')} linhas
+                    </span>
+                  )}
+                </div>
+              )
+            })}
 
-          {/* Botão Atualizar Tarifas */}
-          <div className="flex flex-col items-end gap-1">
-            <button
-              onClick={handleAtualizarTarifas}
-              disabled={processando.TARIFAS || logando}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
-            >
-              {processando.TARIFAS || logando ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              {!conectado ? 'Conectar Google' : 'Atualizar Tarifas'}
-            </button>
-            {uploads.TARIFAS && (
-              <span className="text-xs text-text-muted">
-                Atualizado {tempoDesde(uploads.TARIFAS.uploaded_at)} · {(uploads.TARIFAS.total_linhas ?? 0).toLocaleString('pt-BR')} linhas
-              </span>
-            )}
+            {/* Botão Atualizar Tarifas */}
+            <div className="flex flex-col items-end gap-1">
+              <button
+                onClick={handleAtualizarTarifas}
+                disabled={processando.TARIFAS || logando}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
+              >
+                {processando.TARIFAS || logando ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                {!conectado ? 'Conectar Google' : 'Atualizar Tarifas'}
+              </button>
+              {uploads.TARIFAS && (
+                <span className="text-xs text-text-muted">
+                  Atualizado {tempoDesde(uploads.TARIFAS.uploaded_at)} · {(uploads.TARIFAS.total_linhas ?? 0).toLocaleString('pt-BR')} linhas
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Sub-abas */}
@@ -770,8 +950,8 @@ export function Financeiro() {
       ) : (
         <>
           {abaAtiva === 'resultado' && <ResultadoProjetos cap={cap} car={car} tarifas={tarifas} />}
-          {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} />}
-          {abaAtiva === 'despesas' && <ControleDespesas cap={cap} tarifas={tarifas} />}
+          {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} tarifas={tarifas} />}
+          {abaAtiva === 'despesas' && <ControleDespesas cap={cap} tarifas={tarifas} dimensaoProjetos={dimensaoProjetos} />}
           {abaAtiva === 'dados'    && <TabelaDados cap={cap} car={car} />}
         </>
       )}

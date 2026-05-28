@@ -5,6 +5,7 @@ import { TotaisSecaoRow } from './TotaisSecao'
 import { ModalBancoItens } from './ModalBancoItens'
 import { calcTotaisSecao, filtrarItensCalculo } from '../../utils/calculos'
 import { formatBRL } from '../../utils/formatters'
+import { useAuth } from '../../contexts/AuthContext'
 import { Plus, BookOpen } from 'lucide-react'
 
 interface SecaoCustoProps {
@@ -40,6 +41,7 @@ export function SecaoCusto({
   fornecedoresSugeridos = [],
 }: SecaoCustoProps) {
   const [showBanco, setShowBanco] = useState(false)
+  const { isAdmin } = useAuth()
   const totais = useMemo(() => calcTotaisSecao(secao, qtdFormandos), [secao, qtdFormandos])
 
   // Agrupar itens por área para exibir separadores
@@ -84,9 +86,11 @@ export function SecaoCusto({
       <table className="table-po">
         <thead>
           <tr>
-            {COLUNAS.map((col, i) => (
-              <th key={i} className={col === '|' ? 'px-1 text-white/20' : ''}>{col}</th>
-            ))}
+            {COLUNAS.map((col, i) => {
+              if (col === '|') return <th key={i} className="col-sep" />
+              const fixedClass = i < 7 ? `col-fixed col-${i}` : ''
+              return <th key={i} className={fixedClass}>{col}</th>
+            })}
           </tr>
         </thead>
         <tbody>
@@ -128,24 +132,26 @@ export function SecaoCusto({
         </tbody>
       </table>
 
-      <div className="bg-white px-4 py-2 border-t border-gray-100 flex gap-2">
-        <button
-          onClick={onAddItem}
-          className="flex items-center gap-1.5 text-xs text-primary border border-primary/30 hover:bg-primary/5 px-3 py-1.5 rounded-inner transition-colors"
-        >
-          <Plus size={13} /> Adicionar Item
-        </button>
-        {bancoItens.length > 0 && onAddItemFromBanco && (
+      {isAdmin && (
+        <div className="bg-white px-4 py-2 border-t border-gray-100 flex gap-2">
           <button
-            onClick={() => setShowBanco(true)}
-            className="flex items-center gap-1.5 text-xs text-text-muted border border-white/20 hover:border-primary/30 hover:text-primary px-3 py-1.5 rounded-inner transition-colors"
+            onClick={onAddItem}
+            className="flex items-center gap-1.5 text-xs text-primary border border-primary/30 hover:bg-primary/5 px-3 py-1.5 rounded-inner transition-colors"
           >
-            <BookOpen size={13} /> Adicionar do Banco de Itens
+            <Plus size={13} /> Adicionar Item
           </button>
-        )}
-      </div>
+          {bancoItens.length > 0 && onAddItemFromBanco && (
+            <button
+              onClick={() => setShowBanco(true)}
+              className="flex items-center gap-1.5 text-xs text-text-muted border border-white/20 hover:border-primary/30 hover:text-primary px-3 py-1.5 rounded-inner transition-colors"
+            >
+              <BookOpen size={13} /> Adicionar do Banco de Itens
+            </button>
+          )}
+        </div>
+      )}
 
-      {showBanco && onAddItemFromBanco && (
+      {isAdmin && showBanco && onAddItemFromBanco && (
         <ModalBancoItens
           open={showBanco}
           onClose={() => setShowBanco(false)}

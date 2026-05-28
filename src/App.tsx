@@ -9,11 +9,14 @@ import { BancoDeItens } from './pages/BancoDeItens'
 import { Verbas } from './pages/Verbas'
 import { Financeiro } from './pages/Financeiro'
 import { Configuracoes } from './pages/Configuracoes'
+import { LoginAdmin } from './pages/LoginAdmin'
+import { LoginViewer } from './pages/LoginViewer'
 import { useProjetos } from './hooks/useProjetos'
 import { useBancoItens } from './hooks/useBancoItens'
 import { useConfiguracoes } from './hooks/useConfiguracoes'
 import type { ItemCusto, TAP, Receitas, ConciliacaoEverest, Projeto, ConfiguracaoGlobal, ItemCatalogo, CustoAdicional } from './types'
 import { supabase } from './lib/supabase'
+import { useAuth } from './contexts/AuthContext'
 
 // ── Spinner simples ──────────────────────────────────────────────────────────
 function Spinner() {
@@ -23,6 +26,15 @@ function Spinner() {
       Carregando...
     </div>
   )
+}
+
+// ── Guard de autenticação ─────────────────────────────────────────────────────
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, loading } = useAuth()
+  const location = useLocation()
+  if (loading) return <Spinner />
+  if (!isAuthenticated) return <Navigate to="/access" state={{ from: location }} replace />
+  return <>{children}</>
 }
 
 // ── ProjetoPage recebe tudo do pai — sem useProjetos próprio ─────────────────
@@ -137,7 +149,9 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route element={<Layout />}>
+      <Route path="/login" element={<LoginAdmin />} />
+      <Route path="/access" element={<LoginViewer />} />
+      <Route element={<RequireAuth><Layout /></RequireAuth>}>
         <Route
           path="/"
           element={loadingProjetos ? <Spinner /> : <DashboardGeral projetos={projetos} />}

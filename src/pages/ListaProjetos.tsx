@@ -12,6 +12,7 @@ import { formatBRL, formatPercent } from '../utils/formatters'
 import { ProgressBar } from '../components/ui/ProgressBar'
 import { sincronizarComSheets, extrairSpreadsheetId } from '../utils/sheetsSync'
 import { useGoogleAuth } from '../contexts/GoogleAuthContext'
+import { useAuth } from '../contexts/AuthContext'
 import { Plus, Upload, Trash2, ChevronDown, ChevronRight, RefreshCw, Cloud, Loader, Link, AlertTriangle, X } from 'lucide-react'
 
 function calcFrescor(atualizadoEm: string): { texto: string; cor: string } {
@@ -39,6 +40,7 @@ interface ListaProjetosProps {
 export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, onSincronizar, onAtualizarSheetsUrl }: ListaProjetosProps) {
   const navigate = useNavigate()
   const { accessToken, conectar, invalidarToken } = useGoogleAuth()
+  const { isAdmin } = useAuth()
 
   const [showImportar, setShowImportar] = useState(false)
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null)
@@ -200,14 +202,16 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
         title="Projetos"
         subtitle={`${projetos.length} projeto${projetos.length !== 1 ? 's' : ''} cadastrado${projetos.length !== 1 ? 's' : ''}`}
         actions={
-          <>
-            <button className="btn-secondary flex items-center gap-2" onClick={() => setShowImportar(true)}>
-              <Upload size={15} /> Importar .xlsx
-            </button>
-            <button className="btn-primary flex items-center gap-2" onClick={() => navigate('/projetos/novo')}>
-              <Plus size={15} /> Novo Projeto
-            </button>
-          </>
+          isAdmin ? (
+            <>
+              <button className="btn-secondary flex items-center gap-2" onClick={() => setShowImportar(true)}>
+                <Upload size={15} /> Importar .xlsx
+              </button>
+              <button className="btn-primary flex items-center gap-2" onClick={() => navigate('/projetos/novo')}>
+                <Plus size={15} /> Novo Projeto
+              </button>
+            </>
+          ) : undefined
         }
       />
 
@@ -265,14 +269,16 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
         <div className="card text-center py-16">
           <p className="text-text-muted text-lg mb-2">Nenhum projeto ainda</p>
           <p className="text-text-muted text-sm mb-6">Crie um novo projeto manualmente ou importe um arquivo Excel.</p>
-          <div className="flex gap-3 justify-center">
-            <button className="btn-secondary flex items-center gap-2" onClick={() => setShowImportar(true)}>
-              <Upload size={15} /> Importar .xlsx
-            </button>
-            <button className="btn-primary flex items-center gap-2" onClick={() => navigate('/projetos/novo')}>
-              <Plus size={15} /> Novo Projeto
-            </button>
-          </div>
+          {isAdmin && (
+            <div className="flex gap-3 justify-center">
+              <button className="btn-secondary flex items-center gap-2" onClick={() => setShowImportar(true)}>
+                <Upload size={15} /> Importar .xlsx
+              </button>
+              <button className="btn-primary flex items-center gap-2" onClick={() => navigate('/projetos/novo')}>
+                <Plus size={15} /> Novo Projeto
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
@@ -373,39 +379,41 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
                                       </div>
                                     )
                                   })()}
-                                  <div className="flex items-center gap-2">
-                                    {temSheets ? (
+                                  {isAdmin && (
+                                    <div className="flex items-center gap-2">
+                                      {temSheets ? (
+                                        <button
+                                          className="text-primary/70 hover:text-primary text-xs flex items-center gap-1 transition-colors disabled:opacity-50"
+                                          disabled={isSincronizando}
+                                          onClick={() => handleSincronizar(p)}
+                                        >
+                                          {isSincronizando
+                                            ? <><Loader size={11} className="animate-spin" /> Sinc...</>
+                                            : <><Cloud size={11} /> Sincronizar</>}
+                                        </button>
+                                      ) : (
+                                        <button
+                                          className="text-primary/60 hover:text-primary text-xs flex items-center gap-1 transition-colors"
+                                          onClick={() => setAtualizandoId(p.id)}
+                                        >
+                                          <RefreshCw size={11} /> Atualizar
+                                        </button>
+                                      )}
                                       <button
-                                        className="text-primary/70 hover:text-primary text-xs flex items-center gap-1 transition-colors disabled:opacity-50"
-                                        disabled={isSincronizando}
-                                        onClick={() => handleSincronizar(p)}
+                                        className="text-text-muted/40 hover:text-text-muted text-xs transition-colors"
+                                        title="Configurar URL Google Sheets"
+                                        onClick={() => { setUrlModalId(p.id); setUrlInput(p.sheetsUrl ?? ''); setShowUrlModal(true) }}
                                       >
-                                        {isSincronizando
-                                          ? <><Loader size={11} className="animate-spin" /> Sinc...</>
-                                          : <><Cloud size={11} /> Sincronizar</>}
+                                        <Link size={11} />
                                       </button>
-                                    ) : (
                                       <button
-                                        className="text-primary/60 hover:text-primary text-xs flex items-center gap-1 transition-colors"
-                                        onClick={() => setAtualizandoId(p.id)}
+                                        className="text-danger/50 hover:text-danger text-xs flex items-center gap-1 transition-colors"
+                                        onClick={() => setDeletando(p.id)}
                                       >
-                                        <RefreshCw size={11} /> Atualizar
+                                        <Trash2 size={11} />
                                       </button>
-                                    )}
-                                    <button
-                                      className="text-text-muted/40 hover:text-text-muted text-xs transition-colors"
-                                      title="Configurar URL Google Sheets"
-                                      onClick={() => { setUrlModalId(p.id); setUrlInput(p.sheetsUrl ?? ''); setShowUrlModal(true) }}
-                                    >
-                                      <Link size={11} />
-                                    </button>
-                                    <button
-                                      className="text-danger/50 hover:text-danger text-xs flex items-center gap-1 transition-colors"
-                                      onClick={() => setDeletando(p.id)}
-                                    >
-                                      <Trash2 size={11} />
-                                    </button>
-                                  </div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )
@@ -457,13 +465,15 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
         </div>
       )}
 
-      <ImportadorPO
-        open={showImportar}
-        onClose={() => setShowImportar(false)}
-        onImported={(p) => { onImportar(p); navigate(`/projetos/${p.id}`) }}
-      />
+      {isAdmin && (
+        <ImportadorPO
+          open={showImportar}
+          onClose={() => setShowImportar(false)}
+          onImported={(p) => { onImportar(p); navigate(`/projetos/${p.id}`) }}
+        />
+      )}
 
-      {atualizandoId && (
+      {isAdmin && atualizandoId && (
         <AtualizadorPO
           projetoAtual={projetos.find((p) => p.id === atualizandoId)!}
           onClose={() => setAtualizandoId(null)}

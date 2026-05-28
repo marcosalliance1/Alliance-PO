@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, FolderOpen, BookOpen, BarChart2, DollarSign, Settings, Globe, CheckCircle, LogOut, Loader } from 'lucide-react'
 import { useGoogleAuth } from '../../contexts/GoogleAuthContext'
+import { useAuth } from '../../contexts/AuthContext'
 
 const links = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -13,6 +14,7 @@ const links = [
 
 export function Sidebar() {
   const { conectado, conectar, desconectar, logando } = useGoogleAuth()
+  const { isAdmin, signOut } = useAuth()
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-56 bg-surface border-r border-white/10 flex flex-col z-30">
@@ -67,8 +69,17 @@ export function Sidebar() {
         )}
       </div>
 
-      <div className="px-6 py-3 border-t border-white/10">
+      <div className="px-6 py-3 border-t border-white/10 flex items-center justify-between">
         <div className="text-text-muted text-xs">Alliance Cerimonial</div>
+        {isAdmin && (
+          <button
+            onClick={signOut}
+            title="Sair"
+            className="text-text-muted/50 hover:text-danger transition-colors"
+          >
+            <LogOut size={14} />
+          </button>
+        )}
       </div>
     </aside>
   )
