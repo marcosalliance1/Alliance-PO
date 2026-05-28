@@ -188,6 +188,7 @@ export interface TarifasRow {
   v_lancamento: number
   origem: string
   razao_social: string
+  situacao: 'LIQUIDADO'
 }
 
 export function parseTarifasBuffer(buffer: ArrayBuffer): { linhas: TarifasRow[]; totalLinhas: number; totalValor: number } {
@@ -242,6 +243,7 @@ export function parseTarifasBuffer(buffer: ArrayBuffer): { linhas: TarifasRow[];
       v_lancamento:         Math.abs(limparNumero(get(col.vLancamento))),
       origem:               String(get(col.origem) ?? '').trim(),
       razao_social:         String(get(col.razaoSocial) ?? '').trim(),
+      situacao:             'LIQUIDADO',
     })
   }
 
