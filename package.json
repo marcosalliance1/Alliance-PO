@@ -13,6 +13,8 @@
     "@react-oauth/google": "^0.13.5",
     "@supabase/supabase-js": "^2.104.0",
     "autoprefixer": "^10.5.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.8.0",
     "postcss": "^8.5.10",
     "react": "^19.2.5",

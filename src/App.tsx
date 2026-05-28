@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useParams, Navigate, useLocation } from 'react-router-dom'
 import { Layout } from './components/layout/Layout'
+import { HomeScreen } from './pages/HomeScreen'
 import { DashboardGeral } from './pages/DashboardGeral'
 import { ListaProjetos } from './pages/ListaProjetos'
 import { NovoProjeto } from './pages/NovoProjeto'
@@ -17,6 +18,13 @@ import { useConfiguracoes } from './hooks/useConfiguracoes'
 import type { ItemCusto, TAP, Receitas, ConciliacaoEverest, Projeto, ConfiguracaoGlobal, ItemCatalogo, CustoAdicional } from './types'
 import { supabase } from './lib/supabase'
 import { useAuth } from './contexts/AuthContext'
+import { AppProvider as PreEventosProvider } from './modules/pre-eventos/contexts/AppContext'
+import { Layout as PreEventosLayout } from './modules/pre-eventos/components/Layout/Layout'
+import { DashboardPage } from './modules/pre-eventos/pages/Dashboard/DashboardPage'
+import { ListaOrcamentosPage } from './modules/pre-eventos/pages/Orcamentos/ListaOrcamentosPage'
+import { NovoOrcamentoPage } from './modules/pre-eventos/pages/Orcamentos/NovoOrcamentoPage'
+import { OrcamentoPage } from './modules/pre-eventos/pages/Orcamentos/OrcamentoPage'
+import { ConfiguracoesPage } from './modules/pre-eventos/pages/Configuracoes/ConfiguracoesPage'
 
 // ── Spinner simples ──────────────────────────────────────────────────────────
 function Spinner() {
@@ -97,10 +105,9 @@ function AppRoutes() {
   const { itens, itens: bancoItens, loading: loadingItens, adicionarItem: addBanco, atualizarItem: updBanco, desativarItem, reativarItem } = useBancoItens()
   const { config, salvarConfig } = useConfiguracoes()
 
-  // Atualiza dados ao voltar para dashboard ou lista de projetos
   const location = useLocation()
   useEffect(() => {
-    if (location.pathname === '/' || location.pathname === '/projetos') {
+    if (location.pathname === '/projetos' || location.pathname === '/projetos/dashboard') {
       carregar()
     }
   }, [location.pathname]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -151,9 +158,14 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginAdmin />} />
       <Route path="/access" element={<LoginViewer />} />
+
+      {/* Tela inicial de seleção de módulo */}
+      <Route path="/" element={<RequireAuth><HomeScreen /></RequireAuth>} />
+
+      {/* Módulo P.O. Alliance */}
       <Route element={<RequireAuth><Layout /></RequireAuth>}>
         <Route
-          path="/"
+          path="/projetos/dashboard"
           element={loadingProjetos ? <Spinner /> : <DashboardGeral projetos={projetos} />}
         />
         <Route
@@ -213,14 +225,8 @@ function AppRoutes() {
             )
           }
         />
-        <Route
-          path="/verbas"
-          element={<Verbas />}
-        />
-        <Route
-          path="/financeiro"
-          element={<Financeiro />}
-        />
+        <Route path="/verbas" element={<Verbas />} />
+        <Route path="/financeiro" element={<Financeiro />} />
         <Route
           path="/configuracoes"
           element={
@@ -233,6 +239,24 @@ function AppRoutes() {
             />
           }
         />
+      </Route>
+
+      {/* Módulo Pré-Eventos */}
+      <Route
+        path="/pre-eventos/*"
+        element={
+          <RequireAuth>
+            <PreEventosProvider>
+              <PreEventosLayout />
+            </PreEventosProvider>
+          </RequireAuth>
+        }
+      >
+        <Route index element={<DashboardPage />} />
+        <Route path="orcamentos" element={<ListaOrcamentosPage />} />
+        <Route path="orcamentos/novo" element={<NovoOrcamentoPage />} />
+        <Route path="orcamentos/:id" element={<OrcamentoPage />} />
+        <Route path="configuracoes" element={<ConfiguracoesPage />} />
       </Route>
     </Routes>
   )

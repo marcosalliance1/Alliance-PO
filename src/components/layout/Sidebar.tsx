@@ -4,7 +4,7 @@ import { useGoogleAuth } from '../../contexts/GoogleAuthContext'
 import { useAuth } from '../../contexts/AuthContext'
 
 const links = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/projetos/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/projetos', icon: FolderOpen, label: 'Projetos' },
   { to: '/banco-de-itens', icon: BookOpen, label: 'Banco de Itens' },
   { to: '/verbas', icon: BarChart2, label: 'Verbas' },
@@ -27,7 +27,7 @@ export function Sidebar() {
           <NavLink
             key={to}
             to={to}
-            end={to === '/'}
+            end
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 isActive
