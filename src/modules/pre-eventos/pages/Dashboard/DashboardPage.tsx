@@ -12,11 +12,6 @@ import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL } from '../../utils/formatters'
 import type { EventType, OrcamentoStatus } from '../../types'
 
-const STATUS_COLORS: Record<OrcamentoStatus, string> = {
-  RASCUNHO:    'bg-muted/20 text-muted border-muted/30',
-  EM_ANDAMENTO:'bg-warning/20 text-warning border-warning/30',
-  CONCLUIDO:   'bg-success/20 text-success border-success/30',
-}
 
 type Agrupamento = 'todos' | 'instituicao' | 'tipo'
 type SortKey = 'instituicao' | 'turma' | 'tipo' | 'receitas' | 'custoOrcado' | 'custoPago' | 'saldo' | 'bv'

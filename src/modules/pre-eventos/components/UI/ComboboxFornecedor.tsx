@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from 'react'
+﻿import React, { useState, useRef, useEffect } from 'react'
 import { ChevronDown, X } from 'lucide-react'
 
 interface Props {

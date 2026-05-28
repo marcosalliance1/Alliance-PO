@@ -4,7 +4,6 @@ import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw } from 'lucid
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL, newItemId } from '../../utils/formatters'
-import { recalcularItem } from '../../utils/automacoes'
 import TabelaItens from '../../components/Orcamento/TabelaItens'
 import { ResumoFinanceiro } from '../../components/Orcamento/ResumoFinanceiro'
 import { SecaoAccordion } from '../../components/Orcamento/SecaoAccordion'
