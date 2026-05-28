@@ -60,15 +60,9 @@ export function calcTotaisSecao(secao: SecaoCusto, qtdFormandos: number): Totais
   }
 }
 
-const RECEITA_KEYS: (keyof Receitas)[] = [
-  'faturamentoAdesoes', 'vendasConvitesExtras', 'vendasMesasExtras',
-  'arrecadacaoExtra', 'receitaVendasBaile', 'outros', 'receitaRescisoes',
-]
-
 function somarLinhas(r: Receitas): { vendido: number; orcado: number; contratado: number; pago: number; faltaPagar: number } {
-  return RECEITA_KEYS.reduce(
-    (acc, key) => {
-      const l = r[key]
+  return Object.values(r).reduce(
+    (acc, l) => {
       acc.vendido += l.vendido
       acc.orcado += l.orcado
       acc.contratado += l.contratado
@@ -81,34 +75,21 @@ function somarLinhas(r: Receitas): { vendido: number; orcado: number; contratado
 }
 
 export function calcReceitaBaile(r: Receitas): number {
-  return RECEITA_KEYS.reduce((s, k) => s + r[k].vendido, 0)
+  return Object.values(r).reduce((s, l) => s + l.vendido, 0)
 }
 
 export function calcResumoProjeto(projeto: Projeto): ResumoProjeto {
   const r = projeto.receitas
   const qf = projeto.tap.qtdFormandos || 1
 
-  const LABELS: Record<keyof Receitas, string> = {
-    faturamentoAdesoes: 'Faturamento Adesões',
-    vendasConvitesExtras: 'Vendas Convites Extras',
-    vendasMesasExtras: 'Vendas Mesas Extras',
-    arrecadacaoExtra: 'Arrecadação Extra',
-    receitaVendasBaile: 'Receita Vendas Baile',
-    outros: 'Outros',
-    receitaRescisoes: 'Receita Rescisões',
-  }
-
-  const receitas = RECEITA_KEYS.map((key) => {
-    const l = r[key]
-    return {
-      descricao: LABELS[key],
-      vendido: l.vendido,
-      orcado: l.orcado,
-      contratado: l.contratado,
-      pago: l.pago,
-      faltaPagar: l.faltaPagar !== 0 ? l.faltaPagar : (l.contratado - l.pago),
-    }
-  })
+  const receitas = Object.entries(r).map(([key, l]) => ({
+    descricao: key,
+    vendido: l.vendido,
+    orcado: l.orcado,
+    contratado: l.contratado,
+    pago: l.pago,
+    faltaPagar: l.faltaPagar !== 0 ? l.faltaPagar : (l.contratado - l.pago),
+  }))
 
   const totReceitaBaile = somarLinhas(r)
   const receitaBaile = { descricao: 'RECEITA BAILE', ...totReceitaBaile }
@@ -176,22 +157,34 @@ export function emptyLinha(): ReceitaLinha {
   return { vendido: 0, orcado: 0, contratado: 0, pago: 0, faltaPagar: 0 }
 }
 
-export function emptyReceitas(): Receitas {
-  return {
-    faturamentoAdesoes: emptyLinha(),
-    vendasConvitesExtras: emptyLinha(),
-    vendasMesasExtras: emptyLinha(),
-    arrecadacaoExtra: emptyLinha(),
-    receitaVendasBaile: emptyLinha(),
-    outros: emptyLinha(),
-    receitaRescisoes: emptyLinha(),
-  }
+const DEFAULT_RECEITA_LABELS = [
+  'Faturamento Adesões',
+  'Vendas Convites Extras',
+  'Vendas Mesas Extras',
+  'Arrecadação Extra',
+  'Receita Vendas Baile',
+  'Outros',
+  'Receita Rescisões',
+]
+
+// Mapa de chaves legadas (camelCase) para rótulos legíveis
+const OLD_KEY_LABELS: Record<string, string> = {
+  faturamentoAdesoes:    'Faturamento Adesões',
+  vendasConvitesExtras:  'Vendas Convites Extras',
+  vendasMesasExtras:     'Vendas Mesas Extras',
+  arrecadacaoExtra:      'Arrecadação Extra',
+  receitaVendasBaile:    'Receita Vendas Baile',
+  outros:                'Outros',
+  receitaRescisoes:      'Receita Rescisões',
 }
 
-// Converte formato antigo (number) ou garante ReceitaLinha completo
+export function emptyReceitas(): Receitas {
+  return Object.fromEntries(DEFAULT_RECEITA_LABELS.map(k => [k, emptyLinha()]))
+}
+
+// Converte formato legado (camelCase / number) para Record<label, ReceitaLinha>
 export function migrateReceitas(raw: unknown): Receitas {
-  const empty = emptyReceitas()
-  if (!raw || typeof raw !== 'object') return empty
+  if (!raw || typeof raw !== 'object') return emptyReceitas()
   const obj = raw as Record<string, unknown>
 
   function toLinha(val: unknown): ReceitaLinha {
@@ -199,23 +192,24 @@ export function migrateReceitas(raw: unknown): Receitas {
     if (val && typeof val === 'object') {
       const v = val as Partial<ReceitaLinha>
       return {
-        vendido: v.vendido ?? 0,
-        orcado: v.orcado ?? 0,
+        vendido:    v.vendido    ?? 0,
+        orcado:     v.orcado     ?? 0,
         contratado: v.contratado ?? 0,
-        pago: v.pago ?? 0,
+        pago:       v.pago       ?? 0,
         faltaPagar: v.faltaPagar ?? 0,
       }
     }
     return emptyLinha()
   }
 
-  return {
-    faturamentoAdesoes: toLinha(obj.faturamentoAdesoes),
-    vendasConvitesExtras: toLinha(obj.vendasConvitesExtras),
-    vendasMesasExtras: toLinha(obj.vendasMesasExtras),
-    arrecadacaoExtra: toLinha(obj.arrecadacaoExtra),
-    receitaVendasBaile: toLinha(obj.receitaVendasBaile),
-    outros: toLinha(obj.outros),
-    receitaRescisoes: toLinha(obj.receitaRescisoes),
+  const result: Receitas = {}
+  for (const [k, v] of Object.entries(obj)) {
+    const label = OLD_KEY_LABELS[k] ?? k  // traduz chave legada; mantém rótulos novos
+    result[label] = toLinha(v)
   }
+  // Garante que as chaves padrão existam (sem sobrescrever valores migrados)
+  for (const label of DEFAULT_RECEITA_LABELS) {
+    if (!(label in result)) result[label] = emptyLinha()
+  }
+  return result
 }

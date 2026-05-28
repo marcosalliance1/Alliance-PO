@@ -42,24 +42,33 @@ export interface TarifasRecord extends TarifasRow {
   upload_id: string
 }
 
+export interface DimensaoProjetoRecord {
+  nome_projeto: string
+  ensino: string
+  instituicao: string
+}
+
 export function useFinanceiro() {
   const [cap, setCap] = useState<CAPRecord[]>([])
   const [car, setCar] = useState<CARRecord[]>([])
   const [tarifas, setTarifas] = useState<TarifasRecord[]>([])
+  const [dimensaoProjetos, setDimensaoProjetos] = useState<DimensaoProjetoRecord[]>([])
   const [uploads, setUploads] = useState<{ CAP: UploadMeta | null; CAR: UploadMeta | null; TARIFAS: UploadMeta | null }>({ CAP: null, CAR: null, TARIFAS: null })
   const [carregando, setCarregando] = useState(true)
 
   const carregar = useCallback(async () => {
     setCarregando(true)
-    const [capData, carData, tarifasData, ulpRes] = await Promise.all([
+    const [capData, carData, tarifasData, dimData, ulpRes] = await Promise.all([
       fetchAll<CAPRecord>('financeiro_cap').catch(() => [] as CAPRecord[]),
       fetchAll<CARRecord>('financeiro_car').catch(() => [] as CARRecord[]),
       fetchAll<TarifasRecord>('financeiro_tarifas').catch(() => [] as TarifasRecord[]),
+      fetchAll<DimensaoProjetoRecord>('dimensao_projetos').catch(() => [] as DimensaoProjetoRecord[]),
       supabase.from('financeiro_uploads').select('*').order('uploaded_at', { ascending: false }).limit(20),
     ])
     setCap(capData)
     setCar(carData)
     setTarifas(tarifasData)
+    setDimensaoProjetos(dimData)
     if (!ulpRes.error) {
       const lista = (ulpRes.data ?? []) as UploadMeta[]
       setUploads({
@@ -183,5 +192,5 @@ export function useFinanceiro() {
     return { totalLinhas, totalValor }
   }
 
-  return { cap, car, tarifas, uploads, carregando, uploadCAP, uploadCAR, atualizarTarifas, recarregar: carregar }
+  return { cap, car, tarifas, dimensaoProjetos, uploads, carregando, uploadCAP, uploadCAR, atualizarTarifas, recarregar: carregar }
 }

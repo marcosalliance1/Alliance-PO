@@ -242,7 +242,7 @@ export function useProjetos() {
     const novoTAP = Object.keys(result.tap).length > 0
       ? { ...projeto.tap, ...result.tap }
       : projeto.tap
-    const novasReceitas = { ...projeto.receitas, ...result.receitas }
+    const novasReceitas = Object.keys(result.receitas).length > 0 ? result.receitas : projeto.receitas
 
     // Auto-fill Conciliação Everest: valorEverest = soma de valorPago de cada seção
     const linhasEverest = result.secoes.map(secao => ({

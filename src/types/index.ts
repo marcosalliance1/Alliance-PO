@@ -90,15 +90,7 @@ export interface ReceitaLinha {
   faltaPagar: number
 }
 
-export interface Receitas {
-  faturamentoAdesoes: ReceitaLinha
-  vendasConvitesExtras: ReceitaLinha
-  vendasMesasExtras: ReceitaLinha
-  arrecadacaoExtra: ReceitaLinha
-  receitaVendasBaile: ReceitaLinha
-  outros: ReceitaLinha
-  receitaRescisoes: ReceitaLinha
-}
+export type Receitas = Record<string, ReceitaLinha>
 
 export interface LinhaEverest {
   secaoId: string

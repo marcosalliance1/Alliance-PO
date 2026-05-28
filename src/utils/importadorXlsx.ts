@@ -236,14 +236,14 @@ function normLabel(val: unknown): string {
 }
 
 // Mapeia label de RECEITA (nunca "verba extra" — esses são custos)
-function mapLabelReceita(label: string): keyof Receitas | null {
-  if (/faturamento/.test(label)) return 'faturamentoAdesoes'
-  if (/arrecadac/.test(label)) return 'arrecadacaoExtra'
-  if (/convite.*extra/.test(label) || /venda.*convite/.test(label)) return 'vendasConvitesExtras'
-  if (/mesa.*extra/.test(label) || /venda.*mesa/.test(label)) return 'vendasMesasExtras'
-  if (/receita.*venda/.test(label) || /venda.*baile/.test(label)) return 'receitaVendasBaile'
-  if (/rescis/.test(label)) return 'receitaRescisoes'
-  if (/\boutro/.test(label)) return 'outros'
+function mapLabelReceita(label: string): string | null {
+  if (/faturamento/.test(label)) return 'Faturamento Adesões'
+  if (/arrecadac/.test(label)) return 'Arrecadação Extra'
+  if (/convite.*extra/.test(label) || /venda.*convite/.test(label)) return 'Vendas Convites Extras'
+  if (/mesa.*extra/.test(label) || /venda.*mesa/.test(label)) return 'Vendas Mesas Extras'
+  if (/receita.*venda/.test(label) || /venda.*baile/.test(label)) return 'Receita Vendas Baile'
+  if (/rescis/.test(label)) return 'Receita Rescisões'
+  if (/\boutro/.test(label)) return 'Outros'
   return null
 }
 
@@ -345,6 +345,7 @@ function lerResumoGeral(wb: XLSX.WorkBook): { receitas: Receitas; verbaExtras: I
     const vendido = parseNum(row[vendidoCol])
     const orcado = parseNum(row[orcadoCol])
     if (vendido === 0 && orcado === 0) continue
+    receitas[field] ??= { vendido: 0, orcado: 0, contratado: 0, pago: 0, faltaPagar: 0 }
     receitas[field].vendido += vendido
     receitas[field].orcado += orcado
   }

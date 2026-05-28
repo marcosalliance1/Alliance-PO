@@ -1,11 +1,11 @@
 import type { Projeto, SecaoCusto, ItemCusto, StatusItem, StatusPagamento, TipoCusto, TAP, TipoEscola, Receitas } from '../types'
 import { v4 as uuid } from './uuid'
-import { emptyReceitas } from './calculos'
+
 
 export interface SyncResult {
   secoes: SecaoCusto[]
   tap: Partial<TAP>
-  receitas: Partial<Receitas>
+  receitas: Receitas
   avisos: string[]
 }
 
@@ -114,16 +114,29 @@ function parseItens(
 ): { itens: ItemCusto[], avisos: string[] } {
   const itens: ItemCusto[] = []
   const avisos: string[] = []
-  const INICIO = 8
   const TOLERANCIA = 1.0
 
-  for (let r = INICIO; r < values.length; r++) {
+  // Detect header row dynamically: col 0 has a code label AND col 4 or 5 has an item label
+  let inicioLeitura = 8
+  for (let i = 0; i < Math.min(values.length, 20); i++) {
+    const c0 = norm(parseStr(getCell(values, i, 0)))
+    const c4 = norm(parseStr(getCell(values, i, 4)))
+    const c5 = norm(parseStr(getCell(values, i, 5)))
+    const isCodeCol  = c0 === 'cod' || c0 === 'codigo' || c0.startsWith('cod') || c0 === 'n' || c0 === 'no'
+    const isItemCol4 = c4.includes('sub') || c4.includes('cat') || c4 === 'item'
+    const isItemCol5 = c5 === 'item' || c5.includes('descr') || c5.includes('servic') || c5 === 'produto'
+    if (isCodeCol && (isItemCol4 || isItemCol5)) {
+      inicioLeitura = i + 1
+      break
+    }
+  }
+
+  for (let r = inicioLeitura; r < values.length; r++) {
     const get = (c: number) => getCell(values, r, c)
 
     const subcategoria = parseStr(get(4))
     const item = parseStr(get(5))
     if (!subcategoria && !item) continue
-
     const codigo = parseCodigo(get(0))
     const area = parseStr(get(1))
     const moscow = parseStr(get(2))
@@ -266,22 +279,8 @@ export function parseTAPFromSheet(values: unknown[][]): Partial<TAP> {
   return found
 }
 
-function parseReceitasFromResumo(values: unknown[][]): Partial<Receitas> {
-  type ReceitaKey = keyof Receitas
-
-  const MAPA: Array<[string, ReceitaKey]> = [
-    ['faturamento adesoes', 'faturamentoAdesoes'],
-    ['vendas convites extras', 'vendasConvitesExtras'],
-    ['vendas mesas extras', 'vendasMesasExtras'],
-    ['juros e multas sge', 'arrecadacaoExtra'],
-    ['arrecadacao extra', 'arrecadacaoExtra'],
-    ['receita vendas baile', 'receitaVendasBaile'],
-    ['receita rescisoes', 'receitaRescisoes'],
-    ['rescisao', 'receitaRescisoes'],
-    ['receita - outros', 'outros'],
-    ['outros', 'outros'],
-  ]
-
+function parseReceitasFromResumo(values: unknown[][]): Receitas {
+  // Detect column layout header (rows with "vendido", "orcado", etc.)
   let headerRow0 = -1
   for (let r = 0; r < Math.min(values.length, 15); r++) {
     const joined = ((values[r] as unknown[]) ?? []).map(c => norm(parseStr(c))).join(' ')
@@ -296,12 +295,10 @@ function parseReceitasFromResumo(values: unknown[][]): Partial<Receitas> {
   let colContratado = 6
   let colPago = 8
   let colFaltaPagar = 9
-  let dataStart = 0
 
   if (headerRow0 >= 0 && headerRow0 + 1 < values.length) {
     const row0 = (values[headerRow0] as unknown[]) ?? []
     const row1 = (values[headerRow0 + 1] as unknown[]) ?? []
-    dataStart = headerRow0 + 2
 
     let currentGroup = ''
     for (let c = 0; c < Math.max(row0.length, row1.length); c++) {
@@ -319,6 +316,18 @@ function parseReceitasFromResumo(values: unknown[][]): Partial<Receitas> {
     }
   }
 
+  // Find "RECEITAS" section label in col A or B — data starts from the very next row.
+  // This ensures the aggregate "RECEITAS" subtotal row itself is never read as an individual receipt line.
+  let dataStart = headerRow0 >= 0 ? headerRow0 + 2 : 0
+  for (let r = 0; r < values.length; r++) {
+    const colA = norm(parseStr(getCell(values, r, 0)))
+    const colB = norm(parseStr(getCell(values, r, 1)))
+    if (colA === 'receitas' || colB === 'receitas') {
+      dataStart = r + 1
+      break
+    }
+  }
+
   const parseCell = (r: number, col: number): number => {
     const v = getCell(values, r, col)
     const s = String(v ?? '').trim()
@@ -326,40 +335,33 @@ function parseReceitasFromResumo(values: unknown[][]): Partial<Receitas> {
     return parseNum(v)
   }
 
-  const result: Partial<Receitas> = {}
+  const result: Receitas = {}
 
   for (let r = dataStart; r < values.length; r++) {
-    let label = norm(parseStr(getCell(values, r, 1)))
-    if (!label) label = norm(parseStr(getCell(values, r, 0)))
-    if (!label) continue
+    const rawLabel = parseStr(getCell(values, r, 1))  // somente coluna B — nunca coluna A (evita duplicar rótulos de grupo)
+    if (!rawLabel) continue
 
-    if (label.includes('receita baile')) break
+    if (norm(rawLabel).includes('receita baile')) break  // total row — stop
 
-    let chave: ReceitaKey | undefined
-    for (const [pattern, key] of MAPA) {
-      if (label.includes(norm(pattern))) { chave = key; break }
-    }
-    if (!chave) continue
-
-    const vendido = parseCell(r, colVendido)
-    const orcado = parseCell(r, colOrcado)
+    const vendido    = parseCell(r, colVendido)
+    const orcado     = parseCell(r, colOrcado)
     const contratado = parseCell(r, colContratado)
-    const pago = parseCell(r, colPago)
+    const pago       = parseCell(r, colPago)
     const faltaPagar = parseCell(r, colFaltaPagar)
 
     if (!vendido && !orcado && !contratado && !pago && !faltaPagar) continue
 
-    const existing = result[chave]
+    const existing = result[rawLabel]
     if (existing) {
-      result[chave] = {
-        vendido: existing.vendido + vendido,
-        orcado: existing.orcado + orcado,
+      result[rawLabel] = {
+        vendido:    existing.vendido    + vendido,
+        orcado:     existing.orcado     + orcado,
         contratado: existing.contratado + contratado,
-        pago: existing.pago + pago,
+        pago:       existing.pago       + pago,
         faltaPagar: existing.faltaPagar + faltaPagar,
       }
     } else {
-      result[chave] = { vendido, orcado, contratado, pago, faltaPagar }
+      result[rawLabel] = { vendido, orcado, contratado, pago, faltaPagar }
     }
   }
 
@@ -530,48 +532,36 @@ export async function sincronizarComSheets(
     const novosItens = novasSecoes.get(secao.numero)
     if (!novosItens) return secao
 
+    // Usa codigo como chave primária; fallback para subcategoria|item se código vazio
     const existingMap = new Map<string, ItemCusto>()
     for (const item of secao.itens) {
-      existingMap.set(`${item.subcategoria}|${item.item}`, item)
+      const chave = item.codigo?.trim() ? item.codigo.trim() : `|${item.subcategoria}|${item.item}`
+      existingMap.set(chave, item)  // último vence — elimina duplicatas de mesmo código
     }
 
-    const vistos = new Set<string>()
-    const itensFinais: ItemCusto[] = []
-
-    for (const novoItem of novosItens) {
-      const chave = `${novoItem.subcategoria}|${novoItem.item}`
-      vistos.add(chave)
+    // Sync sobrescreve — apenas itens lidos do sheet ficam. IDs existentes são preservados
+    // para estabilidade de chaves React, mas itens que não existem mais no sheet são removidos.
+    const itensFinais = novosItens.map(novoItem => {
+      const chave = novoItem.codigo?.trim() ? novoItem.codigo.trim() : `|${novoItem.subcategoria}|${novoItem.item}`
       const existente = existingMap.get(chave)
-
       if (existente) {
-        itensFinais.push({
-          ...novoItem,
-          id: existente.id,
-          valorPago: novoItem.valorPago,
-          jotform: existente.jotform,
-        })
-      } else {
-        itensFinais.push(novoItem)
+        return { ...novoItem, id: existente.id, jotform: existente.jotform }
       }
-    }
-
-    for (const [chave, item] of existingMap) {
-      if (!vistos.has(chave)) itensFinais.push(item)
-    }
+      return novoItem
+    })
 
     return { ...secao, itens: itensFinais }
   })
 
-  const receitasBase = emptyReceitas()
-  const receitasMerged = { ...receitasBase }
-  for (const k of Object.keys(receitasMerged) as (keyof Receitas)[]) {
-    const parsed = receitasParsed[k]
-    if (parsed && (parsed.vendido || parsed.orcado || parsed.contratado || parsed.pago || parsed.faltaPagar)) {
-      receitasMerged[k] = parsed
-    } else {
-      receitasMerged[k] = projeto.receitas[k] ?? receitasBase[k]
-    }
-  }
+  // Quando o Resumo Geral foi lido com sucesso, substitui as receitas inteiras pelo dado
+  // parseado — garante que entradas obsoletas (ex: linhas de somatório de syncs antigos) sejam removidas.
+  // Fallback: mantém as receitas do projeto quando a aba não foi encontrada.
+  const parsedEntries = Object.entries(receitasParsed).filter(([, v]) =>
+    v && (v.vendido || v.orcado || v.contratado || v.pago || v.faltaPagar)
+  )
+  const receitasMerged: Receitas = resumoEncontrado && parsedEntries.length > 0
+    ? Object.fromEntries(parsedEntries) as Receitas
+    : { ...projeto.receitas }
 
   const avisos: string[] = []
   if (!resumoEncontrado) {
