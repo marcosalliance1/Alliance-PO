@@ -5,9 +5,9 @@ import {
   FileText,
   Settings,
   PlusCircle,
-  Star,
   ArrowLeft,
 } from 'lucide-react'
+import allianceLogo from '../../../../assets/alliance-logo.png'
 
 const NAV = [
   { to: '/pre-eventos',              icon: <LayoutDashboard className="w-5 h-5" />, label: 'Dashboard' },
@@ -36,14 +36,13 @@ export const Sidebar: React.FC<Props> = ({ open, onClose }) => {
       ].join(' ')}
     >
       {/* Logo */}
-      <div className="p-6 border-b border-bordercol shrink-0">
-        <div className="flex items-center gap-2">
-          <Star className="w-7 h-7 text-accent fill-accent" />
-          <div>
-            <span className="text-white font-bold text-lg tracking-wide">Alliance</span>
-            <p className="text-muted text-xs">Formaturas</p>
-          </div>
-        </div>
+      <div className="px-5 py-4 border-b border-bordercol shrink-0 flex items-center justify-center">
+        <img
+          src={allianceLogo}
+          alt="Alliance"
+          className="h-12 w-auto"
+          style={{ filter: 'brightness(0) invert(1)' }}
+        />
       </div>
 
       {/* Novo Orçamento */}

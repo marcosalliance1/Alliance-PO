@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, FolderOpen, BookOpen, BarChart2, DollarSign, Settings, Globe, CheckCircle, LogOut, Loader } from 'lucide-react'
+import allianceLogo from '../../assets/alliance-logo.png'
 import { useGoogleAuth } from '../../contexts/GoogleAuthContext'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -18,9 +19,13 @@ export function Sidebar() {
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-56 bg-surface border-r border-white/10 flex flex-col z-30">
-      <div className="px-6 py-5 border-b border-white/10">
-        <div className="text-primary font-bold text-lg leading-tight">Alliance</div>
-        <div className="text-text-muted text-xs">P.O. System</div>
+      <div className="px-5 py-4 border-b border-white/10 flex items-center justify-center">
+        <img
+          src={allianceLogo}
+          alt="Alliance"
+          className="h-11 w-auto"
+          style={{ filter: 'brightness(0) invert(1)' }}
+        />
       </div>
       <nav className="flex-1 py-4 px-3 flex flex-col gap-1">
         {links.map(({ to, icon: Icon, label }) => (

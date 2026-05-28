@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { ClipboardList, CalendarCheck, Clock } from 'lucide-react'
+import allianceLogo from '../assets/alliance-logo.png'
 
 const MODULES = [
   {
@@ -30,9 +31,11 @@ export function HomeScreen() {
 
   return (
     <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-4">
-      <div className="mb-10 text-center">
-        <div className="text-primary font-bold text-3xl leading-tight">Alliance</div>
-        <div className="text-text-muted text-sm mt-1">Selecione o módulo</div>
+      <div className="mb-10 text-center flex flex-col items-center gap-3">
+        <div className="bg-white rounded-2xl px-8 py-5">
+          <img src={allianceLogo} alt="Alliance" className="h-20 w-auto" />
+        </div>
+        <div className="text-text-muted text-sm">Selecione o módulo</div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 w-full max-w-2xl">

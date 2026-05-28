@@ -1,38 +1,39 @@
-﻿import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
+  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import {
   FileText, TrendingUp, DollarSign, BarChart2,
-  ChevronRight, ArrowLeft, ArrowUpDown, SlidersHorizontal, Package,
+  ChevronDown, ChevronRight, SlidersHorizontal, Calendar,
 } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL } from '../../utils/formatters'
 import type { EventType, OrcamentoStatus } from '../../types'
 
-
-type Agrupamento = 'todos' | 'instituicao' | 'tipo'
-type SortKey = 'instituicao' | 'turma' | 'tipo' | 'receitas' | 'custoOrcado' | 'custoPago' | 'saldo' | 'bv'
-
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-surface-2 border border-bordercol rounded-lg p-3 text-xs shadow-lg max-w-[200px]">
-      <p className="text-white font-semibold mb-2 truncate">{label}</p>
-      {payload.map((p: any) => (
-        <p key={p.name} style={{ color: p.fill }}>{p.name}: {formatBRL(p.value)}</p>
-      ))}
-    </div>
-  )
-}
+const CHART_COLORS = ['#E63329', '#F56060', '#C44242', '#FF7A6E', '#B8302A', '#FF9B8C', '#A02525', '#FF6B5B']
 
 function allItemsOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
   return [...o.operacaoEstrutura, ...o.equipe, ...o.atracao, ...o.abBebidas, ...o.extras]
 }
 function receitasOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
   return o.bolsaFolia + o.receitasSympla.reduce((s, l) => s + l.total, 0)
+}
+function orcadoOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
+  return allItemsOf(o).reduce((s, i) => s + i.totalOrcado, 0)
+}
+
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; fill?: string; color?: string }[]; label?: string }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-surface-2 border border-bordercol rounded-lg p-3 text-xs shadow-lg max-w-[200px]">
+      <p className="text-white font-semibold mb-2 truncate">{label}</p>
+      {payload.map(p => (
+        <p key={p.name} style={{ color: p.fill ?? p.color }}>{p.name}: {formatBRL(p.value)}</p>
+      ))}
+    </div>
+  )
 }
 
 export const DashboardPage: React.FC = () => {
@@ -44,10 +45,7 @@ export const DashboardPage: React.FC = () => {
   const [filtroInst,       setFiltroInst]       = useState('')
   const [filtroTurma,      setFiltroTurma]      = useState('')
   const [filtroFornecedor, setFiltroFornecedor] = useState('')
-  const [agrupamento,      setAgrupamento]      = useState<Agrupamento>('todos')
-  const [drillInst,        setDrillInst]        = useState<string | null>(null)
-  const [sortKey,          setSortKey]          = useState<SortKey>('instituicao')
-  const [sortDir,          setSortDir]          = useState<'asc' | 'desc'>('asc')
+  const [expandidos,       setExpandidos]       = useState<Record<string, boolean>>({})
 
   const instituicoes = useMemo(() =>
     [...new Set(orcamentos.map(o => o.instituicao).filter(Boolean))].sort(),
@@ -91,122 +89,68 @@ export const DashboardPage: React.FC = () => {
     return { count: filtered.length, totalOrcado, totalPago, totalBV, bolsaFolia, sympla, totalReceitas, saldo: totalReceitas - totalPago }
   }, [filtered])
 
-  // ── Bar data com agrupamento / drill-down ─────────────────────────────────────
-  const barData = useMemo(() => {
-    const base = drillInst ? filtered.filter(o => o.instituicao === drillInst) : filtered
-
-    // Quando filtro de fornecedor ativo, soma só os itens daquele fornecedor
-    const itemsForn = (o: typeof filtered[0]) => {
-      const all = allItemsOf(o)
-      return filtroFornecedor ? all.filter(i => i.fornecedor?.trim() === filtroFornecedor) : all
-    }
-
-    if (agrupamento === 'instituicao' && !drillInst) {
-      const map = new Map<string, { Orçado: number; Pago: number; Receitas: number }>()
-      for (const o of base) {
-        const k = o.instituicao || 'Sem Inst.'
-        const prev = map.get(k) ?? { Orçado: 0, Pago: 0, Receitas: 0 }
-        const items = itemsForn(o)
-        map.set(k, {
-          Orçado:   prev.Orçado   + items.reduce((s, i) => s + i.totalOrcado, 0),
-          Pago:     prev.Pago     + items.reduce((s, i) => s + i.totalPagoReal, 0),
-          Receitas: prev.Receitas + (filtroFornecedor ? 0 : receitasOf(o)),
-        })
-      }
-      return Array.from(map.entries()).map(([name, v]) => ({ name, ...v }))
-    }
-
-    if (agrupamento === 'tipo') {
-      const map = new Map<string, { Orçado: number; Pago: number; Receitas: number }>()
-      for (const o of base) {
-        const k = EVENT_TYPE_LABELS[o.tipo]
-        const prev = map.get(k) ?? { Orçado: 0, Pago: 0, Receitas: 0 }
-        const items = itemsForn(o)
-        map.set(k, {
-          Orçado:   prev.Orçado   + items.reduce((s, i) => s + i.totalOrcado, 0),
-          Pago:     prev.Pago     + items.reduce((s, i) => s + i.totalPagoReal, 0),
-          Receitas: prev.Receitas + (filtroFornecedor ? 0 : receitasOf(o)),
-        })
-      }
-      return Array.from(map.entries()).map(([name, v]) => ({ name, ...v }))
-    }
-
-    // Todos / drill individual
-    return base.map(o => {
-      const items = itemsForn(o)
-      return {
-        name: o.turma || o.id.slice(0, 6),
-        orcamentoId: o.id,
-        Orçado:   items.reduce((s, i) => s + i.totalOrcado, 0),
-        Pago:     items.reduce((s, i) => s + i.totalPagoReal, 0),
-        Receitas: filtroFornecedor ? 0 : receitasOf(o),
-      }
-    })
-  }, [filtered, agrupamento, drillInst, filtroFornecedor])
-
-  function handleBarClick(data: any) {
-    if (agrupamento === 'instituicao' && !drillInst && data?.activeLabel) {
-      setDrillInst(data.activeLabel)
-    } else if (drillInst && data?.activePayload?.[0]?.payload?.orcamentoId) {
-      navigate(`/pre-eventos/orcamentos/${data.activePayload[0].payload.orcamentoId}`)
-    }
-  }
-
-  // ── Top Fornecedores ─────────────────────────────────────────────────────────
-  const topFornecedores = useMemo(() => {
-    const map = new Map<string, { orcado: number; pago: number }>()
+  // ── Gráfico 1: Rosca por instituição ─────────────────────────────────────────
+  const donutData = useMemo(() => {
+    const map = new Map<string, number>()
     for (const o of filtered) {
-      for (const item of allItemsOf(o)) {
-        const key = item.fornecedor?.trim() || 'Sem fornecedor'
-        if (!item.totalOrcado && !item.totalPagoReal) continue
-        const prev = map.get(key) ?? { orcado: 0, pago: 0 }
-        map.set(key, { orcado: prev.orcado + item.totalOrcado, pago: prev.pago + item.totalPagoReal })
-      }
+      const k = o.instituicao || 'Sem instituição'
+      map.set(k, (map.get(k) ?? 0) + 1)
     }
     return [...map.entries()]
-      .map(([name, v]) => ({ name, ...v }))
-      .sort((a, b) => b.orcado - a.orcado)
-      .slice(0, 8)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
   }, [filtered])
 
-  // ── Tabela resumo ─────────────────────────────────────────────────────────────
-  interface TRow {
-    id: string; instituicao: string; turma: string; tipo: EventType
-    receitas: number; custoOrcado: number; custoPago: number; saldo: number; bv: number
-  }
+  // ── Gráfico 2: Barras horizontais por instituição ─────────────────────────────
+  const barInstData = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const o of filtered) {
+      const k = o.instituicao || 'Sem instituição'
+      map.set(k, (map.get(k) ?? 0) + orcadoOf(o))
+    }
+    return [...map.entries()]
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [filtered])
 
-  const tabelaRows = useMemo<TRow[]>(() => filtered.map(o => {
-    const items = allItemsOf(o)
-    const receitas    = receitasOf(o)
-    const custoOrcado = items.reduce((s, i) => s + i.totalOrcado, 0)
-    const custoPago   = items.reduce((s, i) => s + i.totalPagoReal, 0)
-    const bv          = items.reduce((s, i) => s + i.bvAbsoluto, 0)
-    return { id: o.id, instituicao: o.instituicao, turma: o.turma, tipo: o.tipo, receitas, custoOrcado, custoPago, saldo: receitas - custoPago, bv }
-  }), [filtered])
+  // ── Gráfico 3: Timeline ───────────────────────────────────────────────────────
+  const hoje = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d }, [])
+  const em30  = useMemo(() => new Date(hoje.getTime() + 30 * 86400000), [hoje])
 
-  const sortedRows = useMemo(() => [...tabelaRows].sort((a, b) => {
-    const va = a[sortKey], vb = b[sortKey]
-    if (typeof va === 'string' && typeof vb === 'string')
-      return sortDir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
-    return sortDir === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number)
-  }), [tabelaRows, sortKey, sortDir])
+  const timeline = useMemo(() =>
+    [...filtered]
+      .filter(o => o.data)
+      .map(o => {
+        const d = new Date(o.data)
+        const diffDias = Math.ceil((d.getTime() - hoje.getTime()) / 86400000)
+        return { ...o, _date: d, _diffDias: diffDias }
+      })
+      .sort((a, b) => a._date.getTime() - b._date.getTime()),
+  [filtered, hoje])
 
-  function toggleSort(k: SortKey) {
-    if (sortKey === k) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortKey(k); setSortDir('asc') }
-  }
+  // ── Drilldown por instituição ─────────────────────────────────────────────────
+  const drilldown = useMemo(() => {
+    const map = new Map<string, typeof filtered>()
+    for (const o of filtered) {
+      const k = o.instituicao || 'Sem instituição'
+      if (!map.has(k)) map.set(k, [])
+      map.get(k)!.push(o)
+    }
+    return [...map.entries()]
+      .map(([inst, orcs]) => {
+        const sorted = [...orcs].sort((a, b) => {
+          if (!a.data && !b.data) return 0
+          if (!a.data) return 1
+          if (!b.data) return -1
+          return new Date(a.data).getTime() - new Date(b.data).getTime()
+        })
+        return { inst, orcs: sorted, total: orcs.reduce((s, o) => s + orcadoOf(o), 0) }
+      })
+      .sort((a, b) => b.total - a.total)
+  }, [filtered])
 
-  function SortTh({ k, label }: { k: SortKey; label: string }) {
-    const active = sortKey === k
-    return (
-      <th className={`px-3 py-2 text-xs font-medium cursor-pointer select-none whitespace-nowrap ${active ? 'text-accent' : 'text-muted'} hover:text-white transition-colors`}
-        onClick={() => toggleSort(k)}>
-        <span className="flex items-center gap-1">
-          {label}
-          <ArrowUpDown className={`w-3 h-3 ${active ? 'opacity-100' : 'opacity-40'}`} />
-        </span>
-      </th>
-    )
+  function toggleInst(inst: string) {
+    setExpandidos(p => ({ ...p, [inst]: !p[inst] }))
   }
 
   const cardCls = 'bg-surface-2 border border-bordercol rounded-card p-4 flex items-center gap-3'
@@ -267,7 +211,7 @@ export const DashboardPage: React.FC = () => {
         )}
       </div>
 
-      {/* ── KPIs — linha 1: receitas ── */}
+      {/* ── KPIs linha 1: receitas ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className={`${cardCls} border-success/30`}>
           <div className="w-9 h-9 rounded-lg bg-success/20 flex items-center justify-center shrink-0">
@@ -296,7 +240,6 @@ export const DashboardPage: React.FC = () => {
             <p className="text-success font-bold text-sm truncate">{formatBRL(kpis.totalReceitas)}</p>
           </div>
         </div>
-        {/* Saldo em destaque */}
         <div className={`${cardCls} border-2 ${kpis.saldo >= 0 ? 'border-success/60 bg-success/5' : 'border-danger/60 bg-danger/5'}`}>
           <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${kpis.saldo >= 0 ? 'bg-success/20' : 'bg-danger/20'}`}>
             <BarChart2 className={`w-4 h-4 ${kpis.saldo >= 0 ? 'text-success' : 'text-danger'}`} />
@@ -308,7 +251,7 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── KPIs — linha 2: custos ── */}
+      {/* ── KPIs linha 2: custos ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className={cardCls}>
           <div className="w-9 h-9 rounded-lg bg-accent/20 flex items-center justify-center shrink-0">
@@ -348,138 +291,148 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Gráfico ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-surface-2 border border-bordercol rounded-card p-5">
-          {/* Toolbar gráfico */}
-          <div className="flex flex-wrap items-center gap-3 mb-4">
-            <h2 className="text-white font-semibold text-sm flex-1">
-              {filtroFornecedor ? `Despesa: ${filtroFornecedor}` : 'Comparativo'}
-            </h2>
-            {drillInst && (
-              <div className="flex items-center gap-1 text-xs text-muted">
-                <button onClick={() => setDrillInst(null)} className="text-accent hover:underline flex items-center gap-1">
-                  <ArrowLeft className="w-3 h-3" /> Todas
-                </button>
-                <ChevronRight className="w-3 h-3" />
-                <span className="text-white">{drillInst}</span>
-              </div>
-            )}
-            <select value={agrupamento}
-              onChange={e => { setAgrupamento(e.target.value as Agrupamento); setDrillInst(null) }}
-              className="bg-surface border border-bordercol rounded px-2 py-1 text-xs text-white outline-none focus:border-accent">
-              <option value="todos">Todos</option>
-              <option value="instituicao">Por Instituição</option>
-              <option value="tipo">Por Tipo de Evento</option>
-            </select>
-          </div>
+      {/* ── 3 Gráficos ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-          {barData.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-muted text-sm">Nenhum dado</div>
-          ) : (
-            <div className="overflow-x-auto -mx-1 px-1">
-              <div style={{ minWidth: 420 }}>
-                <ResponsiveContainer width="100%" height={230}>
-                  <BarChart data={barData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }} onClick={handleBarClick}
-                    style={{ cursor: agrupamento === 'instituicao' && !drillInst ? 'pointer' : 'default' }}>
-                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#8892a4' }} />
-                    <YAxis tick={{ fontSize: 10, fill: '#8892a4' }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend wrapperStyle={{ fontSize: 11, color: '#8892a4' }} />
-                    <Bar dataKey="Orçado"   fill="#3b82f6" radius={[3,3,0,0]} />
-                    <Bar dataKey="Pago"     fill="#e94560" radius={[3,3,0,0]} />
-                    <Bar dataKey="Receitas" fill="#00b894" radius={[3,3,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+        {/* Gráfico 1: Rosca por instituição */}
+        <div className="bg-surface-2 border border-bordercol rounded-card p-5">
+          <h2 className="text-white font-semibold text-sm mb-4">Distribuição por Instituição</h2>
+          {donutData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie data={donutData} innerRadius={38} outerRadius={62} paddingAngle={3} dataKey="value"
+                    label={({ percent }: { percent?: number }) => percent ? `${(percent * 100).toFixed(0)}%` : ''}
+                    labelLine={false}>
+                    {donutData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip
+                    formatter={(v: number, name: string) => [`${v} orçamento${v !== 1 ? 's' : ''}`, name]}
+                    contentStyle={{ background: '#16213e', border: '1px solid #2a2a4a', borderRadius: 8, fontSize: 12 }}
+                    labelStyle={{ color: '#fff' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-1.5 mt-2">
+                {donutData.slice(0, 5).map((d, i) => (
+                  <div key={d.name} className="flex items-center gap-2 text-xs">
+                    <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
+                    <span className="text-muted flex-1 truncate">{d.name}</span>
+                    <span className="text-white font-medium">{d.value}</span>
+                  </div>
+                ))}
               </div>
-            </div>
-          )}
-          {agrupamento === 'instituicao' && !drillInst && (
-            <p className="text-muted text-[10px] mt-2 text-center">Clique em uma barra para ver detalhes da instituição</p>
+            </>
+          ) : (
+            <div className="h-48 flex items-center justify-center text-muted text-sm">Sem dados</div>
           )}
         </div>
 
-        {/* Top Fornecedores */}
-        <div className="bg-surface-2 border border-bordercol rounded-card p-5 flex flex-col">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-6 h-6 rounded-md bg-accent/20 flex items-center justify-center shrink-0">
-              <Package className="w-3.5 h-3.5 text-accent" />
-            </div>
-            <h2 className="text-white font-semibold text-sm">Top Fornecedores</h2>
-          </div>
-          {topFornecedores.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center text-muted text-sm">Sem dados</div>
+        {/* Gráfico 2: Barras horizontais por instituição */}
+        <div className="bg-surface-2 border border-bordercol rounded-card p-5">
+          <h2 className="text-white font-semibold text-sm mb-4">Valor Orçado por Instituição</h2>
+          {barInstData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={barInstData} layout="vertical" margin={{ left: 0, right: 12, top: 0, bottom: 0 }}>
+                <XAxis type="number" tick={{ fontSize: 9, fill: '#8892a4' }}
+                  tickFormatter={v => `${((v as number) / 1000).toFixed(0)}k`}
+                  axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#8892a4' }}
+                  axisLine={false} tickLine={false} width={75} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="value" name="Orçado" fill="#E63329" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           ) : (
-            <div className="space-y-3">
-              {topFornecedores.map((f, i) => {
-                const maxOrcado = topFornecedores[0].orcado
-                const pct = maxOrcado > 0 ? (f.orcado / maxOrcado) * 100 : 0
-                const pagoPct = f.orcado > 0 ? (f.pago / f.orcado) * 100 : 0
-                return (
-                  <div key={f.name}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] text-muted w-3 text-right shrink-0">{i + 1}</span>
-                      <span className="text-xs text-white truncate flex-1" title={f.name}>{f.name}</span>
-                      <span className="text-xs font-medium text-white shrink-0">{formatBRL(f.orcado)}</span>
-                    </div>
-                    <div className="ml-5 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full relative" style={{ width: `${pct}%`, background: 'rgba(59,130,246,0.5)' }}>
-                        <div className="absolute inset-y-0 left-0 rounded-full bg-success/80" style={{ width: `${pagoPct}%` }} />
-                      </div>
-                    </div>
-                    <div className="ml-5 flex gap-3 mt-0.5">
-                      <span className="text-[9px] text-blue-400">Orç. {formatBRL(f.orcado)}</span>
-                      <span className="text-[9px] text-success">Pago {formatBRL(f.pago)}</span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            <div className="h-48 flex items-center justify-center text-muted text-sm">Sem dados</div>
           )}
-          <p className="text-[10px] text-muted mt-4 text-center">azul = orçado · verde = pago</p>
+        </div>
+
+        {/* Gráfico 3: Timeline */}
+        <div className="bg-surface-2 border border-bordercol rounded-card p-5">
+          <h2 className="text-white font-semibold text-sm mb-4 flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-accent" />
+            Próximos Eventos
+          </h2>
+          <div className="space-y-1 max-h-[220px] overflow-y-auto pr-1">
+            {timeline.length === 0 ? (
+              <div className="text-muted text-sm text-center py-10">Sem datas cadastradas</div>
+            ) : timeline.map(o => {
+              const past = o._diffDias < 0
+              const soon = !past && o._diffDias <= 30
+              return (
+                <button key={o.id}
+                  onClick={() => navigate(`/pre-eventos/orcamentos/${o.id}`)}
+                  className={`w-full flex items-center gap-2 text-left px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors ${past ? 'opacity-40' : ''}`}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-xs font-medium truncate">{o.turma || '—'}</p>
+                    <p className="text-muted text-[10px] truncate">{o.instituicao}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-muted text-[10px]">{new Date(o.data).toLocaleDateString('pt-BR')}</p>
+                    {soon && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-accent/20 text-accent">
+                        {o._diffDias === 0 ? 'HOJE' : `${o._diffDias}d`}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
 
-      {/* ── Tabela Resumo Ordenável ── */}
-      {sortedRows.length > 0 && (
-        <div className="bg-surface-2 border border-bordercol rounded-card overflow-hidden">
-          <div className="px-5 py-3 border-b border-bordercol">
-            <h2 className="text-white font-semibold text-sm">Resumo por Orçamento</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs" style={{ minWidth: 600 }}>
-              <thead className="bg-surface2/50">
-                <tr>
-                  <SortTh k="instituicao" label="Instituição" />
-                  <SortTh k="turma"       label="Turma" />
-                  <SortTh k="tipo"        label="Tipo" />
-                  <SortTh k="receitas"    label="Receitas" />
-                  <SortTh k="custoOrcado" label="Custo Orç." />
-                  <SortTh k="custoPago"   label="Custo Pago" />
-                  <SortTh k="saldo"       label="Saldo" />
-                  <SortTh k="bv"          label="BV" />
-                </tr>
-              </thead>
-              <tbody>
-                {sortedRows.map(row => (
-                  <tr key={row.id}
-                    className="border-t border-bordercol/50 hover:bg-white/[0.03] cursor-pointer transition-colors"
-                    onClick={() => navigate(`/pre-eventos/orcamentos/${row.id}`)}>
-                    <td className="px-3 py-2 text-white font-medium">{row.instituicao || '—'}</td>
-                    <td className="px-3 py-2 text-gray-300">{row.turma || '—'}</td>
-                    <td className="px-3 py-2 text-muted">{EVENT_TYPE_LABELS[row.tipo]}</td>
-                    <td className="px-3 py-2 text-right text-success font-medium">{formatBRL(row.receitas)}</td>
-                    <td className="px-3 py-2 text-right text-gray-300">{formatBRL(row.custoOrcado)}</td>
-                    <td className="px-3 py-2 text-right text-gray-300">{formatBRL(row.custoPago)}</td>
-                    <td className={`px-3 py-2 text-right font-semibold ${row.saldo >= 0 ? 'text-success' : 'text-danger'}`}>{formatBRL(row.saldo)}</td>
-                    <td className={`px-3 py-2 text-right font-semibold ${row.bv >= 0 ? 'text-success' : 'text-danger'}`}>{formatBRL(row.bv)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {/* ── Drilldown por instituição → turma ── */}
+      <div className="bg-surface-2 border border-bordercol rounded-card overflow-hidden">
+        <div className="px-5 py-3 border-b border-bordercol">
+          <h2 className="text-white font-semibold text-sm">Orçamentos por Instituição</h2>
         </div>
-      )}
+        {drilldown.length === 0 ? (
+          <div className="px-5 py-8 text-center text-muted text-sm">Nenhum orçamento</div>
+        ) : drilldown.map(({ inst, orcs, total }) => (
+          <div key={inst}>
+            {/* Nível 1: Instituição */}
+            <button
+              onClick={() => toggleInst(inst)}
+              className="w-full flex items-center gap-3 px-5 py-3 text-left border-b border-bordercol/50 hover:bg-white/[0.03] transition-colors">
+              {expandidos[inst]
+                ? <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+                : <ChevronRight className="w-4 h-4 text-muted shrink-0" />}
+              <span className="text-white font-semibold text-sm flex-1 uppercase tracking-wide">{inst}</span>
+              <span className="text-muted text-xs mr-4">{orcs.length} turma{orcs.length !== 1 ? 's' : ''}</span>
+              <span className="text-white text-sm font-bold">{formatBRL(total)}</span>
+            </button>
+
+            {/* Nível 2: Turmas */}
+            {expandidos[inst] && orcs.map(o => {
+              const eventDate = o.data ? new Date(o.data) : null
+              const past = eventDate && eventDate < hoje
+              const soon = eventDate && !past && eventDate <= em30
+              return (
+                <button key={o.id}
+                  onClick={() => navigate(`/pre-eventos/orcamentos/${o.id}`)}
+                  className={`w-full flex items-center gap-3 px-5 py-2.5 pl-12 border-b border-bordercol/30 hover:bg-white/[0.03] transition-colors bg-black/10 text-left ${past ? 'opacity-50' : ''}`}>
+                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                    <span className="text-sm text-white">{o.turma || o.id.slice(0, 8)}</span>
+                    {eventDate && (
+                      <span className="text-muted text-xs">{eventDate.toLocaleDateString('pt-BR')}</span>
+                    )}
+                    {soon && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-accent/20 text-accent">30 dias</span>
+                    )}
+                    {past && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-muted">realizado</span>
+                    )}
+                  </div>
+                  <span className="text-white text-sm font-medium shrink-0">{formatBRL(orcadoOf(o))}</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-muted shrink-0" />
+                </button>
+              )
+            })}
+          </div>
+        ))}
+      </div>
 
       {filtered.length === 0 && (
         <div className="bg-surface-2 border border-bordercol rounded-card p-12 text-center">
