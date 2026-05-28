@@ -17,9 +17,6 @@ const CHART_COLORS = ['#E63329', '#F56060', '#C44242', '#FF7A6E', '#B8302A', '#F
 function allItemsOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
   return [...o.operacaoEstrutura, ...o.equipe, ...o.atracao, ...o.abBebidas, ...o.extras]
 }
-function receitasOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
-  return o.bolsaFolia + o.receitasSympla.reduce((s, l) => s + l.total, 0)
-}
 function orcadoOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
   return allItemsOf(o).reduce((s, i) => s + i.totalOrcado, 0)
 }
@@ -307,7 +304,7 @@ export const DashboardPage: React.FC = () => {
                     {donutData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                   </Pie>
                   <Tooltip
-                    formatter={(v: number, name: string) => [`${v} orçamento${v !== 1 ? 's' : ''}`, name]}
+                    formatter={(v, name) => [`${v} orçamento${Number(v) !== 1 ? 's' : ''}`, String(name)]}
                     contentStyle={{ background: '#16213e', border: '1px solid #2a2a4a', borderRadius: 8, fontSize: 12 }}
                     labelStyle={{ color: '#fff' }}
                   />
