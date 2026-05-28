@@ -10,7 +10,7 @@ import { SecaoAccordion } from '../../components/Orcamento/SecaoAccordion'
 import { exportarPDF } from '../../utils/exportPDF'
 import { exportarExcel } from '../../utils/exportExcel'
 import CampoMoeda from '../../components/UI/CampoMoeda'
-import type { Orcamento, EventType, OrcamentoStatus, SymplaLote, ItemOrcamento } from '../../types'
+import type { Orcamento, EventType, OrcamentoStatus, SymplaLote, ItemOrcamento, Cotacao } from '../../types'
 
 // ─── Ordinal helper ────────────────────────────────────────────────────────────
 const ORDINALS = ['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º']
@@ -196,6 +196,81 @@ export const OrcamentoPage: React.FC = () => {
 
   const inputCls = 'w-full bg-surface border border-bordercol rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-accent transition-colors'
   const labelCls = 'block text-xs text-muted mb-1'
+
+  // ─── Cotações helpers ───────────────────────────────────────────────────────
+  const CATEGORIAS_COTACAO = ['Local', 'Bar / Drinks', 'Food', 'Decoração', 'Som / Iluminação', 'Foto / Vídeo', 'Segurança', 'Outros']
+
+  function CotacoesSection({ cotacoes, onChange, inputCls: cls }: {
+    cotacoes: Cotacao[]
+    onChange: (c: Cotacao[]) => void
+    inputCls: string
+  }) {
+    function add() {
+      onChange([...cotacoes, { id: newItemId(), categoria: 'Local', fornecedor: '', valor: 0, notas: '' }])
+    }
+    function remove(id: string) {
+      onChange(cotacoes.filter(c => c.id !== id))
+    }
+    function update(id: string, field: keyof Cotacao, val: string | number) {
+      onChange(cotacoes.map(c => c.id === id ? { ...c, [field]: val } : c))
+    }
+
+    return (
+      <div className="space-y-3">
+        {cotacoes.length === 0 && (
+          <p className="text-muted text-sm py-2">Nenhuma cotação cadastrada.</p>
+        )}
+        {cotacoes.map(c => (
+          <div key={c.id} className="grid grid-cols-1 sm:grid-cols-[160px_1fr_130px_1fr_36px] gap-2 items-start">
+            <select
+              value={c.categoria}
+              onChange={e => update(c.id, 'categoria', e.target.value)}
+              className={cls}
+            >
+              {CATEGORIAS_COTACAO.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
+            <input
+              className={cls}
+              placeholder="Fornecedor"
+              value={c.fornecedor}
+              onChange={e => update(c.id, 'fornecedor', e.target.value)}
+            />
+            <CampoMoeda
+              value={c.valor}
+              onChange={v => update(c.id, 'valor', v)}
+              className={`${cls} text-right`}
+            />
+            <input
+              className={cls}
+              placeholder="Notas"
+              value={c.notas}
+              onChange={e => update(c.id, 'notas', e.target.value)}
+            />
+            <button
+              onClick={() => remove(c.id)}
+              className="h-[38px] flex items-center justify-center text-danger/60 hover:text-danger transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={add}
+          className="flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 transition-colors mt-1"
+        >
+          <Plus className="w-3.5 h-3.5" /> Adicionar cotação
+        </button>
+        {cotacoes.length > 0 && (
+          <div className="flex justify-end pt-2 border-t border-bordercol/50">
+            <span className="text-xs text-muted mr-2">Total cotações:</span>
+            <span className="text-sm font-semibold text-white">
+              {formatBRL(cotacoes.reduce((s, c) => s + (c.valor || 0), 0))}
+            </span>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   if (!orc) return (
     <div className="flex items-center justify-center h-64 text-muted">Carregando...</div>
@@ -388,6 +463,18 @@ export const OrcamentoPage: React.FC = () => {
         <TabelaItens
           items={orc.extras}
           onChange={items => updateSecao('extras', items)}
+        />
+      </SecaoAccordion>
+
+      {/* ── 8. Cotações / Orçamentos Recebidos ── */}
+      <SecaoAccordion
+        title="Cotações / Orçamentos Recebidos"
+        subtitle={`${(orc.cotacoes ?? []).length} cotações`}
+      >
+        <CotacoesSection
+          cotacoes={orc.cotacoes ?? []}
+          onChange={cotacoes => set('cotacoes', cotacoes)}
+          inputCls={inputCls}
         />
       </SecaoAccordion>
 

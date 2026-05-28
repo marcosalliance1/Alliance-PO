@@ -37,12 +37,14 @@ export const Sidebar: React.FC<Props> = ({ open, onClose }) => {
     >
       {/* Logo */}
       <div className="px-5 py-4 border-b border-bordercol shrink-0 flex items-center justify-center">
-        <img
-          src={allianceLogo}
-          alt="Alliance"
-          className="h-12 w-auto"
-          style={{ filter: 'brightness(0) invert(1)' }}
-        />
+        <div className="rounded-xl px-4 py-2" style={{ background: 'rgba(255,255,255,0.05)' }}>
+          <img
+            src={allianceLogo}
+            alt="Alliance"
+            className="h-10 w-auto"
+            style={{ mixBlendMode: 'multiply' }}
+          />
+        </div>
       </div>
 
       {/* Novo Orçamento */}

@@ -32,8 +32,8 @@ export function HomeScreen() {
   return (
     <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-4">
       <div className="mb-10 text-center flex flex-col items-center gap-3">
-        <div className="bg-white rounded-2xl px-8 py-5">
-          <img src={allianceLogo} alt="Alliance" className="h-20 w-auto" />
+        <div className="rounded-2xl px-10 py-6" style={{ background: 'rgba(255,255,255,0.05)' }}>
+          <img src={allianceLogo} alt="Alliance" className="h-20 w-auto" style={{ mixBlendMode: 'multiply' }} />
         </div>
         <div className="text-text-muted text-sm">Selecione o módulo</div>
       </div>

@@ -46,6 +46,14 @@ export interface SymplaLote {
   total: number
 }
 
+export interface Cotacao {
+  id: string
+  categoria: string
+  fornecedor: string
+  valor: number
+  notas: string
+}
+
 export interface Orcamento {
   id: string
   tipo: EventType
@@ -63,6 +71,7 @@ export interface Orcamento {
   atracao: ItemOrcamento[]
   abBebidas: ItemOrcamento[]
   extras: ItemOrcamento[]
+  cotacoes?: Cotacao[]
 }
 
 // ─── Config Automações ───────────────────────────────────────────────────────
