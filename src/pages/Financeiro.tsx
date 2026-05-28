@@ -184,7 +184,7 @@ function ResultadoProjetos({ cap, car, tarifas }: { cap: CAPRecord[]; car: CARRe
 }
 
 // ─── Aba 2: Fluxo de Caixa ────────────────────────────────────────
-function FluxoCaixa({ cap, tarifas }: { cap: CAPRecord[]; tarifas: TarifasRecord[] }) {
+function FluxoCaixa({ cap }: { cap: CAPRecord[] }) {
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const [expandidosProjetos, setExpandidosProjetos] = useState<Record<string, boolean>>({})
   const [expandidosContas, setExpandidosContas] = useState<Record<string, boolean>>({})
@@ -194,24 +194,15 @@ function FluxoCaixa({ cap, tarifas }: { cap: CAPRecord[]; tarifas: TarifasRecord
 
   const capAtivo = cap.filter(i => i.situacao === 'ATIVO')
   const totalAberto  = capAtivo.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-                     + tarifas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const totalVencido = capAtivo.filter(i => i.d_vencimento && i.d_vencimento < hoje).reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-                     + tarifas.filter(i => i.d_vencimento && i.d_vencimento < hoje).reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const aVencer7     = capAtivo.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em7).reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-                     + tarifas.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em7).reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const aVencer30    = capAtivo.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em30).reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-                     + tarifas.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em30).reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
 
   const porMes: Record<string, { mes: string; sortKey: string; valor: number }> = {}
   for (const i of capAtivo) {
     const key = mesAno(i.d_vencimento); if (!key || !i.d_vencimento) continue
     porMes[key] ??= { mes: key, sortKey: i.d_vencimento.slice(0, 7), valor: 0 }
     porMes[key].valor += i.v_titulo ?? 0
-  }
-  for (const i of tarifas) {
-    const key = mesAno(i.d_vencimento); if (!key || !i.d_vencimento) continue
-    porMes[key] ??= { mes: key, sortKey: i.d_vencimento.slice(0, 7), valor: 0 }
-    porMes[key].valor += i.v_lancamento ?? 0
   }
   const dadosMes = Object.values(porMes).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
@@ -232,19 +223,6 @@ function FluxoCaixa({ cap, tarifas }: { cap: CAPRecord[]; tarifas: TarifasRecord
     pagPorMes[key].projetos[proj].contas[g] ??= { total: 0, fornecedores: {} }
     pagPorMes[key].projetos[proj].contas[g].total += i.v_titulo ?? 0
     pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] = (pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_titulo ?? 0)
-  }
-  for (const i of tarifas) {
-    const key  = mesAno(i.d_vencimento); if (!key || !i.d_vencimento) continue
-    const proj = i.desc_centro_custo    || '(sem projeto)'
-    const g    = i.desc_conta_gerencial || 'TARIFAS BANCÁRIAS'
-    const forn = i.fantasia_empresa     || i.razao_social || '(sem fornecedor)'
-    pagPorMes[key] ??= { mes: key, sortKey: i.d_vencimento.slice(0, 7), total: 0, vencido: i.d_vencimento < hoje, projetos: {} }
-    pagPorMes[key].total += i.v_lancamento ?? 0
-    pagPorMes[key].projetos[proj] ??= { total: 0, contas: {} }
-    pagPorMes[key].projetos[proj].total += i.v_lancamento ?? 0
-    pagPorMes[key].projetos[proj].contas[g] ??= { total: 0, fornecedores: {} }
-    pagPorMes[key].projetos[proj].contas[g].total += i.v_lancamento ?? 0
-    pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] = (pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_lancamento ?? 0)
   }
   const linhasPag = Object.values(pagPorMes).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
@@ -950,7 +928,7 @@ export function Financeiro() {
       ) : (
         <>
           {abaAtiva === 'resultado' && <ResultadoProjetos cap={cap} car={car} tarifas={tarifas} />}
-          {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} tarifas={tarifas} />}
+          {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} />}
           {abaAtiva === 'despesas' && <ControleDespesas cap={cap} tarifas={tarifas} dimensaoProjetos={dimensaoProjetos} />}
           {abaAtiva === 'dados'    && <TabelaDados cap={cap} car={car} />}
         </>
