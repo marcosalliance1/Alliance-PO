@@ -43,9 +43,13 @@ function Spinner() {
 // ── Guard de autenticação admin ───────────────────────────────────────────────
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated: isPortalAuth } = usePortalAuth()
   const location = useLocation()
   if (loading) return <Spinner />
-  if (!isAuthenticated) return <Navigate to="/access" state={{ from: location }} replace />
+  if (!isAuthenticated) {
+    if (isPortalAuth) return <Navigate to="/portal/dashboard" replace />
+    return <Navigate to="/access" state={{ from: location }} replace />
+  }
   return <>{children}</>
 }
 

@@ -1,11 +1,15 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { usePortalAuth } from '../../contexts/PortalAuthContext'
 import allianceLogo from '../../assets/alliance-logo.png'
 
 export function LoginPortal() {
-  const { signIn } = usePortalAuth()
+  const { signIn, isAuthenticated } = usePortalAuth()
   const navigate = useNavigate()
+
+  if (isAuthenticated) {
+    return <Navigate to="/portal/dashboard" replace />
+  }
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
