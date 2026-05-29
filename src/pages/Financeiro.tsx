@@ -40,9 +40,7 @@ function TTip({ active, payload, label }: { active?: boolean; payload?: { name: 
 }
 
 // ─── Aba 1: Resultado Projetos ────────────────────────────────────
-function ResultadoProjetos({ cap, car, tarifas }: { cap: CAPRecord[]; car: CARRecord[]; tarifas: TarifasRecord[] }) {
-  const [filtroProj, setFiltroProj] = useState('')
-
+function ResultadoProjetos({ cap, car, tarifas, filtroProj }: { cap: CAPRecord[]; car: CARRecord[]; tarifas: TarifasRecord[]; filtroProj: string }) {
   const fp = filtroProj.toLowerCase()
   const capF     = fp ? cap.filter(r => r.desc_centro_custo.toLowerCase().includes(fp))     : cap
   const carF     = fp ? car.filter(r => r.desc_centro_custo.toLowerCase().includes(fp))     : car
@@ -95,17 +93,6 @@ function ResultadoProjetos({ cap, car, tarifas }: { cap: CAPRecord[]; car: CARRe
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-end">
-        <div className="relative w-60">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-          <input
-            value={filtroProj}
-            onChange={e => setFiltroProj(e.target.value)}
-            placeholder="Filtrar por projeto…"
-            className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-text-main placeholder:text-text-muted focus:outline-none focus:border-primary/50"
-          />
-        </div>
-      </div>
       <div className="grid grid-cols-4 gap-4">
         <KPICard title="Receitas Totais"  value={fmtCompact(totalReceitas)} color={C_RECEITA} />
         <KPICard title="Despesas Totais"  value={fmtCompact(totalDespesas)} color={C_DESPESA} />
@@ -184,7 +171,9 @@ function ResultadoProjetos({ cap, car, tarifas }: { cap: CAPRecord[]; car: CARRe
 }
 
 // ─── Aba 2: Fluxo de Caixa ────────────────────────────────────────
-function FluxoCaixa({ cap }: { cap: CAPRecord[] }) {
+function FluxoCaixa({ cap: capRaw, filtroProj }: { cap: CAPRecord[]; filtroProj: string }) {
+  const fp = filtroProj.toLowerCase().trim()
+  const cap = fp ? capRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : capRaw
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const [expandidosProjetos, setExpandidosProjetos] = useState<Record<string, boolean>>({})
   const [expandidosContas, setExpandidosContas] = useState<Record<string, boolean>>({})
@@ -323,11 +312,15 @@ function normalizeEnsino(raw: string): string {
   return raw.trim() || 'Outros'
 }
 
-function ControleDespesas({ cap, tarifas, dimensaoProjetos }: {
+function ControleDespesas({ cap: capRaw, tarifas: tarifasRaw, dimensaoProjetos, filtroProj }: {
   cap: CAPRecord[]
   tarifas: TarifasRecord[]
   dimensaoProjetos: DimensaoProjetoRecord[]
+  filtroProj: string
 }) {
+  const fp = filtroProj.toLowerCase().trim()
+  const cap     = fp ? capRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp))     : capRaw
+  const tarifas = fp ? tarifasRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : tarifasRaw
   const [expandidosEnsino, setExpandidosEnsino] = useState<Record<string, boolean>>({})
   const [expandidosInst, setExpandidosInst] = useState<Record<string, boolean>>({})
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
@@ -593,7 +586,10 @@ function ControleDespesas({ cap, tarifas, dimensaoProjetos }: {
 // ─── Aba 4: Dados (tabelas brutas) ────────────────────────────────
 const PAGE_SIZE = 100
 
-function TabelaDados({ cap, car }: { cap: CAPRecord[]; car: CARRecord[] }) {
+function TabelaDados({ cap: capRaw, car: carRaw, filtroProj }: { cap: CAPRecord[]; car: CARRecord[]; filtroProj: string }) {
+  const fp = filtroProj.toLowerCase().trim()
+  const cap = fp ? capRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : capRaw
+  const car = fp ? carRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : carRaw
   const [tabela, setTabela] = useState<'CAP' | 'CAR'>('CAP')
   const [filtro, setFiltro] = useState('')
   const [pagina, setPagina] = useState(0)
@@ -785,6 +781,7 @@ export function Financeiro() {
   const { accessToken, conectado, logando, conectar } = useGoogleAuth()
   const { isAdmin } = useAuth()
   const [abaAtiva, setAbaAtiva] = useState<AbaId>('resultado')
+  const [filtroProj, setFiltroProj] = useState('')
   const [processando, setProcessando] = useState({ CAP: false, CAR: false, TARIFAS: false })
   const [toast, setToast] = useState<{ mensagem: string; tipo: 'sucesso' | 'erro' } | null>(null)
   const capRef = useRef<HTMLInputElement>(null)
@@ -891,21 +888,32 @@ export function Financeiro() {
         )}
       </div>
 
-      {/* Sub-abas */}
-      <div className="flex gap-1 border-b border-white/10 mb-5">
-        {ABAS.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            onClick={() => setAbaAtiva(id)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
-              abaAtiva === id
-                ? 'text-primary border-primary'
-                : 'text-text-muted border-transparent hover:text-text-main'
-            }`}
-          >
-            <Icon size={14} /> {label}
-          </button>
-        ))}
+      {/* Sub-abas + filtro de projeto */}
+      <div className="flex items-end justify-between border-b border-white/10 mb-5 gap-4 flex-wrap">
+        <div className="flex gap-1">
+          {ABAS.map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              onClick={() => setAbaAtiva(id)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                abaAtiva === id
+                  ? 'text-primary border-primary'
+                  : 'text-text-muted border-transparent hover:text-text-main'
+              }`}
+            >
+              <Icon size={14} /> {label}
+            </button>
+          ))}
+        </div>
+        <div className="relative mb-1 shrink-0">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input
+            value={filtroProj}
+            onChange={e => setFiltroProj(e.target.value)}
+            placeholder="Filtrar por projeto…"
+            className="w-56 bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-text-main placeholder:text-text-muted focus:outline-none focus:border-primary/50"
+          />
+        </div>
       </div>
 
       {/* Conteúdo */}
@@ -927,10 +935,10 @@ export function Financeiro() {
         </div>
       ) : (
         <>
-          {abaAtiva === 'resultado' && <ResultadoProjetos cap={cap} car={car} tarifas={tarifas} />}
-          {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} />}
-          {abaAtiva === 'despesas' && <ControleDespesas cap={cap} tarifas={tarifas} dimensaoProjetos={dimensaoProjetos} />}
-          {abaAtiva === 'dados'    && <TabelaDados cap={cap} car={car} />}
+          {abaAtiva === 'resultado' && <ResultadoProjetos cap={cap} car={car} tarifas={tarifas} filtroProj={filtroProj} />}
+          {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} filtroProj={filtroProj} />}
+          {abaAtiva === 'despesas' && <ControleDespesas cap={cap} tarifas={tarifas} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
+          {abaAtiva === 'dados'    && <TabelaDados cap={cap} car={car} filtroProj={filtroProj} />}
         </>
       )}
 
