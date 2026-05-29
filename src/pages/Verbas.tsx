@@ -96,11 +96,19 @@ export function Verbas() {
     return totais
   }, [itens])
 
-  const dadosGrafico = useMemo(() => projetos.map(p => ({
-    name: p.nome,
-    segmento: p.segmento,
-    total: itens.filter(it => it.projeto_id === p.id).reduce((s, it) => s + it.valor_orcado, 0),
-  })), [projetos, itens])
+  const dadosGrafico = useMemo(() => {
+    const segOrder = Object.fromEntries(SEGMENTOS.map((s, i) => [s, i]))
+    return projetos
+      .map(p => ({
+        name: p.nome,
+        segmento: p.segmento,
+        total: itens.filter(it => it.projeto_id === p.id).reduce((s, it) => s + it.valor_orcado, 0),
+      }))
+      .sort((a, b) => {
+        const d = (segOrder[a.segmento] ?? 99) - (segOrder[b.segmento] ?? 99)
+        return d !== 0 ? d : a.name.localeCompare(b.name)
+      })
+  }, [projetos, itens])
 
   const categorias = useMemo(
     () => [...new Set(itens.map(it => it.categoria))].sort(),
