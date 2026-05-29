@@ -655,21 +655,10 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
                   titulo="A&B / Bebidas"
                   items={orc.abBebidas ?? []}
                 />
-                {(orc.extras ?? []).length > 0 && (
-                  <div>
-                    <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Extras</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {(orc.extras ?? []).map(item => (
-                        <span
-                          key={item.id}
-                          className={`text-xs px-2.5 py-1 rounded-full border font-medium ${STATUS_STYLE[item.status] ?? STATUS_STYLE.PENDENTE} border-current/20`}
-                        >
-                          {item.item}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <PlanilhaSecao
+                  titulo="Extras"
+                  items={orc.extras ?? []}
+                />
                 {(orc.cotacoes ?? []).length > 0 && (
                   <div>
                     <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Cotações</h4>
