@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, AlertTriangle, LogOut, CalendarClock } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, LogOut, CalendarClock, ChevronDown, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { usePortalAuth } from '../../contexts/PortalAuthContext'
 import allianceLogo from '../../assets/alliance-logo.png'
@@ -41,21 +41,34 @@ interface CapVencimento {
 
 // ─── Seção 1: Status do Evento ────────────────────────────────────────────────
 
-const FORNECEDORES_CHAVE = ['buffet', 'bar', 'cerveja', 'destilados', 'japa', 'chopp', 'food', 'bebida', 'catering']
+// Cada categoria define o label visível e as palavras-chave para encontrar o item no projeto
+const CATEGORIAS_FORNECEDOR = [
+  { label: 'Buffet',     keywords: ['buffet', 'catering', 'alimentação'] },
+  { label: 'Bar',        keywords: ['bar '] },
+  { label: 'Cerveja',    keywords: ['cerveja', 'chopp'] },
+  { label: 'Destilados', keywords: ['destilado'] },
+  { label: 'Japa',       keywords: ['japa', 'japonês', 'sushi'] },
+  { label: 'Som',        keywords: ['som', 'sonorização', 'audio'] },
+  { label: 'Iluminação', keywords: ['iluminação', 'luz'] },
+]
 
 function SecaoEvento({ projeto }: { projeto: Projeto }) {
   const { tap, secoes } = projeto
-
   const todosItens = secoes.flatMap(s => s.itens)
 
-  const fornecedoresGrid = todosItens
-    .filter(i => FORNECEDORES_CHAVE.some(k => i.item.toLowerCase().includes(k)))
-    .map(i => ({ nome: i.item, fechado: i.fornecedor.trim() !== '' }))
+  // Monta grid de categorias nomeadas: acha o primeiro item matching e mostra o fornecedor
+  const categoriasGrid = CATEGORIAS_FORNECEDOR.map(cat => {
+    const item = todosItens.find(i =>
+      cat.keywords.some(k => i.item.toLowerCase().includes(k))
+    )
+    return { label: cat.label, fornecedor: item?.fornecedor?.trim() || '', fechado: !!item?.fornecedor?.trim() }
+  })
 
   const secaoArtistica = secoes.find(s =>
     s.numero === '2.2' || s.nome.toLowerCase().includes('artíst') || s.nome.toLowerCase().includes('artist')
   )
-  const lineup = (secaoArtistica?.itens ?? []).filter(i => i.fornecedor.trim() !== '')
+  // Lineup: todos os itens artísticos, com ou sem fornecedor (para mostrar horários pendentes também)
+  const lineup = secaoArtistica?.itens ?? []
 
   const itemCenografia = todosItens.find(i =>
     i.item.toLowerCase().includes('cenografia') || i.item.toLowerCase().includes('tema')
@@ -64,68 +77,71 @@ function SecaoEvento({ projeto }: { projeto: Projeto }) {
   return (
     <div className="space-y-6">
       {/* Info do evento */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: 'Instituição', value: tap.instituicao || '—' },
           { label: 'Turma', value: tap.turma || '—' },
           { label: 'Data do Evento', value: tap.dataEvento ? fmtData(tap.dataEvento) : '—' },
           { label: 'Local', value: tap.local || '—' },
         ].map(({ label, value }) => (
-          <div key={label} className="bg-bg rounded-lg px-4 py-3">
+          <div key={label} className="bg-bg rounded-xl px-4 py-3">
             <div className="text-text-muted text-xs mb-1">{label}</div>
-            <div className="text-text-main text-sm font-medium truncate">{value}</div>
+            <div className="text-text-main text-sm font-semibold leading-snug">{value}</div>
           </div>
         ))}
       </div>
 
-      {/* Grid de fornecedores */}
-      {fornecedoresGrid.length > 0 && (
-        <div>
-          <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-3">Fornecedores</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {fornecedoresGrid.map(({ nome, fechado }) => (
-              <div
-                key={nome}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm ${
-                  fechado
-                    ? 'border-success/30 bg-success/10 text-success'
-                    : 'border-warning/30 bg-warning/10 text-warning'
-                }`}
-              >
+      {/* Grid de fornecedores nomeados */}
+      <div>
+        <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-3">Fornecedores</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {categoriasGrid.map(({ label, fornecedor, fechado }) => (
+            <div
+              key={label}
+              className={`rounded-xl px-4 py-3 border ${
+                fechado ? 'border-success/25 bg-success/8' : 'border-white/8 bg-surface'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-text-muted">{label}</span>
                 {fechado
-                  ? <CheckCircle2 size={14} className="shrink-0" />
-                  : <AlertTriangle size={14} className="shrink-0" />
+                  ? <CheckCircle2 size={13} className="text-success" />
+                  : <AlertTriangle size={13} className="text-warning/70" />
                 }
-                <span className="truncate text-xs">{nome}</span>
               </div>
-            ))}
-          </div>
+              <div className={`text-sm font-semibold ${fechado ? 'text-text-main' : 'text-text-muted'}`}>
+                {fechado ? fornecedor : 'Pendente'}
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* Lineup artístico */}
       {lineup.length > 0 && (
         <div>
           <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-3">Lineup Artístico</h3>
-          <div className="rounded-lg border border-white/10 overflow-hidden">
+          <div className="rounded-xl border border-white/10 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-surface border-b border-white/10">
-                  <th className="text-left px-4 py-2 text-text-muted text-xs font-medium">Atração / Horário</th>
-                  <th className="text-left px-4 py-2 text-text-muted text-xs font-medium">Artista / Fornecedor</th>
-                  <th className="text-right px-4 py-2 text-text-muted text-xs font-medium">Status</th>
+                  <th className="text-left px-4 py-2.5 text-text-muted text-xs font-medium">Horário / Atração</th>
+                  <th className="text-left px-4 py-2.5 text-text-muted text-xs font-medium">Artista</th>
+                  <th className="text-right px-4 py-2.5 text-text-muted text-xs font-medium">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {lineup.map(item => (
                   <tr key={item.id} className="border-b border-white/5 last:border-0">
                     <td className="px-4 py-2.5 text-text-main text-xs">{item.item}</td>
-                    <td className="px-4 py-2.5 text-text-main text-xs">{item.fornecedor}</td>
+                    <td className="px-4 py-2.5 text-xs font-medium text-text-main">
+                      {item.fornecedor || <span className="text-text-muted">—</span>}
+                    </td>
                     <td className="px-4 py-2.5 text-right">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        item.status === 'fechado' ? 'bg-success/20 text-success' : 'bg-warning/20 text-warning'
+                        item.status === 'fechado' ? 'bg-success/20 text-success' : 'bg-warning/15 text-warning'
                       }`}>
-                        {item.status}
+                        {item.status === 'fechado' ? 'Fechado' : 'Pendente'}
                       </span>
                     </td>
                   </tr>
@@ -140,15 +156,17 @@ function SecaoEvento({ projeto }: { projeto: Projeto }) {
       {itemCenografia && (
         <div>
           <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-3">Cenografia / Tema</h3>
-          <div className="bg-bg rounded-lg px-4 py-3 text-sm">
-            <div className="text-text-main">{itemCenografia.fornecedor || '—'}</div>
+          <div className={`rounded-xl border px-4 py-3 ${itemCenografia.fornecedor ? 'border-success/25 bg-success/8' : 'border-white/8 bg-surface'}`}>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold text-text-main">
+                {itemCenografia.fornecedor || <span className="text-text-muted font-normal">Pendente</span>}
+              </div>
+              {itemCenografia.fornecedor
+                ? <CheckCircle2 size={14} className="text-success" />
+                : <AlertTriangle size={14} className="text-warning/70" />
+              }
+            </div>
           </div>
-        </div>
-      )}
-
-      {fornecedoresGrid.length === 0 && lineup.length === 0 && (
-        <div className="text-text-muted text-sm text-center py-8">
-          Detalhes do evento ainda não disponíveis.
         </div>
       )}
     </div>
@@ -163,21 +181,39 @@ function SecaoFinanceiro({ projeto, vencimentos }: { projeto: Projeto; venciment
   const totalContratado = allItens.reduce((s, i) => s + i.valorContratado, 0)
   const totalPago = allItens.reduce((s, i) => s + i.valorPago, 0)
   const faltaPagar = allItens.reduce((s, i) => s + i.faltaPagar, 0)
-
-  const kpis = [
-    { label: 'Total Orçado', value: totalOrcado, color: 'text-text-main' },
-    { label: 'Total Contratado', value: totalContratado, color: 'text-primary' },
-    { label: 'Total Pago', value: totalPago, color: 'text-success' },
-    { label: 'Falta Pagar', value: faltaPagar, color: 'text-warning' },
-  ]
+  const pctContratado = totalOrcado > 0 ? (totalContratado / totalOrcado) * 100 : 0
+  const pctPago = totalContratado > 0 ? (totalPago / totalContratado) * 100 : 0
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {kpis.map(({ label, value, color }) => (
-          <div key={label} className="bg-bg rounded-lg px-4 py-4">
+      {/* Linha 1: valores monetários */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total Orçado',     value: fmtBRL(totalOrcado),     color: 'text-text-main' },
+          { label: 'Total Contratado', value: fmtBRL(totalContratado), color: 'text-primary' },
+          { label: 'Total Pago',       value: fmtBRL(totalPago),       color: 'text-success' },
+          { label: 'Falta Pagar',      value: fmtBRL(faltaPagar),      color: 'text-warning' },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="bg-bg rounded-xl px-4 py-4">
             <div className="text-text-muted text-xs mb-1">{label}</div>
-            <div className={`text-lg font-semibold ${color}`}>{fmtBRL(value)}</div>
+            <div className={`text-lg font-semibold ${color}`}>{value}</div>
+          </div>
+        ))}
+      </div>
+      {/* Linha 2: porcentagens */}
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { label: '% Contratado', pct: pctContratado, color: '#E63329' },
+          { label: '% Pago',       pct: pctPago,       color: '#00b894' },
+        ].map(({ label, pct, color }) => (
+          <div key={label} className="bg-bg rounded-xl px-4 py-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-text-muted text-xs">{label}</span>
+              <span className="text-sm font-bold" style={{ color }}>{pct.toFixed(1)}%</span>
+            </div>
+            <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, pct)}%`, background: color }} />
+            </div>
           </div>
         ))}
       </div>
@@ -224,35 +260,78 @@ function SecaoFinanceiro({ projeto, vencimentos }: { projeto: Projeto; venciment
 // ─── Seção 3: PO Resumido ─────────────────────────────────────────────────────
 
 function SecaoPO({ projeto }: { projeto: Projeto }) {
-  const secoesVisiveis = projeto.secoes.filter(s =>
-    s.numero.startsWith('2.') || ['2.1','2.2','2.3','2.4','2.5','2.6','2.7','2.8'].includes(s.numero)
-  )
+  const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
+
+  const secoesVisiveis = projeto.secoes.filter(s => s.numero.startsWith('2.'))
+
+  function toggle(id: string) {
+    setExpandidos(prev => ({ ...prev, [id]: !prev[id] }))
+  }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {secoesVisiveis.map(secao => {
         const totalOrcado = secao.itens.reduce((s, i) => s + i.valorOrcado, 0)
         const totalContratado = secao.itens.reduce((s, i) => s + i.valorContratado, 0)
         const pct = totalOrcado > 0 ? Math.min(100, (totalContratado / totalOrcado) * 100) : 0
+        const aberto = expandidos[secao.id] ?? false
+
+        // Agrupa itens por subcategoria para o drill-down
+        const porSubcat: Record<string, { contratado: number; orcado: number }> = {}
+        for (const item of secao.itens) {
+          const sub = item.subcategoria?.trim() || item.area?.trim() || 'Geral'
+          if (!porSubcat[sub]) porSubcat[sub] = { contratado: 0, orcado: 0 }
+          porSubcat[sub].contratado += item.valorContratado
+          porSubcat[sub].orcado += item.valorOrcado
+        }
+        const subcats = Object.entries(porSubcat)
 
         return (
-          <div key={secao.id} className="bg-bg rounded-lg px-4 py-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium text-text-main">
-                <span className="text-text-muted text-xs mr-2">{secao.numero}</span>
-                {secao.nome}
+          <div key={secao.id} className="bg-bg rounded-xl overflow-hidden">
+            {/* Cabeçalho clicável */}
+            <button
+              onClick={() => toggle(secao.id)}
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/3 transition-colors text-left"
+            >
+              <span className="text-text-muted shrink-0">
+                {aberto ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </span>
+              <span className="text-text-muted text-xs w-8 shrink-0">{secao.numero}</span>
+              <span className="flex-1 text-sm font-medium text-text-main">{secao.nome}</span>
+              <span className="text-xs text-text-muted shrink-0">{fmtBRL(totalContratado)} / {fmtBRL(totalOrcado)}</span>
+            </button>
+
+            {/* Barra de progresso */}
+            <div className="px-4 pb-3">
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${pct}%`, background: pct >= 80 ? '#00b894' : pct >= 40 ? '#E63329' : '#f59e0b' }}
+                />
               </div>
-              <div className="text-xs text-text-muted">
-                {fmtBRL(totalContratado)} / {fmtBRL(totalOrcado)}
+              <div className="text-right text-xs text-text-muted mt-1">{pct.toFixed(0)}% contratado</div>
+            </div>
+
+            {/* Drill-down: subcategorias */}
+            {aberto && subcats.length > 0 && (
+              <div className="border-t border-white/8 px-4 py-2 space-y-1 pb-3">
+                {subcats.map(([sub, vals]) => {
+                  const contratado = vals.contratado > 0
+                  return (
+                    <div key={sub} className="flex items-center gap-3 py-1.5">
+                      {contratado
+                        ? <CheckCircle2 size={13} className="text-success shrink-0" />
+                        : <AlertTriangle size={13} className="text-warning/60 shrink-0" />
+                      }
+                      <span className={`text-sm flex-1 ${contratado ? 'text-text-main' : 'text-text-muted'}`}>{sub}</span>
+                      <span className={`text-xs ${contratado ? 'text-success' : 'text-warning/70'}`}>
+                        {contratado ? 'Contratado' : 'Pendente'}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
-            </div>
-            <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all"
-                style={{ width: `${pct}%`, background: pct >= 80 ? '#00b894' : pct >= 40 ? '#E63329' : '#f59e0b' }}
-              />
-            </div>
-            <div className="text-right text-xs text-text-muted mt-1">{pct.toFixed(0)}% contratado</div>
+            )}
           </div>
         )
       })}
