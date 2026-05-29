@@ -5,7 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
   PieChart, Pie, Cell,
 } from 'recharts'
-import { CheckCircle2, AlertTriangle, LogOut, CalendarClock, ChevronDown, ChevronRight } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, LogOut, ChevronDown, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { usePortalAuth } from '../../contexts/PortalAuthContext'
 import { calcResumoProjeto, filtrarItensCalculo } from '../../utils/calculos'
@@ -158,11 +158,10 @@ function SecaoEvento({ projeto }: { projeto: Projeto }) {
 
 // ─── Seção 2: Financeiro ──────────────────────────────────────────────────────
 
-function SecaoFinanceiro({ projeto, vencimentos }: { projeto: Projeto; vencimentos: CapVencimento[] }) {
+function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; vencimentos: CapVencimento[] }) {
   const resumo = useMemo(() => calcResumoProjeto(projeto), [projeto])
-  const { contratado: totalContratado, pago: totalPago, faltaPagar, orcado: totalOrcado } = resumo.custoTotal
+  const { contratado: totalContratado, pago: totalPago, faltaPagar } = resumo.custoTotal
   const pctPago = totalContratado > 0 ? Math.min(100, (totalPago / totalContratado) * 100) : 0
-  const dentroOrcamento = totalOrcado === 0 || totalContratado <= totalOrcado
 
   const chartData = resumo.custos
     .filter(c => c.contratado > 0 || c.pago > 0)
@@ -205,11 +204,8 @@ function SecaoFinanceiro({ projeto, vencimentos }: { projeto: Projeto; venciment
 
       {/* Barra de progresso de pagamento */}
       <div className="bg-bg rounded-xl px-4 py-4">
-        <div className="flex items-center justify-between mb-2">
+        <div className="mb-2">
           <span className="text-text-muted text-xs">Progresso de Pagamento</span>
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${dentroOrcamento ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'}`}>
-            {dentroOrcamento ? 'Dentro do orçamento' : 'Acima do orçamento'}
-          </span>
         </div>
         <div className="h-2.5 bg-white/10 rounded-full overflow-hidden">
           <div className="h-full rounded-full transition-all" style={{ width: `${pctPago}%`, background: '#00b894' }} />
@@ -220,38 +216,6 @@ function SecaoFinanceiro({ projeto, vencimentos }: { projeto: Projeto; venciment
         </div>
       </div>
 
-      {/* Próximos vencimentos */}
-      <div>
-        <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2">
-          <CalendarClock size={12} /> Próximos Vencimentos (30 dias)
-        </h3>
-        {vencimentos.length > 0 ? (
-          <div className="rounded-xl border border-white/10 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-surface border-b border-white/10">
-                  <th className="text-left px-4 py-2.5 text-text-muted text-xs font-medium">Fornecedor</th>
-                  <th className="text-left px-4 py-2.5 text-text-muted text-xs font-medium">Categoria</th>
-                  <th className="text-right px-4 py-2.5 text-text-muted text-xs font-medium">Vencimento</th>
-                  <th className="text-right px-4 py-2.5 text-text-muted text-xs font-medium">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {vencimentos.map((v, i) => (
-                  <tr key={i} className="border-b border-white/5 last:border-0">
-                    <td className="px-4 py-2.5 text-text-main text-xs">{v.fantasia_fornecedor || '—'}</td>
-                    <td className="px-4 py-2.5 text-text-muted text-xs">{v.desc_conta_gerencial || '—'}</td>
-                    <td className="px-4 py-2.5 text-right text-warning text-xs">{fmtData(v.d_vencimento ?? '')}</td>
-                    <td className="px-4 py-2.5 text-right text-text-main text-xs font-medium">{fmtBRL(v.v_titulo)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="text-text-muted text-sm text-center py-4 bg-bg rounded-xl">Sem vencimentos nos próximos 30 dias.</div>
-        )}
-      </div>
     </div>
   )
 }
@@ -260,7 +224,18 @@ function SecaoFinanceiro({ projeto, vencimentos }: { projeto: Projeto; venciment
 
 function SecaoPO({ projeto }: { projeto: Projeto }) {
   const [drillSecaoId, setDrillSecaoId] = useState<string | null>(null)
-  const resumo = useMemo(() => calcResumoProjeto(projeto), [projeto])
+
+  // Custos Administrativos: exibir apenas itens com subcategoria = 'Custo Projeto'
+  const projetoFiltrado = useMemo(() => ({
+    ...projeto,
+    secoes: projeto.secoes.map(s =>
+      s.nome.toLowerCase().includes('administrativ')
+        ? { ...s, itens: s.itens.filter(i => i.subcategoria === 'Custo Projeto') }
+        : s
+    ),
+  }), [projeto])
+
+  const resumo = useMemo(() => calcResumoProjeto(projetoFiltrado), [projetoFiltrado])
 
   const pieData = useMemo(() =>
     resumo.custos
@@ -273,7 +248,7 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
     .filter(c => c.contratado > 0 || c.pago > 0)
     .map(c => ({ nome: c.nome.split(' ')[0], Contratado: Math.round(c.contratado), Pago: Math.round(c.pago) }))
 
-  const drillSecao = drillSecaoId ? projeto.secoes.find(s => s.id === drillSecaoId) : null
+  const drillSecao = drillSecaoId ? projetoFiltrado.secoes.find(s => s.id === drillSecaoId) : null
   const drillLabel = drillSecaoId ? pieData.find(p => p.secaoId === drillSecaoId)?.fullName : null
 
   return (
