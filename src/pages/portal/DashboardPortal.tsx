@@ -223,7 +223,7 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
 // ─── Seção 3: P.O. Resumido ───────────────────────────────────────────────────
 
 function SecaoPO({ projeto }: { projeto: Projeto }) {
-  const [drillSecaoId, setDrillSecaoId] = useState<string | null>(null)
+  const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
 
   // Custos Administrativos: exibir apenas itens com subcategoria = 'Custo Projeto'
   const projetoFiltrado = useMemo(() => ({
@@ -237,6 +237,8 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
 
   const resumo = useMemo(() => calcResumoProjeto(projetoFiltrado), [projetoFiltrado])
 
+  const anyOpen = Object.values(expandidos).some(Boolean)
+
   const pieData = useMemo(() =>
     resumo.custos
       .filter(c => c.contratado > 0)
@@ -248,8 +250,9 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
     .filter(c => c.contratado > 0 || c.pago > 0)
     .map(c => ({ nome: c.nome.split(' ')[0], Contratado: Math.round(c.contratado), Pago: Math.round(c.pago) }))
 
-  const drillSecao = drillSecaoId ? projetoFiltrado.secoes.find(s => s.id === drillSecaoId) : null
-  const drillLabel = drillSecaoId ? pieData.find(p => p.secaoId === drillSecaoId)?.fullName : null
+  function toggle(id: string) {
+    setExpandidos(prev => ({ ...prev, [id]: !prev[id] }))
+  }
 
   return (
     <div className="space-y-6">
@@ -258,13 +261,8 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
         {/* Donut */}
         {pieData.length > 0 && (
           <div className="bg-bg rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
+            <div className="mb-2">
               <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider">Composição Contratada</h3>
-              {drillSecaoId && (
-                <button onClick={() => setDrillSecaoId(null)} className="text-xs text-text-muted hover:text-text-main underline">
-                  ← Ver todos
-                </button>
-              )}
             </div>
             <div className="flex gap-4 flex-wrap items-start">
               <ResponsiveContainer width={180} height={180}>
@@ -274,18 +272,15 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
                     cx="50%" cy="50%"
                     innerRadius={50} outerRadius={82}
                     dataKey="value"
-                    onClick={d => {
-                      const e = d as unknown as typeof pieData[0]
-                      setDrillSecaoId(e.secaoId === drillSecaoId ? null : e.secaoId)
-                    }}
+                    onClick={d => toggle((d as unknown as typeof pieData[0]).secaoId)}
                     style={{ cursor: 'pointer' }}
                   >
                     {pieData.map(entry => (
                       <Cell
                         key={entry.secaoId}
                         fill={entry.color}
-                        opacity={drillSecaoId && drillSecaoId !== entry.secaoId ? 0.3 : 1}
-                        stroke={drillSecaoId === entry.secaoId ? '#fff' : 'transparent'}
+                        opacity={anyOpen && !expandidos[entry.secaoId] ? 0.3 : 1}
+                        stroke={expandidos[entry.secaoId] ? '#fff' : 'transparent'}
                         strokeWidth={2}
                       />
                     ))}
@@ -297,8 +292,8 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
                 {pieData.map(entry => (
                   <button
                     key={entry.secaoId}
-                    onClick={() => setDrillSecaoId(entry.secaoId === drillSecaoId ? null : entry.secaoId)}
-                    className={`w-full flex items-center gap-2 text-left py-0.5 transition-opacity ${drillSecaoId && drillSecaoId !== entry.secaoId ? 'opacity-30' : ''}`}
+                    onClick={() => toggle(entry.secaoId)}
+                    className={`w-full flex items-center gap-2 text-left py-0.5 transition-opacity ${anyOpen && !expandidos[entry.secaoId] ? 'opacity-30' : ''}`}
                   >
                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: entry.color }} />
                     <span className="text-xs text-text-muted flex-1 truncate">{entry.name}</span>
@@ -329,72 +324,72 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
         )}
       </div>
 
-      {/* Drill-down subcategorias */}
-      {drillSecao && (
-        <div className="bg-bg rounded-xl p-4">
-          <h3 className="text-text-main text-sm font-semibold mb-3">{drillLabel}</h3>
-          {(() => {
-            const itensFiltrados = filtrarItensCalculo(drillSecao.itens)
-            const porSubcat: Record<string, { contratado: number; pago: number }> = {}
-            for (const item of itensFiltrados) {
-              const sub = item.subcategoria?.trim() || item.area?.trim() || 'Geral'
-              if (!porSubcat[sub]) porSubcat[sub] = { contratado: 0, pago: 0 }
-              porSubcat[sub].contratado += item.valorContratado
-              porSubcat[sub].pago += item.valorPago
-            }
-            return (
-              <div className="space-y-2">
-                {Object.entries(porSubcat).map(([sub, vals]) => {
-                  const pct = vals.contratado > 0 ? Math.min(100, (vals.pago / vals.contratado) * 100) : 0
-                  return (
-                    <div key={sub} className="space-y-1">
-                      <div className="flex items-center gap-3">
-                        {vals.contratado > 0
-                          ? <CheckCircle2 size={13} className="text-success shrink-0" />
-                          : <AlertTriangle size={13} className="text-warning/60 shrink-0" />
-                        }
-                        <span className="text-sm text-text-main flex-1">{sub}</span>
-                        <span className="text-xs text-success">{fmtBRL(vals.pago)}</span>
-                        <span className="text-xs text-text-muted">/ {fmtBRL(vals.contratado)}</span>
-                      </div>
-                      {vals.contratado > 0 && (
-                        <div className="ml-[25px] h-1 bg-white/10 rounded-full overflow-hidden">
-                          <div className="h-full bg-success/60 rounded-full" style={{ width: `${pct}%` }} />
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          })()}
-        </div>
-      )}
-
-      {/* Lista de seções com barra de progresso */}
+      {/* Lista de seções com drill-down inline */}
       <div className="space-y-2">
         {resumo.custos.map(c => {
           const pct = c.contratado > 0 ? Math.min(100, (c.pago / c.contratado) * 100) : 0
+          const isOpen = expandidos[c.secaoId] ?? false
+          const secao = projetoFiltrado.secoes.find(s => s.id === c.secaoId)
+
           return (
-            <button
-              key={c.secaoId}
-              onClick={() => setDrillSecaoId(c.secaoId === drillSecaoId ? null : c.secaoId)}
-              className="w-full bg-bg rounded-xl px-4 py-3 text-left hover:bg-white/3 transition-colors"
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-text-muted">{drillSecaoId === c.secaoId ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</span>
-                <span className="flex-1 text-sm font-medium text-text-main">{c.nome}</span>
-                <span className="text-xs text-success">{fmtBRL(c.pago)}</span>
-                <span className="text-xs text-text-muted">/ {fmtBRL(c.contratado)}</span>
-              </div>
-              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${pct}%`, background: pct >= 80 ? '#00b894' : pct >= 40 ? '#E63329' : '#f59e0b' }}
-                />
-              </div>
-              <div className="text-right text-xs text-text-muted mt-1">{pct.toFixed(0)}% pago</div>
-            </button>
+            <div key={c.secaoId} className={`rounded-xl overflow-hidden transition-all ${isOpen ? 'bg-surface ring-1 ring-white/10' : 'bg-bg'}`}>
+              {/* Cabeçalho clicável */}
+              <button
+                onClick={() => toggle(c.secaoId)}
+                className="w-full px-4 py-3 text-left hover:bg-white/3 transition-colors"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-text-muted shrink-0">{isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</span>
+                  <span className="flex-1 text-sm font-medium text-text-main">{c.nome}</span>
+                  <span className="text-xs text-success">{fmtBRL(c.pago)}</span>
+                  <span className="text-xs text-text-muted">/ {fmtBRL(c.contratado)}</span>
+                </div>
+                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${pct}%`, background: pct >= 80 ? '#00b894' : pct >= 40 ? '#E63329' : '#f59e0b' }}
+                  />
+                </div>
+                <div className="text-right text-xs text-text-muted mt-1">{pct.toFixed(0)}% pago</div>
+              </button>
+
+              {/* Drill-down inline */}
+              {isOpen && secao && (() => {
+                const itensFiltrados = filtrarItensCalculo(secao.itens)
+                const porSubcat: Record<string, { contratado: number; pago: number }> = {}
+                for (const item of itensFiltrados) {
+                  const sub = item.subcategoria?.trim() || item.area?.trim() || 'Geral'
+                  if (!porSubcat[sub]) porSubcat[sub] = { contratado: 0, pago: 0 }
+                  porSubcat[sub].contratado += item.valorContratado
+                  porSubcat[sub].pago += item.valorPago
+                }
+                return (
+                  <div className="border-t border-white/8 px-4 pb-4 pt-3 space-y-2">
+                    {Object.entries(porSubcat).map(([sub, vals]) => {
+                      const p = vals.contratado > 0 ? Math.min(100, (vals.pago / vals.contratado) * 100) : 0
+                      return (
+                        <div key={sub} className="space-y-1">
+                          <div className="flex items-center gap-3">
+                            {vals.contratado > 0
+                              ? <CheckCircle2 size={13} className="text-success shrink-0" />
+                              : <AlertTriangle size={13} className="text-warning/60 shrink-0" />
+                            }
+                            <span className="text-sm text-text-main flex-1">{sub}</span>
+                            <span className="text-xs text-success">{fmtBRL(vals.pago)}</span>
+                            <span className="text-xs text-text-muted">/ {fmtBRL(vals.contratado)}</span>
+                          </div>
+                          {vals.contratado > 0 && (
+                            <div className="ml-[25px] h-1 bg-white/10 rounded-full overflow-hidden">
+                              <div className="h-full bg-success/60 rounded-full" style={{ width: `${p}%` }} />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </div>
           )
         })}
       </div>
