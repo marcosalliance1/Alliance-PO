@@ -440,15 +440,64 @@ const TIPO_LABEL: Record<string, string> = {
   FESTA_X_DIAS: 'Festa X Dias',
 }
 
-const CATS_PE = [
-  { label: 'Buffet', secao: 'operacaoEstrutura' as const, keyword: 'buffet' },
-  { label: 'Bar',    secao: 'abBebidas' as const,         keyword: 'bar' },
-  { label: 'Chopp',  secao: 'abBebidas' as const,         keyword: 'chopp' },
-]
+// ─── Status badge ─────────────────────────────────────────────────────────────
 
-function fornecedorPE(orc: Orcamento, secao: keyof Orcamento, keyword: string): ItemOrcamento | undefined {
-  const items = orc[secao] as ItemOrcamento[] | undefined
-  return items?.find(i => i.item.toLowerCase().includes(keyword))
+const STATUS_STYLE: Record<string, string> = {
+  CONTRATADO: 'bg-success/15 text-success',
+  PAGO:       'bg-blue-400/15 text-blue-400',
+  PENDENTE:   'bg-warning/15 text-warning',
+}
+const STATUS_LABEL: Record<string, string> = {
+  CONTRATADO: 'Contratado',
+  PAGO:       'Pago',
+  PENDENTE:   'Pendente',
+}
+
+// ─── Tabela de itens de uma seção ─────────────────────────────────────────────
+
+function PlanilhaSecao({ titulo, items, col1 = 'Item', col2 = 'Fornecedor' }: {
+  titulo: string
+  items: ItemOrcamento[]
+  col1?: string
+  col2?: string
+}) {
+  if (!items.length) return null
+  return (
+    <div>
+      <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">{titulo}</h4>
+      <div className="rounded-xl border border-white/8 overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-surface border-b border-white/8">
+              <th className="text-left px-3 py-2 text-text-muted font-medium">{col1}</th>
+              <th className="text-left px-3 py-2 text-text-muted font-medium">{col2}</th>
+              <th className="text-right px-3 py-2 text-text-muted font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map(item => (
+              <tr key={item.id} className="border-b border-white/5 last:border-0">
+                <td className="px-3 py-2.5">
+                  <div className="text-text-main font-medium">{item.item}</div>
+                  {item.notas?.trim() && (
+                    <div className="text-text-muted text-[10px] mt-0.5 leading-relaxed">{item.notas}</div>
+                  )}
+                </td>
+                <td className="px-3 py-2.5 text-text-main">
+                  {item.fornecedor?.trim() || <span className="text-text-muted/50">—</span>}
+                </td>
+                <td className="px-3 py-2.5 text-right">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_STYLE[item.status] ?? STATUS_STYLE.PENDENTE}`}>
+                    {STATUS_LABEL[item.status] ?? item.status}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
 function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
@@ -492,8 +541,6 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
       {orcamentos.map(orc => {
         const isPast = orc.data && orc.data < hoje
         const isOpen = expandidos[orc.id] ?? false
-        const lineup = orc.atracao?.filter(i => i.fornecedor?.trim()) ?? []
-        const extras = orc.extras?.filter(i => i.status !== 'PENDENTE') ?? []
 
         return (
           <div key={orc.id} className={`bg-bg rounded-xl overflow-hidden transition-opacity ${isPast ? 'opacity-50' : ''}`}>
@@ -515,57 +562,60 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
               </div>
             </button>
 
-            {/* Expandido */}
+            {/* Planilha expandida */}
             {isOpen && (
-              <div className="border-t border-white/8 px-4 py-4 space-y-5">
-                {/* Grid de fornecedores */}
-                <div>
-                  <h4 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-3">Fornecedores</h4>
-                  <div className="grid grid-cols-3 gap-3">
-                    {CATS_PE.map(({ label, secao, keyword }) => {
-                      const item = fornecedorPE(orc, secao, keyword)
-                      const fechado = !!(item?.fornecedor?.trim())
-                      return (
-                        <div key={label} className={`rounded-xl px-3 py-2.5 border ${fechado ? 'border-success/25 bg-success/8' : 'border-white/8 bg-surface'}`}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-text-muted">{label}</span>
-                            {fechado ? <CheckCircle2 size={12} className="text-success" /> : <AlertTriangle size={12} className="text-warning/70" />}
-                          </div>
-                          <div className={`text-xs font-semibold ${fechado ? 'text-text-main' : 'text-text-muted'}`}>
-                            {fechado ? item!.fornecedor : 'Pendente'}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Lineup artístico */}
-                {lineup.length > 0 && (
+              <div className="border-t border-white/8 px-4 py-5 space-y-5">
+                <PlanilhaSecao
+                  titulo="Operação e Estrutura"
+                  items={orc.operacaoEstrutura ?? []}
+                />
+                <PlanilhaSecao
+                  titulo="Lineup Artístico"
+                  items={orc.atracao ?? []}
+                  col1="Horário / Atração"
+                  col2="Artista"
+                />
+                <PlanilhaSecao
+                  titulo="A&B / Bebidas"
+                  items={orc.abBebidas ?? []}
+                />
+                {(orc.extras ?? []).length > 0 && (
                   <div>
-                    <h4 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-2">Lineup</h4>
-                    <div className="space-y-1">
-                      {lineup.map(item => (
-                        <div key={item.id} className="flex items-center gap-3 py-1">
-                          <CheckCircle2 size={12} className="text-success shrink-0" />
-                          <span className="text-xs text-text-muted flex-1">{item.item}</span>
-                          <span className="text-xs font-medium text-text-main">{item.fornecedor}</span>
-                        </div>
+                    <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Extras</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {(orc.extras ?? []).map(item => (
+                        <span
+                          key={item.id}
+                          className={`text-xs px-2.5 py-1 rounded-full border font-medium ${STATUS_STYLE[item.status] ?? STATUS_STYLE.PENDENTE} border-current/20`}
+                        >
+                          {item.item}
+                        </span>
                       ))}
                     </div>
                   </div>
                 )}
-
-                {/* Extras */}
-                {extras.length > 0 && (
+                {(orc.cotacoes ?? []).length > 0 && (
                   <div>
-                    <h4 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-2">Extras</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {extras.map(item => (
-                        <span key={item.id} className="text-xs px-2 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20">
-                          {item.item}
-                        </span>
-                      ))}
+                    <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Cotações</h4>
+                    <div className="rounded-xl border border-white/8 overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-surface border-b border-white/8">
+                            <th className="text-left px-3 py-2 text-text-muted font-medium">Categoria</th>
+                            <th className="text-left px-3 py-2 text-text-muted font-medium">Fornecedor</th>
+                            <th className="text-right px-3 py-2 text-text-muted font-medium">Valor</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(orc.cotacoes ?? []).map(c => (
+                            <tr key={c.id} className="border-b border-white/5 last:border-0">
+                              <td className="px-3 py-2.5 text-text-muted">{c.categoria}</td>
+                              <td className="px-3 py-2.5 text-text-main">{c.fornecedor || '—'}</td>
+                              <td className="px-3 py-2.5 text-right text-text-main font-medium">{fmtBRL(c.valor)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}
