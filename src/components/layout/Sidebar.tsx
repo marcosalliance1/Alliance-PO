@@ -20,14 +20,12 @@ export function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 h-screen w-56 bg-surface border-r border-white/10 flex flex-col z-30">
       <div className="px-5 py-4 border-b border-white/10 flex items-center justify-center">
-        <div className="rounded-xl px-4 py-2" style={{ background: 'rgba(255,255,255,0.05)' }}>
-          <img
-            src={allianceLogo}
-            alt="Alliance"
-            className="h-10 w-auto"
-            style={{ mixBlendMode: 'multiply' }}
-          />
-        </div>
+        <img
+          src={allianceLogo}
+          alt="Alliance"
+          className="h-10 w-auto"
+          style={{ mixBlendMode: 'screen' }}
+        />
       </div>
       <nav className="flex-1 py-4 px-3 flex flex-col gap-1">
         {links.map(({ to, icon: Icon, label }) => (
