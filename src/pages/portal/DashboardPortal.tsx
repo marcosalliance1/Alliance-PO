@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
   PieChart, Pie, Cell,
@@ -590,6 +591,7 @@ const TABS: { id: TabId; label: string }[] = [
 
 export function DashboardPortal() {
   const { session, signOut } = usePortalAuth()
+  const { isAdmin } = useAuth()
   const navigate = useNavigate()
   const [projeto, setProjeto] = useState<Projeto | null>(null)
   const [vencimentos, setVencimentos] = useState<CapVencimento[]>([])
@@ -648,6 +650,19 @@ export function DashboardPortal() {
 
   return (
     <div className="min-h-screen bg-bg">
+      {/* Banner de preview para admin */}
+      {isAdmin && (
+        <div className="bg-warning/15 border-b border-warning/30 px-4 py-2 flex items-center justify-between">
+          <span className="text-warning text-xs font-medium">Você está visualizando o portal como: <strong>{session?.email}</strong></span>
+          <button
+            onClick={() => { signOut(); navigate('/portal-admin') }}
+            className="text-xs text-warning hover:text-warning/80 underline transition-colors"
+          >
+            ← Voltar ao sistema
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <header className="sticky top-0 z-20 bg-surface border-b border-white/10 px-4 sm:px-8 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">

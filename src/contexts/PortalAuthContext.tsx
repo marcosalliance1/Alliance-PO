@@ -16,6 +16,7 @@ interface PortalAuthCtx {
   isAuthenticated: boolean
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => void
+  previewAs: (s: PortalSession) => void
 }
 
 const Ctx = createContext<PortalAuthCtx>(null!)
@@ -56,8 +57,13 @@ export function PortalAuthProvider({ children }: { children: React.ReactNode }) 
     setSession(null)
   }
 
+  function previewAs(s: PortalSession) {
+    sessionStorage.setItem(PORTAL_KEY, JSON.stringify(s))
+    setSession(s)
+  }
+
   return (
-    <Ctx.Provider value={{ session, isAuthenticated: !!session, signIn, signOut }}>
+    <Ctx.Provider value={{ session, isAuthenticated: !!session, signIn, signOut, previewAs }}>
       {children}
     </Ctx.Provider>
   )

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Plus, ToggleLeft, ToggleRight, KeyRound, Loader, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, ToggleLeft, ToggleRight, KeyRound, Loader, X, ExternalLink } from 'lucide-react'
 import bcrypt from 'bcryptjs'
 import { supabase } from '../../lib/supabase'
+import { usePortalAuth } from '../../contexts/PortalAuthContext'
 import type { Projeto, TAP, SecaoCusto, Receitas } from '../../types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -206,12 +208,19 @@ function ModalResetSenha({ cliente, onClose, onSaved }: { cliente: PortalCliente
 // ─── Página Principal ─────────────────────────────────────────────────────────
 
 export function AdminPortal() {
+  const { previewAs } = usePortalAuth()
+  const navigate = useNavigate()
   const [clientes, setClientes] = useState<PortalCliente[]>([])
   const [projetos, setProjetos] = useState<Projeto[]>([])
   const [loading, setLoading] = useState(true)
   const [modalNovo, setModalNovo] = useState(false)
   const [editando, setEditando] = useState<PortalCliente | undefined>()
   const [resetando, setResetando] = useState<PortalCliente | undefined>()
+
+  function verDashboard(c: PortalCliente) {
+    previewAs({ clienteId: c.id, projetoId: c.projeto_id, email: c.email, nomeContato: c.nome_contato })
+    navigate('/portal/dashboard')
+  }
 
   async function carregar() {
     const [{ data: cl }, { data: pr }] = await Promise.all([
@@ -291,6 +300,13 @@ export function AdminPortal() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => verDashboard(c)}
+                        title="Ver dashboard do cliente"
+                        className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+                      >
+                        <ExternalLink size={13} /> Ver
+                      </button>
                       <button
                         onClick={() => toggleAtivo(c)}
                         title={c.ativo ? 'Desativar' : 'Ativar'}
