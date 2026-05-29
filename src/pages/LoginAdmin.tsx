@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export function LoginAdmin() {
@@ -16,7 +16,7 @@ export function LoginAdmin() {
     setLoading(true)
     try {
       await signInAdmin(email, password)
-      navigate('/', { replace: true })
+      navigate('/modulos', { replace: true })
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -29,7 +29,7 @@ export function LoginAdmin() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="text-primary font-bold text-2xl">Alliance</div>
-          <div className="text-text-muted text-sm mt-1">P.O. System — Admin</div>
+          <div className="text-text-muted text-sm mt-1">Acesso Administrativo</div>
         </div>
         <div className="card">
           <h1 className="text-text-main font-semibold text-lg mb-6">Entrar como Admin</h1>
@@ -64,6 +64,11 @@ export function LoginAdmin() {
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
+        </div>
+        <div className="text-center mt-6">
+          <Link to="/" className="text-xs text-text-muted/50 hover:text-text-muted transition-colors">
+            ← Voltar
+          </Link>
         </div>
       </div>
     </div>

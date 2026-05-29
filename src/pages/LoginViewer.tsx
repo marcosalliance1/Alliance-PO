@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import allianceLogo from '../assets/alliance-logo.png'
 
 export function LoginViewer() {
   const { signInViewer } = useAuth()
@@ -9,7 +10,8 @@ export function LoginViewer() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState(false)
 
-  const from = (location.state as { from?: Location })?.from?.pathname ?? '/'
+  // Preserva destino se veio de rota protegida; caso contrário, vai para módulos
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/modulos'
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -24,13 +26,14 @@ export function LoginViewer() {
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="text-primary font-bold text-2xl">Alliance</div>
-          <div className="text-text-muted text-sm mt-1">P.O. System</div>
+        <div className="mb-8 flex flex-col items-center gap-3">
+          <img src={allianceLogo} alt="Alliance" className="h-12 w-auto" style={{ mixBlendMode: 'screen' }} />
+          <p className="text-text-muted text-sm">Time interno e gestores</p>
         </div>
+
         <div className="card">
-          <h1 className="text-text-main font-semibold text-lg mb-2">Acesso Restrito</h1>
-          <p className="text-text-muted text-xs mb-6">Insira a senha para visualizar o sistema.</p>
+          <h1 className="text-text-main font-semibold text-lg mb-1">Acesso Alliance</h1>
+          <p className="text-text-muted text-xs mb-6">Insira a senha para acessar o sistema.</p>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs text-text-muted mb-1">Senha</label>
@@ -49,12 +52,14 @@ export function LoginViewer() {
             <button type="submit" className="w-full btn-primary">
               Acessar
             </button>
-            <div className="text-center">
-              <a href="/login" className="text-xs text-text-muted hover:text-primary transition-colors">
-                Login Admin
-              </a>
-            </div>
           </form>
+        </div>
+
+        {/* Link discreto para admin */}
+        <div className="text-center mt-6">
+          <Link to="/login" className="text-xs text-text-muted/50 hover:text-text-muted transition-colors">
+            Acesso Administrativo
+          </Link>
         </div>
       </div>
     </div>

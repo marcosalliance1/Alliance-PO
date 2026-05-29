@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useParams, Navigate, useLocation } from 'react-router-dom'
 import { Layout } from './components/layout/Layout'
 import { HomeScreen } from './pages/HomeScreen'
+import { LandingPage } from './pages/LandingPage'
 import { LoginPortal } from './pages/portal/LoginPortal'
 import { DashboardPortal } from './pages/portal/DashboardPortal'
 import { AdminPortal } from './pages/portal/AdminPortal'
@@ -50,6 +51,8 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     if (isPortalAuth) return <Navigate to="/portal/dashboard" replace />
     return <Navigate to="/access" state={{ from: location }} replace />
   }
+  // Viewer/admin na raiz → ir para módulos
+  if (location.pathname === '/') return <Navigate to="/modulos" replace />
   return <>{children}</>
 }
 
@@ -178,8 +181,11 @@ function AppRoutes() {
       <Route path="/portal" element={<LoginPortal />} />
       <Route path="/portal/dashboard" element={<RequirePortalAuth><DashboardPortal /></RequirePortalAuth>} />
 
-      {/* Tela inicial de seleção de módulo */}
-      <Route path="/" element={<RequireAuth><HomeScreen /></RequireAuth>} />
+      {/* Tela de entrada pública */}
+      <Route path="/" element={<LandingPage />} />
+
+      {/* Tela de seleção de módulos (requer auth) */}
+      <Route path="/modulos" element={<RequireAuth><HomeScreen /></RequireAuth>} />
 
       {/* Módulo P.O. Alliance */}
       <Route element={<RequireAuth><Layout /></RequireAuth>}>
