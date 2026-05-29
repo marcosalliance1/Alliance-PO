@@ -480,7 +480,7 @@ function PlanilhaSecao({ titulo, items, col1 = 'Item', col2 = 'Fornecedor' }: {
       <div className="rounded-xl border border-white/8 overflow-hidden">
         <table className="w-full text-xs">
           <thead>
-            <tr className="bg-surface border-b border-white/8">
+            <tr className="bg-white/4 border-b border-white/8">
               <th className="text-left px-3 py-2 text-text-muted font-medium">{col1}</th>
               <th className="text-left px-3 py-2 text-text-muted font-medium">{col2}</th>
               {temValor && <th className="text-right px-3 py-2 text-text-muted font-medium">Valor</th>}
@@ -489,7 +489,7 @@ function PlanilhaSecao({ titulo, items, col1 = 'Item', col2 = 'Fornecedor' }: {
           </thead>
           <tbody>
             {items.map(item => (
-              <tr key={item.id} className="border-b border-white/5 last:border-0">
+              <tr key={item.id} className="border-b border-white/5 last:border-0 hover:bg-white/2">
                 <td className="px-3 py-2.5">
                   <div className="text-text-main font-medium">{item.item}</div>
                   {item.notas?.trim() && (
@@ -512,6 +512,18 @@ function PlanilhaSecao({ titulo, items, col1 = 'Item', col2 = 'Fornecedor' }: {
               </tr>
             ))}
           </tbody>
+          {temValor && (() => {
+            const total = items.reduce((s, i) => s + (i.valorPassadoCliente ?? 0), 0)
+            return total > 0 ? (
+              <tfoot>
+                <tr className="border-t border-white/10 bg-white/4">
+                  <td colSpan={2} className="px-3 py-2 text-text-muted text-xs font-semibold">Total</td>
+                  <td className="px-3 py-2 text-right text-text-main text-xs font-bold tabular-nums">{fmtBRL(total)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            ) : null
+          })()}
         </table>
       </div>
     </div>
@@ -561,7 +573,7 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
         const isOpen = expandidos[orc.id] ?? false
 
         return (
-          <div key={orc.id} className={`bg-bg rounded-xl overflow-hidden transition-opacity ${isPast ? 'opacity-50' : ''}`}>
+          <div key={orc.id} className={`rounded-xl overflow-hidden transition-all ${isPast ? 'opacity-50' : ''} ${isOpen ? 'bg-surface ring-1 ring-white/10' : 'bg-bg'}`}>
             {/* Cabeçalho */}
             <button
               onClick={() => setExpandidos(prev => ({ ...prev, [orc.id]: !prev[orc.id] }))}
