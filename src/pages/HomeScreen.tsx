@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
-import { ClipboardList, CalendarCheck, Clock } from 'lucide-react'
+import { ClipboardList, CalendarCheck, Clock, Users } from 'lucide-react'
 import allianceLogo from '../assets/alliance-logo.png'
+import { useAuth } from '../contexts/AuthContext'
 
 const MODULES = [
   {
@@ -28,6 +29,18 @@ const MODULES = [
 
 export function HomeScreen() {
   const navigate = useNavigate()
+  const { isAdmin } = useAuth()
+
+  const modules = [
+    ...MODULES,
+    ...(isAdmin ? [{
+      icon: Users,
+      title: 'Portal Clientes',
+      description: 'Gerenciar acessos das comissões',
+      to: '/portal-admin',
+      disabled: false,
+    }] : []),
+  ]
 
   return (
     <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-4">
@@ -36,8 +49,8 @@ export function HomeScreen() {
         <div className="text-text-muted text-sm">Selecione o módulo</div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 w-full max-w-2xl">
-        {MODULES.map(({ icon: Icon, title, description, to, disabled }) => (
+      <div className={`grid gap-5 w-full ${isAdmin ? 'grid-cols-2 sm:grid-cols-4 max-w-3xl' : 'grid-cols-1 sm:grid-cols-3 max-w-2xl'}`}>
+        {modules.map(({ icon: Icon, title, description, to, disabled }) => (
           <button
             key={to}
             onClick={() => !disabled && navigate(to)}
