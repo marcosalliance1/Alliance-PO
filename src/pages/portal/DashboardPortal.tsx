@@ -142,7 +142,6 @@ function SecaoEvento({ projeto }: { projeto: Projeto }) {
           <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-3">Cenografia / Tema</h3>
           <div className="bg-bg rounded-lg px-4 py-3 text-sm">
             <div className="text-text-main">{itemCenografia.fornecedor || '—'}</div>
-            {itemCenografia.notas && <div className="text-text-muted text-xs mt-1">{itemCenografia.notas}</div>}
           </div>
         </div>
       )}
