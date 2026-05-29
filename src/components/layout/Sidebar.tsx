@@ -1,5 +1,5 @@
-import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, FolderOpen, BookOpen, BarChart2, DollarSign, Settings, Globe, CheckCircle, LogOut, Loader, Users } from 'lucide-react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { LayoutDashboard, FolderOpen, BookOpen, BarChart2, DollarSign, Settings, Globe, CheckCircle, LogOut, Loader, Users, ArrowLeft } from 'lucide-react'
 import allianceLogo from '../../assets/alliance-logo.png'
 import { useGoogleAuth } from '../../contexts/GoogleAuthContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -17,6 +17,7 @@ const links = [
 export function Sidebar() {
   const { conectado, conectar, desconectar, logando } = useGoogleAuth()
   const { isAdmin, signOut } = useAuth()
+  const navigate = useNavigate()
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-56 bg-surface border-r border-white/10 flex flex-col z-30">
@@ -73,6 +74,15 @@ export function Sidebar() {
             {logando ? 'Conectando...' : 'Conectar Google Drive'}
           </button>
         )}
+      </div>
+
+      <div className="px-3 pb-1 border-t border-white/10 pt-2">
+        <button
+          onClick={() => navigate('/')}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-text-muted hover:text-text-main hover:bg-white/5 transition-colors"
+        >
+          <ArrowLeft size={13} /> Voltar à Home
+        </button>
       </div>
 
       <div className="px-6 py-3 border-t border-white/10 flex items-center justify-between">
