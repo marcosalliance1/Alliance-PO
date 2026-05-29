@@ -453,6 +453,17 @@ const STATUS_LABEL: Record<string, string> = {
   PENDENTE:   'Pendente',
 }
 
+// ─── Helpers financeiros ──────────────────────────────────────────────────────
+
+function totalReceitas(orc: Orcamento) {
+  return (orc.receitasSympla ?? []).reduce((s, l) => s + l.total, 0) + (orc.bolsaFolia ?? 0)
+}
+
+function totalDespesas(orc: Orcamento) {
+  const secoes = [...(orc.operacaoEstrutura ?? []), ...(orc.atracao ?? []), ...(orc.abBebidas ?? []), ...(orc.extras ?? []), ...(orc.equipe ?? [])]
+  return secoes.reduce((s, i) => s + (i.valorPassadoCliente ?? 0), 0)
+}
+
 // ─── Tabela de itens de uma seção ─────────────────────────────────────────────
 
 function PlanilhaSecao({ titulo, items, col1 = 'Item', col2 = 'Fornecedor' }: {
@@ -462,6 +473,7 @@ function PlanilhaSecao({ titulo, items, col1 = 'Item', col2 = 'Fornecedor' }: {
   col2?: string
 }) {
   if (!items.length) return null
+  const temValor = items.some(i => (i.valorPassadoCliente ?? 0) > 0)
   return (
     <div>
       <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">{titulo}</h4>
@@ -471,6 +483,7 @@ function PlanilhaSecao({ titulo, items, col1 = 'Item', col2 = 'Fornecedor' }: {
             <tr className="bg-surface border-b border-white/8">
               <th className="text-left px-3 py-2 text-text-muted font-medium">{col1}</th>
               <th className="text-left px-3 py-2 text-text-muted font-medium">{col2}</th>
+              {temValor && <th className="text-right px-3 py-2 text-text-muted font-medium">Valor</th>}
               <th className="text-right px-3 py-2 text-text-muted font-medium">Status</th>
             </tr>
           </thead>
@@ -486,6 +499,11 @@ function PlanilhaSecao({ titulo, items, col1 = 'Item', col2 = 'Fornecedor' }: {
                 <td className="px-3 py-2.5 text-text-main">
                   {item.fornecedor?.trim() || <span className="text-text-muted/50">—</span>}
                 </td>
+                {temValor && (
+                  <td className="px-3 py-2.5 text-right text-text-main font-medium tabular-nums">
+                    {(item.valorPassadoCliente ?? 0) > 0 ? fmtBRL(item.valorPassadoCliente) : <span className="text-text-muted/40">—</span>}
+                  </td>
+                )}
                 <td className="px-3 py-2.5 text-right">
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_STYLE[item.status] ?? STATUS_STYLE.PENDENTE}`}>
                     {STATUS_LABEL[item.status] ?? item.status}
@@ -565,6 +583,64 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
             {/* Planilha expandida */}
             {isOpen && (
               <div className="border-t border-white/8 px-4 py-5 space-y-5">
+                {/* KPIs financeiros */}
+                {(() => {
+                  const receita = totalReceitas(orc)
+                  const despesa = totalDespesas(orc)
+                  const saldo = receita - despesa
+                  return (receita > 0 || despesa > 0) ? (
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: 'Receita', value: receita, color: 'text-success' },
+                        { label: 'Despesa', value: despesa, color: 'text-primary' },
+                        { label: 'Saldo',   value: saldo,   color: saldo >= 0 ? 'text-success' : 'text-danger' },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="bg-bg rounded-xl px-3 py-3 text-center">
+                          <div className="text-text-muted text-[10px] mb-1">{label}</div>
+                          <div className={`text-sm font-bold tabular-nums ${color}`}>{fmtBRL(value)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null
+                })()}
+
+                {/* Receitas Sympla */}
+                {((orc.receitasSympla ?? []).length > 0 || (orc.bolsaFolia ?? 0) > 0) && (
+                  <div>
+                    <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Receitas</h4>
+                    <div className="rounded-xl border border-white/8 overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-surface border-b border-white/8">
+                            <th className="text-left px-3 py-2 text-text-muted font-medium">Lote / Tipo</th>
+                            <th className="text-right px-3 py-2 text-text-muted font-medium">Qtde</th>
+                            <th className="text-right px-3 py-2 text-text-muted font-medium">Unit.</th>
+                            <th className="text-right px-3 py-2 text-text-muted font-medium">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(orc.receitasSympla ?? []).map(l => (
+                            <tr key={l.id} className="border-b border-white/5 last:border-0">
+                              <td className="px-3 py-2 text-text-main">{l.nome}</td>
+                              <td className="px-3 py-2 text-right text-text-muted tabular-nums">{l.qtde}</td>
+                              <td className="px-3 py-2 text-right text-text-muted tabular-nums">{fmtBRL(l.valorUnitario)}</td>
+                              <td className="px-3 py-2 text-right text-success font-semibold tabular-nums">{fmtBRL(l.total)}</td>
+                            </tr>
+                          ))}
+                          {(orc.bolsaFolia ?? 0) > 0 && (
+                            <tr className="border-b border-white/5 last:border-0">
+                              <td className="px-3 py-2 text-text-main">Bolsa Folia</td>
+                              <td className="px-3 py-2" />
+                              <td className="px-3 py-2" />
+                              <td className="px-3 py-2 text-right text-success font-semibold tabular-nums">{fmtBRL(orc.bolsaFolia)}</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
                 <PlanilhaSecao
                   titulo="Operação e Estrutura"
                   items={orc.operacaoEstrutura ?? []}
