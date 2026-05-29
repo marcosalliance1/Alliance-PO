@@ -2,6 +2,10 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useParams, Navigate, useLocation } from 'react-router-dom'
 import { Layout } from './components/layout/Layout'
 import { HomeScreen } from './pages/HomeScreen'
+import { LoginPortal } from './pages/portal/LoginPortal'
+import { DashboardPortal } from './pages/portal/DashboardPortal'
+import { AdminPortal } from './pages/portal/AdminPortal'
+import { PortalAuthProvider, usePortalAuth } from './contexts/PortalAuthContext'
 import { DashboardGeral } from './pages/DashboardGeral'
 import { ListaProjetos } from './pages/ListaProjetos'
 import { NovoProjeto } from './pages/NovoProjeto'
@@ -36,12 +40,19 @@ function Spinner() {
   )
 }
 
-// ── Guard de autenticação ─────────────────────────────────────────────────────
+// ── Guard de autenticação admin ───────────────────────────────────────────────
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
   const location = useLocation()
   if (loading) return <Spinner />
   if (!isAuthenticated) return <Navigate to="/access" state={{ from: location }} replace />
+  return <>{children}</>
+}
+
+// ── Guard de autenticação portal ──────────────────────────────────────────────
+function RequirePortalAuth({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = usePortalAuth()
+  if (!isAuthenticated) return <Navigate to="/portal" replace />
   return <>{children}</>
 }
 
@@ -159,6 +170,10 @@ function AppRoutes() {
       <Route path="/login" element={<LoginAdmin />} />
       <Route path="/access" element={<LoginViewer />} />
 
+      {/* Portal do Cliente — autenticação separada */}
+      <Route path="/portal" element={<LoginPortal />} />
+      <Route path="/portal/dashboard" element={<RequirePortalAuth><DashboardPortal /></RequirePortalAuth>} />
+
       {/* Tela inicial de seleção de módulo */}
       <Route path="/" element={<RequireAuth><HomeScreen /></RequireAuth>} />
 
@@ -227,6 +242,7 @@ function AppRoutes() {
         />
         <Route path="/verbas" element={<Verbas />} />
         <Route path="/financeiro" element={<Financeiro />} />
+        <Route path="/portal-admin" element={<AdminPortal />} />
         <Route
           path="/configuracoes"
           element={
@@ -265,7 +281,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <PortalAuthProvider>
+        <AppRoutes />
+      </PortalAuthProvider>
     </BrowserRouter>
   )
 }

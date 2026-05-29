@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { ClipboardList, CalendarCheck, Clock } from 'lucide-react'
+import { ClipboardList, CalendarCheck, Clock, Users } from 'lucide-react'
 import allianceLogo from '../assets/alliance-logo.png'
 
 const MODULES = [
@@ -24,6 +24,13 @@ const MODULES = [
     to: '/followup',
     disabled: true,
   },
+  {
+    icon: Users,
+    title: 'Portal Cliente',
+    description: 'Acesso exclusivo para comissões de formatura',
+    to: '/portal',
+    disabled: false,
+  },
 ]
 
 export function HomeScreen() {
@@ -36,7 +43,7 @@ export function HomeScreen() {
         <div className="text-text-muted text-sm">Selecione o módulo</div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 w-full max-w-2xl">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-5 w-full max-w-3xl">
         {MODULES.map(({ icon: Icon, title, description, to, disabled }) => (
           <button
             key={to}
