@@ -15,7 +15,7 @@ import { ModalImportarDoDrive } from '../../components/Orcamento/ModalImportarDo
 import { supabase } from '../../lib/supabase'
 import { recalcularItem } from '../../utils/automacoes'
 import type { Orcamento, EventType, OrcamentoStatus, SymplaLote, ItemOrcamento, Cotacao, DocumentoCotacao } from '../../types'
-import type { ItemImportado } from '../../utils/importarPlanilha'
+import type { ItemImportado, SecaoKey } from '../../utils/importarPlanilha'
 
 // ─── Ordinal helper ────────────────────────────────────────────────────────────
 const ORDINALS = ['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º']
@@ -247,6 +247,7 @@ export const OrcamentoPage: React.FC = () => {
   function handleAplicarImportacao(
     reconhecidos: ItemImportado[],
     mapeados: { item: ItemImportado; alvoId: string }[],
+    novos: { item: ItemImportado; nome: string; secao: SecaoKey }[],
   ) {
     if (!orc) return
     let updated = { ...orc }
@@ -263,10 +264,32 @@ export const OrcamentoPage: React.FC = () => {
     }
     for (const rec of reconhecidos) if (rec.matchId) aplicar(rec, rec.matchId)
     for (const { item, alvoId } of mapeados) aplicar(item, alvoId)
+    for (const { item, nome, secao } of novos) {
+      const secaoItems = updated[secao] as ItemOrcamento[]
+      const novoItem = recalcularItem({
+        id: newItemId(),
+        item: nome,
+        fornecedor: '',
+        qtde: item.qtde,
+        custoUnitario: item.custoUnitario,
+        totalOrcado: 0,
+        totalPagoReal: 0,
+        valorPassadoCliente: 0,
+        bvAbsoluto: 0,
+        bvPercentual: 0,
+        status: item.status,
+        dataPagamento: null,
+        notas: item.notas,
+        automatico: false,
+        fixo: false,
+      })
+      updated = { ...updated, [secao]: [...secaoItems, novoItem] }
+    }
     setOrc(updated)
     setDirty(true)
     setShowImportModal(false)
-    addToast(`${reconhecidos.length + mapeados.length} itens importados!`, 'success')
+    setShowDriveModal(false)
+    addToast(`${reconhecidos.length + mapeados.length + novos.length} itens importados!`, 'success')
   }
 
   // ─── Anexar documento em Cotação ────────────────────────────────────────

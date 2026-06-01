@@ -3,15 +3,21 @@ import { X, LogIn, RefreshCw, AlertTriangle, Check, ExternalLink } from 'lucide-
 import { useGoogleAuth } from '../../../../contexts/GoogleAuthContext'
 import { fetchAba, extrairSpreadsheetId } from '../../../../utils/sheetsSync'
 import { parsearAbaGoogle, parsearPlanilha, SECAO_LABELS } from '../../utils/importarPlanilha'
-import type { ItemImportado, ResultadoImportacao } from '../../utils/importarPlanilha'
+import type { ItemImportado, ResultadoImportacao, SecaoKey } from '../../utils/importarPlanilha'
 import type { Orcamento, ItemOrcamento } from '../../types'
 import { formatBRL } from '../../utils/formatters'
+
+type Decisao =
+  | { tipo: 'ignorar' }
+  | { tipo: 'mapear'; alvoId: string }
+  | { tipo: 'criar'; nome: string; secao: SecaoKey }
 
 interface Props {
   orc: Orcamento
   onConfirmar: (
     reconhecidos: ItemImportado[],
     mapeados: { item: ItemImportado; alvoId: string }[],
+    novos: { item: ItemImportado; nome: string; secao: SecaoKey }[],
   ) => void
   onFechar: () => void
 }
@@ -22,10 +28,9 @@ export const ModalImportarDoDrive: React.FC<Props> = ({ orc, onConfirmar, onFech
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
   const [resultado, setResultado] = useState<ResultadoImportacao | null>(null)
-  const [decisoes, setDecisoes] = useState<Record<number, string>>({})
+  const [decisoes, setDecisoes] = useState<Record<number, Decisao>>({})
   const [pendingLoad, setPendingLoad] = useState(false)
 
-  // After OAuth flow completes, trigger load automatically
   useEffect(() => {
     if (accessToken && pendingLoad) {
       setPendingLoad(false)
@@ -69,7 +74,6 @@ export const ModalImportarDoDrive: React.FC<Props> = ({ orc, onConfirmar, onFech
       let r: ResultadoImportacao
 
       if (!isNativeSheets) {
-        // Office file (.xlsx etc.) — download binary and parse with XLSX
         const downloadResp = await fetch(
           `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(spreadsheetId)}?alt=media`,
           { headers: { Authorization: `Bearer ${token}` } },
@@ -81,7 +85,6 @@ export const ModalImportarDoDrive: React.FC<Props> = ({ orc, onConfirmar, onFech
         const buffer = await downloadResp.arrayBuffer()
         r = parsearPlanilha(buffer, orc)
       } else {
-        // Native Google Sheets — use Sheets API
         const metaResp = await fetch(
           `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties.title`,
           { headers: { Authorization: `Bearer ${token}` } },
@@ -97,6 +100,7 @@ export const ModalImportarDoDrive: React.FC<Props> = ({ orc, onConfirmar, onFech
         if (!values || values.length === 0) throw new Error('A primeira aba está vazia.')
         r = parsearAbaGoogle(values, orc)
       }
+
       if (r.reconhecidos.length === 0 && r.naoReconhecidos.length === 0) {
         setErro(
           'Nenhum item encontrado. Verifique se a planilha tem as colunas: ITEM, QTDE, CUSTO UNITÁRIO, STATUS, ESPECIFICAÇÕES — e linhas de seção como OPERAÇÃO/ESTRUTURA, EQUIPE, ATRAÇÃO.',
@@ -104,8 +108,8 @@ export const ModalImportarDoDrive: React.FC<Props> = ({ orc, onConfirmar, onFech
         return
       }
       setResultado(r)
-      const d: Record<number, string> = {}
-      r.naoReconhecidos.forEach((_, i) => { d[i] = '' })
+      const d: Record<number, Decisao> = {}
+      r.naoReconhecidos.forEach((_, i) => { d[i] = { tipo: 'ignorar' } })
       setDecisoes(d)
     } catch (e) {
       const err = e as Error & { tipo?: string }
@@ -130,17 +134,37 @@ export const ModalImportarDoDrive: React.FC<Props> = ({ orc, onConfirmar, onFech
     void doCarregar(accessToken)
   }
 
+  function handleModeChange(i: number, modo: Decisao['tipo'], item: ItemImportado) {
+    if (modo === 'ignorar') setDecisoes(prev => ({ ...prev, [i]: { tipo: 'ignorar' } }))
+    else if (modo === 'mapear') setDecisoes(prev => ({ ...prev, [i]: { tipo: 'mapear', alvoId: '' } }))
+    else setDecisoes(prev => ({ ...prev, [i]: { tipo: 'criar', nome: item.nome, secao: item.secao } }))
+  }
+
   function handleConfirmar() {
     if (!resultado) return
     const mapeados = resultado.naoReconhecidos
-      .map((item, i) => ({ item, alvoId: decisoes[i] ?? '' }))
-      .filter(x => x.alvoId !== '')
-    onConfirmar(resultado.reconhecidos, mapeados)
+      .map((item, i) => {
+        const d = decisoes[i]
+        if (!d || d.tipo !== 'mapear' || !d.alvoId) return null
+        return { item, alvoId: d.alvoId }
+      })
+      .filter((x): x is { item: ItemImportado; alvoId: string } => x !== null)
+    const novos = resultado.naoReconhecidos
+      .map((item, i) => {
+        const d = decisoes[i]
+        if (!d || d.tipo !== 'criar' || !d.nome.trim()) return null
+        return { item, nome: d.nome.trim(), secao: d.secao }
+      })
+      .filter((x): x is { item: ItemImportado; nome: string; secao: SecaoKey } => x !== null)
+    onConfirmar(resultado.reconhecidos, mapeados, novos)
   }
 
   const totalImportando =
     (resultado?.reconhecidos.length ?? 0) +
-    Object.values(decisoes).filter(v => v !== '').length
+    Object.values(decisoes).filter(d =>
+      (d.tipo === 'mapear' && d.alvoId !== '') ||
+      (d.tipo === 'criar' && d.nome.trim() !== '')
+    ).length
 
   const btnLabel = logando || (pendingLoad && !conectado)
     ? 'Conectando...'
@@ -246,29 +270,58 @@ export const ModalImportarDoDrive: React.FC<Props> = ({ orc, onConfirmar, onFech
                   </h3>
                   <div className="space-y-2">
                     {resultado.naoReconhecidos.map((item, i) => {
+                      const d = decisoes[i] ?? { tipo: 'ignorar' as const }
                       const sectionItems = orc[item.secao] as ItemOrcamento[]
                       return (
-                        <div key={i} className="bg-surface2/40 border border-bordercol/50 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white text-xs font-medium truncate">{item.nome}</p>
-                            <p className="text-muted text-[10px]">
-                              {SECAO_LABELS[item.secao]} · Qtde: {item.qtde} · {formatBRL(item.custoUnitario)}
-                            </p>
+                        <div key={i} className="bg-surface2/40 border border-bordercol/50 rounded-lg p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-white text-xs font-medium truncate">{item.nome}</p>
+                              <p className="text-muted text-[10px]">
+                                {SECAO_LABELS[item.secao]} · Qtde: {item.qtde} · {formatBRL(item.custoUnitario)}
+                              </p>
+                            </div>
+                            <select
+                              value={d.tipo}
+                              onChange={e => handleModeChange(i, e.target.value as Decisao['tipo'], item)}
+                              className="text-xs bg-surface border border-bordercol rounded px-2 py-1.5 text-white outline-none focus:border-accent transition-colors shrink-0"
+                            >
+                              <option value="ignorar">Ignorar</option>
+                              <option value="mapear">Mapear para existente</option>
+                              <option value="criar">Criar novo item</option>
+                            </select>
                           </div>
-                          <select
-                            value={decisoes[i] ?? ''}
-                            onChange={e => setDecisoes(prev => ({ ...prev, [i]: e.target.value }))}
-                            className="text-xs bg-surface border border-bordercol rounded px-2 py-1.5 text-white outline-none focus:border-accent transition-colors shrink-0"
-                          >
-                            <option value="">Ignorar (não importar)</option>
-                            {sectionItems.length > 0 && (
-                              <optgroup label="Mapear para...">
-                                {sectionItems.map(si => (
-                                  <option key={si.id} value={si.id}>{si.item || '(sem nome)'}</option>
+                          {d.tipo === 'mapear' && (
+                            <select
+                              value={d.alvoId}
+                              onChange={e => setDecisoes(prev => ({ ...prev, [i]: { tipo: 'mapear', alvoId: e.target.value } }))}
+                              className="w-full text-xs bg-surface border border-bordercol rounded px-2 py-1.5 text-white outline-none focus:border-accent transition-colors"
+                            >
+                              <option value="">— Escolha o item —</option>
+                              {sectionItems.map(si => (
+                                <option key={si.id} value={si.id}>{si.item || '(sem nome)'}</option>
+                              ))}
+                            </select>
+                          )}
+                          {d.tipo === 'criar' && (
+                            <div className="flex gap-2">
+                              <input
+                                value={d.nome}
+                                onChange={e => setDecisoes(prev => ({ ...prev, [i]: { ...d, nome: e.target.value } }))}
+                                className="flex-1 text-xs bg-surface border border-bordercol rounded px-2 py-1.5 text-white outline-none focus:border-accent transition-colors"
+                                placeholder="Nome do item"
+                              />
+                              <select
+                                value={d.secao}
+                                onChange={e => setDecisoes(prev => ({ ...prev, [i]: { ...d, secao: e.target.value as SecaoKey } }))}
+                                className="text-xs bg-surface border border-bordercol rounded px-2 py-1.5 text-white outline-none focus:border-accent transition-colors shrink-0"
+                              >
+                                {(Object.entries(SECAO_LABELS) as [SecaoKey, string][]).map(([k, v]) => (
+                                  <option key={k} value={k}>{v}</option>
                                 ))}
-                              </optgroup>
-                            )}
-                          </select>
+                              </select>
+                            </div>
+                          )}
                         </div>
                       )
                     })}

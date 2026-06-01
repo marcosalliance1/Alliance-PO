@@ -2,14 +2,20 @@ import React, { useRef, useState } from 'react'
 import { X, Upload, AlertTriangle, Check } from 'lucide-react'
 import type { Orcamento, ItemOrcamento } from '../../types'
 import { parsearPlanilha, SECAO_LABELS } from '../../utils/importarPlanilha'
-import type { ItemImportado, ResultadoImportacao } from '../../utils/importarPlanilha'
+import type { ItemImportado, ResultadoImportacao, SecaoKey } from '../../utils/importarPlanilha'
 import { formatBRL } from '../../utils/formatters'
+
+type Decisao =
+  | { tipo: 'ignorar' }
+  | { tipo: 'mapear'; alvoId: string }
+  | { tipo: 'criar'; nome: string; secao: SecaoKey }
 
 interface Props {
   orc: Orcamento
   onConfirmar: (
     reconhecidos: ItemImportado[],
     mapeados: { item: ItemImportado; alvoId: string }[],
+    novos: { item: ItemImportado; nome: string; secao: SecaoKey }[],
   ) => void
   onFechar: () => void
 }
@@ -18,7 +24,7 @@ export const ModalImportarPlanilha: React.FC<Props> = ({ orc, onConfirmar, onFec
   const inputRef = useRef<HTMLInputElement>(null)
   const [resultado, setResultado] = useState<ResultadoImportacao | null>(null)
   const [erro, setErro] = useState('')
-  const [decisoes, setDecisoes] = useState<Record<number, string>>({})
+  const [decisoes, setDecisoes] = useState<Record<number, Decisao>>({})
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -33,8 +39,8 @@ export const ModalImportarPlanilha: React.FC<Props> = ({ orc, onConfirmar, onFec
           return
         }
         setResultado(r)
-        const d: Record<number, string> = {}
-        r.naoReconhecidos.forEach((_, i) => { d[i] = '' })
+        const d: Record<number, Decisao> = {}
+        r.naoReconhecidos.forEach((_, i) => { d[i] = { tipo: 'ignorar' } })
         setDecisoes(d)
       } catch {
         setErro('Erro ao ler o arquivo. Certifique-se de que é um arquivo Excel (.xlsx).')
@@ -44,17 +50,37 @@ export const ModalImportarPlanilha: React.FC<Props> = ({ orc, onConfirmar, onFec
     e.target.value = ''
   }
 
+  function handleModeChange(i: number, modo: Decisao['tipo'], item: ItemImportado) {
+    if (modo === 'ignorar') setDecisoes(prev => ({ ...prev, [i]: { tipo: 'ignorar' } }))
+    else if (modo === 'mapear') setDecisoes(prev => ({ ...prev, [i]: { tipo: 'mapear', alvoId: '' } }))
+    else setDecisoes(prev => ({ ...prev, [i]: { tipo: 'criar', nome: item.nome, secao: item.secao } }))
+  }
+
   function handleConfirmar() {
     if (!resultado) return
     const mapeados = resultado.naoReconhecidos
-      .map((item, i) => ({ item, alvoId: decisoes[i] ?? '' }))
-      .filter(x => x.alvoId !== '')
-    onConfirmar(resultado.reconhecidos, mapeados)
+      .map((item, i) => {
+        const d = decisoes[i]
+        if (!d || d.tipo !== 'mapear' || !d.alvoId) return null
+        return { item, alvoId: d.alvoId }
+      })
+      .filter((x): x is { item: ItemImportado; alvoId: string } => x !== null)
+    const novos = resultado.naoReconhecidos
+      .map((item, i) => {
+        const d = decisoes[i]
+        if (!d || d.tipo !== 'criar' || !d.nome.trim()) return null
+        return { item, nome: d.nome.trim(), secao: d.secao }
+      })
+      .filter((x): x is { item: ItemImportado; nome: string; secao: SecaoKey } => x !== null)
+    onConfirmar(resultado.reconhecidos, mapeados, novos)
   }
 
   const totalImportando =
     (resultado?.reconhecidos.length ?? 0) +
-    Object.values(decisoes).filter(v => v !== '').length
+    Object.values(decisoes).filter(d =>
+      (d.tipo === 'mapear' && d.alvoId !== '') ||
+      (d.tipo === 'criar' && d.nome.trim() !== '')
+    ).length
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4">
@@ -138,29 +164,58 @@ export const ModalImportarPlanilha: React.FC<Props> = ({ orc, onConfirmar, onFec
                   </h3>
                   <div className="space-y-2">
                     {resultado.naoReconhecidos.map((item, i) => {
+                      const d = decisoes[i] ?? { tipo: 'ignorar' as const }
                       const sectionItems = orc[item.secao] as ItemOrcamento[]
                       return (
-                        <div key={i} className="bg-surface2/40 border border-bordercol/50 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white text-xs font-medium truncate">{item.nome}</p>
-                            <p className="text-muted text-[10px]">
-                              {SECAO_LABELS[item.secao]} · Qtde: {item.qtde} · {formatBRL(item.custoUnitario)}
-                            </p>
+                        <div key={i} className="bg-surface2/40 border border-bordercol/50 rounded-lg p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-white text-xs font-medium truncate">{item.nome}</p>
+                              <p className="text-muted text-[10px]">
+                                {SECAO_LABELS[item.secao]} · Qtde: {item.qtde} · {formatBRL(item.custoUnitario)}
+                              </p>
+                            </div>
+                            <select
+                              value={d.tipo}
+                              onChange={e => handleModeChange(i, e.target.value as Decisao['tipo'], item)}
+                              className="text-xs bg-surface border border-bordercol rounded px-2 py-1.5 text-white outline-none focus:border-accent transition-colors shrink-0"
+                            >
+                              <option value="ignorar">Ignorar</option>
+                              <option value="mapear">Mapear para existente</option>
+                              <option value="criar">Criar novo item</option>
+                            </select>
                           </div>
-                          <select
-                            value={decisoes[i] ?? ''}
-                            onChange={e => setDecisoes(prev => ({ ...prev, [i]: e.target.value }))}
-                            className="text-xs bg-surface border border-bordercol rounded px-2 py-1.5 text-white outline-none focus:border-accent transition-colors shrink-0"
-                          >
-                            <option value="">Ignorar (não importar)</option>
-                            {sectionItems.length > 0 && (
-                              <optgroup label="Mapear para...">
-                                {sectionItems.map(si => (
-                                  <option key={si.id} value={si.id}>{si.item || '(sem nome)'}</option>
+                          {d.tipo === 'mapear' && (
+                            <select
+                              value={d.alvoId}
+                              onChange={e => setDecisoes(prev => ({ ...prev, [i]: { tipo: 'mapear', alvoId: e.target.value } }))}
+                              className="w-full text-xs bg-surface border border-bordercol rounded px-2 py-1.5 text-white outline-none focus:border-accent transition-colors"
+                            >
+                              <option value="">— Escolha o item —</option>
+                              {sectionItems.map(si => (
+                                <option key={si.id} value={si.id}>{si.item || '(sem nome)'}</option>
+                              ))}
+                            </select>
+                          )}
+                          {d.tipo === 'criar' && (
+                            <div className="flex gap-2">
+                              <input
+                                value={d.nome}
+                                onChange={e => setDecisoes(prev => ({ ...prev, [i]: { ...d, nome: e.target.value } }))}
+                                className="flex-1 text-xs bg-surface border border-bordercol rounded px-2 py-1.5 text-white outline-none focus:border-accent transition-colors"
+                                placeholder="Nome do item"
+                              />
+                              <select
+                                value={d.secao}
+                                onChange={e => setDecisoes(prev => ({ ...prev, [i]: { ...d, secao: e.target.value as SecaoKey } }))}
+                                className="text-xs bg-surface border border-bordercol rounded px-2 py-1.5 text-white outline-none focus:border-accent transition-colors shrink-0"
+                              >
+                                {(Object.entries(SECAO_LABELS) as [SecaoKey, string][]).map(([k, v]) => (
+                                  <option key={k} value={k}>{v}</option>
                                 ))}
-                              </optgroup>
-                            )}
-                          </select>
+                              </select>
+                            </div>
+                          )}
                         </div>
                       )
                     })}
