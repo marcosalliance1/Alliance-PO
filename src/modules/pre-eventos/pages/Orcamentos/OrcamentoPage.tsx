@@ -1,6 +1,6 @@
-﻿import React, { useState, useEffect, useCallback } from 'react'
+﻿import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw } from 'lucide-react'
+import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL, newItemId } from '../../utils/formatters'
@@ -10,7 +10,11 @@ import { SecaoAccordion } from '../../components/Orcamento/SecaoAccordion'
 import { exportarPDF } from '../../utils/exportPDF'
 import { exportarExcel } from '../../utils/exportExcel'
 import CampoMoeda from '../../components/UI/CampoMoeda'
-import type { Orcamento, EventType, OrcamentoStatus, SymplaLote, ItemOrcamento, Cotacao } from '../../types'
+import { ModalImportarPlanilha } from '../../components/Orcamento/ModalImportarPlanilha'
+import { supabase } from '../../lib/supabase'
+import { recalcularItem } from '../../utils/automacoes'
+import type { Orcamento, EventType, OrcamentoStatus, SymplaLote, ItemOrcamento, Cotacao, DocumentoCotacao } from '../../types'
+import type { ItemImportado } from '../../utils/importarPlanilha'
 
 // ─── Ordinal helper ────────────────────────────────────────────────────────────
 const ORDINALS = ['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º']
@@ -125,6 +129,46 @@ const LotesSympla: React.FC<{
   )
 }
 
+// ─── Barra de progresso de pagamento ─────────────────────────────────────────
+const BarraProgressoPagamento: React.FC<{ orc: Orcamento }> = ({ orc }) => {
+  const secoes = [orc.operacaoEstrutura, orc.equipe, orc.atracao, orc.abBebidas, orc.extras]
+  const totalOrcado = secoes.reduce((s, sec) => s + sec.reduce((a, i) => a + i.totalOrcado, 0), 0)
+  const totalPago   = secoes.reduce((s, sec) => s + sec.reduce((a, i) => a + i.totalPagoReal, 0), 0)
+
+  if (totalOrcado === 0 && totalPago === 0) return null
+
+  const pct   = totalOrcado > 0 ? Math.min((totalPago / totalOrcado) * 100, 100) : 0
+  const acima = totalPago > totalOrcado
+
+  return (
+    <div className="bg-surface-2 border border-bordercol rounded-card p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-muted">Progresso de Pagamento</span>
+        {acima && (
+          <span className="text-xs font-semibold text-danger border border-danger/30 bg-danger/10 rounded px-2 py-0.5">
+            Acima do orçamento
+          </span>
+        )}
+      </div>
+      <div className="w-full bg-surface2 rounded-full h-3 overflow-hidden">
+        <div
+          className={`h-3 rounded-full transition-all duration-500 ${acima ? 'bg-danger' : 'bg-success'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-xs text-muted mt-2">
+        <span className="text-white font-semibold">{formatBRL(totalPago)}</span>
+        {' '}pago de{' '}
+        <span className="text-white font-semibold">{formatBRL(totalOrcado)}</span>
+        {' '}orçado —{' '}
+        <span className={`font-semibold ${acima ? 'text-danger' : 'text-success'}`}>
+          {totalOrcado > 0 ? ((totalPago / totalOrcado) * 100).toFixed(1) : '0.0'}% concluído
+        </span>
+      </p>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export const OrcamentoPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -133,6 +177,9 @@ export const OrcamentoPage: React.FC = () => {
 
   const [orc, setOrc] = useState<Orcamento | null>(null)
   const [dirty, setDirty] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [uploadingCotId, setUploadingCotId] = useState<string | null>(null)
+  const cotFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!id) return
@@ -194,6 +241,60 @@ export const OrcamentoPage: React.FC = () => {
     set(key, recalcularSecao(items))
   }
 
+  // ─── Importar planilha ────────────────────────────────────────────────────
+  function handleAplicarImportacao(
+    reconhecidos: ItemImportado[],
+    mapeados: { item: ItemImportado; alvoId: string }[],
+  ) {
+    if (!orc) return
+    let updated = { ...orc }
+    const aplicar = (item: ItemImportado, alvoId: string) => {
+      const secao = updated[item.secao] as ItemOrcamento[]
+      updated = {
+        ...updated,
+        [item.secao]: secao.map(i =>
+          i.id === alvoId
+            ? recalcularItem({ ...i, qtde: item.qtde, custoUnitario: item.custoUnitario, status: item.status, notas: item.notas || i.notas })
+            : i,
+        ),
+      }
+    }
+    for (const rec of reconhecidos) if (rec.matchId) aplicar(rec, rec.matchId)
+    for (const { item, alvoId } of mapeados) aplicar(item, alvoId)
+    setOrc(updated)
+    setDirty(true)
+    setShowImportModal(false)
+    addToast(`${reconhecidos.length + mapeados.length} itens importados!`, 'success')
+  }
+
+  // ─── Anexar documento em Cotação ────────────────────────────────────────
+  function iniciarAnexoCotacao(cotId: string) {
+    setUploadingCotId(cotId)
+    cotFileRef.current?.click()
+  }
+
+  async function handleFileCotacao(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !uploadingCotId || !orc) return
+    if (!supabase) {
+      addToast('Supabase Storage não configurado', 'error')
+      setUploadingCotId(null)
+      return
+    }
+    const cotId = uploadingCotId
+    const path = `pre-eventos/cotacoes/${orc.id}/${cotId}/${file.name}`
+    const { error } = await supabase.storage.from('pre-eventos').upload(path, file, { upsert: true })
+    if (error) { addToast('Erro ao enviar arquivo', 'error'); setUploadingCotId(null); return }
+    const { data: { publicUrl } } = supabase.storage.from('pre-eventos').getPublicUrl(path)
+    const doc: DocumentoCotacao = { nome: file.name, url: publicUrl, tamanho: file.size, tipo: file.type }
+    set('cotacoes', (orc.cotacoes ?? []).map(c =>
+      c.id === cotId ? { ...c, documentos: [...(c.documentos ?? []), doc] } : c,
+    ))
+    addToast('Arquivo anexado!', 'success')
+    setUploadingCotId(null)
+    e.target.value = ''
+  }
+
   const inputCls = 'w-full bg-surface border border-bordercol rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-accent transition-colors'
   const labelCls = 'block text-xs text-muted mb-1'
 
@@ -214,6 +315,11 @@ export const OrcamentoPage: React.FC = () => {
     function update(id: string, field: keyof Cotacao, val: string | number) {
       onChange(cotacoes.map(c => c.id === id ? { ...c, [field]: val } : c))
     }
+    function removerDoc(cotId: string, docIdx: number) {
+      onChange(cotacoes.map(c =>
+        c.id === cotId ? { ...c, documentos: (c.documentos ?? []).filter((_, i) => i !== docIdx) } : c,
+      ))
+    }
 
     return (
       <div className="space-y-3">
@@ -221,37 +327,61 @@ export const OrcamentoPage: React.FC = () => {
           <p className="text-muted text-sm py-2">Nenhuma cotação cadastrada.</p>
         )}
         {cotacoes.map(c => (
-          <div key={c.id} className="grid grid-cols-1 sm:grid-cols-[160px_1fr_130px_1fr_36px] gap-2 items-start">
-            <select
-              value={c.categoria}
-              onChange={e => update(c.id, 'categoria', e.target.value)}
-              className={cls}
-            >
-              {CATEGORIAS_COTACAO.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-            </select>
-            <input
-              className={cls}
-              placeholder="Fornecedor"
-              value={c.fornecedor}
-              onChange={e => update(c.id, 'fornecedor', e.target.value)}
-            />
-            <CampoMoeda
-              value={c.valor}
-              onChange={v => update(c.id, 'valor', v)}
-              className={`${cls} text-right`}
-            />
-            <input
-              className={cls}
-              placeholder="Notas"
-              value={c.notas}
-              onChange={e => update(c.id, 'notas', e.target.value)}
-            />
-            <button
-              onClick={() => remove(c.id)}
-              className="h-[38px] flex items-center justify-center text-danger/60 hover:text-danger transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+          <div key={c.id} className="space-y-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr_130px_1fr_auto_36px] gap-2 items-start">
+              <select
+                value={c.categoria}
+                onChange={e => update(c.id, 'categoria', e.target.value)}
+                className={cls}
+              >
+                {CATEGORIAS_COTACAO.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
+              <input
+                className={cls}
+                placeholder="Fornecedor"
+                value={c.fornecedor}
+                onChange={e => update(c.id, 'fornecedor', e.target.value)}
+              />
+              <CampoMoeda
+                value={c.valor}
+                onChange={v => update(c.id, 'valor', v)}
+                className={`${cls} text-right`}
+              />
+              <input
+                className={cls}
+                placeholder="Notas"
+                value={c.notas}
+                onChange={e => update(c.id, 'notas', e.target.value)}
+              />
+              <button
+                onClick={() => iniciarAnexoCotacao(c.id)}
+                title="Anexar documento"
+                className={`h-[38px] flex items-center justify-center border border-dashed border-bordercol hover:border-accent/50 rounded-lg px-2 transition-colors ${uploadingCotId === c.id ? 'text-accent' : 'text-muted hover:text-accent'}`}
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => remove(c.id)}
+                className="h-[38px] flex items-center justify-center text-danger/60 hover:text-danger transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+            {(c.documentos ?? []).length > 0 && (
+              <div className="pl-2 flex flex-wrap gap-2">
+                {c.documentos!.map((doc, di) => (
+                  <div key={di} className="flex items-center gap-1 bg-surface2/60 border border-bordercol/50 rounded px-2 py-1 text-[10px]">
+                    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline flex items-center gap-1 max-w-[140px] truncate" title={doc.nome}>
+                      <ExternalLink className="w-3 h-3 shrink-0" />
+                      {doc.nome}
+                    </a>
+                    <button onClick={() => removerDoc(c.id, di)} className="text-muted hover:text-danger transition-colors shrink-0">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
         <button
@@ -294,6 +424,12 @@ export const OrcamentoPage: React.FC = () => {
             Não salvo
           </span>
         )}
+        <button
+          onClick={() => setShowImportModal(true)}
+          className="hidden md:flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors"
+        >
+          <FileUp className="w-4 h-4" /> Importar
+        </button>
         <button
           onClick={handlePDF}
           className="hidden md:flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors"
@@ -383,6 +519,9 @@ export const OrcamentoPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Barra de progresso ── */}
+      <BarraProgressoPagamento orc={orc} />
 
       {/* ── 2. Receitas ── */}
       <SecaoAccordion
@@ -491,6 +630,18 @@ export const OrcamentoPage: React.FC = () => {
             <Save className="w-4 h-4" /> Salvar alterações
           </button>
         </div>
+      )}
+
+      {/* Input oculto para upload de documento de cotação */}
+      <input ref={cotFileRef} type="file" className="hidden" onChange={handleFileCotacao} />
+
+      {/* Modal de importar planilha */}
+      {showImportModal && (
+        <ModalImportarPlanilha
+          orc={orc}
+          onConfirmar={handleAplicarImportacao}
+          onFechar={() => setShowImportModal(false)}
+        />
       )}
 
       {/* Mobile sticky bottom action bar */}

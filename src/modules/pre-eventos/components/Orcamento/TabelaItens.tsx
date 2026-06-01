@@ -151,7 +151,7 @@ const LinhaItem: React.FC<{
           onChange={e => onUpdate(item.id, 'qtde', Number(e.target.value))} />
       </td>
       {/* Custo Unit. */}
-      <td className={tdBase}>
+      <td className={tdBase} style={{ minWidth: 140 }}>
         <CampoMoeda value={item.custoUnitario} onChange={v => onUpdate(item.id, 'custoUnitario', v)} className={numCls} />
       </td>
       {/* Total Orç. */}
@@ -274,7 +274,7 @@ const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true })
             <th className={`${thCls} min-w-[130px]`}>Item</th>
             <th className={`${thCls} min-w-[140px]`}>Fornecedor</th>
             <th className={`${thCls} text-right`} style={{ minWidth: 70 }}>Qtde</th>
-            <th className={`${thCls} w-28 text-right`}>Custo Unit.</th>
+            <th className={`${thCls} text-right`} style={{ minWidth: 140 }}>Custo Unit.</th>
             <th className={`${thCls} w-28 text-right`}>Total Orç.</th>
             <th className={`${thCls} w-28 text-right`}>Total Pago</th>
             <th className={`${thCls} w-28 text-right`}>Val. Cliente</th>

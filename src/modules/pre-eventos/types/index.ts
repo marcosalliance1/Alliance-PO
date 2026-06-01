@@ -46,12 +46,20 @@ export interface SymplaLote {
   total: number
 }
 
+export interface DocumentoCotacao {
+  nome: string
+  url: string
+  tamanho: number
+  tipo: string
+}
+
 export interface Cotacao {
   id: string
   categoria: string
   fornecedor: string
   valor: number
   notas: string
+  documentos?: DocumentoCotacao[]
 }
 
 export interface Orcamento {

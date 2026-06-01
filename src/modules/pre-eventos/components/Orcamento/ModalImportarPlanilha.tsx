@@ -1,0 +1,200 @@
+import React, { useRef, useState } from 'react'
+import { X, Upload, AlertTriangle, Check } from 'lucide-react'
+import type { Orcamento, ItemOrcamento } from '../../types'
+import { parsearPlanilha, SECAO_LABELS } from '../../utils/importarPlanilha'
+import type { ItemImportado, ResultadoImportacao } from '../../utils/importarPlanilha'
+import { formatBRL } from '../../utils/formatters'
+
+interface Props {
+  orc: Orcamento
+  onConfirmar: (
+    reconhecidos: ItemImportado[],
+    mapeados: { item: ItemImportado; alvoId: string }[],
+  ) => void
+  onFechar: () => void
+}
+
+export const ModalImportarPlanilha: React.FC<Props> = ({ orc, onConfirmar, onFechar }) => {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [resultado, setResultado] = useState<ResultadoImportacao | null>(null)
+  const [erro, setErro] = useState('')
+  const [decisoes, setDecisoes] = useState<Record<number, string>>({})
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setErro('')
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      try {
+        const r = parsearPlanilha(ev.target!.result as ArrayBuffer, orc)
+        if (r.reconhecidos.length === 0 && r.naoReconhecidos.length === 0) {
+          setErro('Nenhum item encontrado. Verifique se o arquivo tem as colunas: ITEM, QTDE, CUSTO UNITÁRIO, STATUS, ESPECIFICAÇÕES, e seções como OPERAÇÃO/ESTRUTURA, EQUIPE, etc.')
+          return
+        }
+        setResultado(r)
+        const d: Record<number, string> = {}
+        r.naoReconhecidos.forEach((_, i) => { d[i] = '' })
+        setDecisoes(d)
+      } catch {
+        setErro('Erro ao ler o arquivo. Certifique-se de que é um arquivo Excel (.xlsx).')
+      }
+    }
+    reader.readAsArrayBuffer(file)
+    e.target.value = ''
+  }
+
+  function handleConfirmar() {
+    if (!resultado) return
+    const mapeados = resultado.naoReconhecidos
+      .map((item, i) => ({ item, alvoId: decisoes[i] ?? '' }))
+      .filter(x => x.alvoId !== '')
+    onConfirmar(resultado.reconhecidos, mapeados)
+  }
+
+  const totalImportando =
+    (resultado?.reconhecidos.length ?? 0) +
+    Object.values(decisoes).filter(v => v !== '').length
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4">
+      <div className="absolute inset-0 bg-black/60" onClick={onFechar} />
+      <div className="relative bg-surface border border-bordercol rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col">
+
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-bordercol shrink-0">
+          <h2 className="text-white font-semibold">Importar Planilha Histórica</h2>
+          <button onClick={onFechar} className="text-muted hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 p-5 space-y-5">
+          {!resultado ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted">
+                Selecione um arquivo Excel (.xlsx) com as colunas:{' '}
+                <span className="text-white">ITEM, QTDE, CUSTO UNITÁRIO, TOTAL, STATUS, ESPECIFICAÇÕES</span>.
+                Seções são detectadas por linhas de cabeçalho (ex: OPERAÇÃO/ESTRUTURA, EQUIPE, ATRAÇÃO, A&B, EXTRAS).
+              </p>
+              {erro && (
+                <div className="flex items-start gap-2 text-sm text-danger bg-danger/10 border border-danger/30 rounded-lg p-3">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{erro}</span>
+                </div>
+              )}
+              <button
+                onClick={() => inputRef.current?.click()}
+                className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-white text-sm font-semibold py-2.5 px-5 rounded-lg transition-colors"
+              >
+                <Upload className="w-4 h-4" /> Selecionar arquivo Excel
+              </button>
+              <input ref={inputRef} type="file" accept=".xlsx,.xls,.ods" className="hidden" onChange={handleFile} />
+            </div>
+          ) : (
+            <div className="space-y-5">
+
+              {/* Reconhecidos */}
+              {resultado.reconhecidos.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+                    <Check className="w-4 h-4 text-success" />
+                    Reconhecidos ({resultado.reconhecidos.length}) — serão atualizados automaticamente
+                  </h3>
+                  <div className="overflow-x-auto rounded-lg border border-bordercol/50">
+                    <table className="w-full text-xs min-w-[500px]">
+                      <thead>
+                        <tr className="bg-surface2/50 text-muted">
+                          <th className="text-left px-2 py-1.5 font-medium">Item</th>
+                          <th className="text-left px-2 py-1.5 font-medium">Seção</th>
+                          <th className="text-right px-2 py-1.5 font-medium w-12">Qtde</th>
+                          <th className="text-right px-2 py-1.5 font-medium w-28">Custo Unit.</th>
+                          <th className="text-left px-2 py-1.5 font-medium w-24">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resultado.reconhecidos.map((item, i) => (
+                          <tr key={i} className="border-t border-bordercol/50">
+                            <td className="px-2 py-1.5 text-white">{item.nome}</td>
+                            <td className="px-2 py-1.5 text-muted">{SECAO_LABELS[item.secao]}</td>
+                            <td className="px-2 py-1.5 text-right text-gray-300">{item.qtde}</td>
+                            <td className="px-2 py-1.5 text-right text-gray-300">{formatBRL(item.custoUnitario)}</td>
+                            <td className="px-2 py-1.5 text-muted">{item.status}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Não reconhecidos */}
+              {resultado.naoReconhecidos.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-warning mb-2 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    Não reconhecidos ({resultado.naoReconhecidos.length}) — escolha o que fazer com cada um
+                  </h3>
+                  <div className="space-y-2">
+                    {resultado.naoReconhecidos.map((item, i) => {
+                      const sectionItems = orc[item.secao] as ItemOrcamento[]
+                      return (
+                        <div key={i} className="bg-surface2/40 border border-bordercol/50 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white text-xs font-medium truncate">{item.nome}</p>
+                            <p className="text-muted text-[10px]">
+                              {SECAO_LABELS[item.secao]} · Qtde: {item.qtde} · {formatBRL(item.custoUnitario)}
+                            </p>
+                          </div>
+                          <select
+                            value={decisoes[i] ?? ''}
+                            onChange={e => setDecisoes(prev => ({ ...prev, [i]: e.target.value }))}
+                            className="text-xs bg-surface border border-bordercol rounded px-2 py-1.5 text-white outline-none focus:border-accent transition-colors shrink-0"
+                          >
+                            <option value="">Ignorar (não importar)</option>
+                            {sectionItems.length > 0 && (
+                              <optgroup label="Mapear para...">
+                                {sectionItems.map(si => (
+                                  <option key={si.id} value={si.id}>{si.item || '(sem nome)'}</option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </select>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        {resultado && (
+          <div className="flex items-center justify-between p-4 border-t border-bordercol shrink-0">
+            <button
+              onClick={() => { setResultado(null); setErro('') }}
+              className="text-sm text-muted hover:text-white transition-colors"
+            >
+              ← Trocar arquivo
+            </button>
+            <div className="flex items-center gap-3">
+              <button onClick={onFechar} className="text-sm text-muted hover:text-white transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmar}
+                disabled={totalImportando === 0}
+                className="flex items-center gap-2 bg-accent hover:bg-accent/90 disabled:opacity-40 text-white text-sm font-semibold py-2 px-5 rounded-lg transition-colors"
+              >
+                Importar ({totalImportando} {totalImportando === 1 ? 'item' : 'itens'})
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
