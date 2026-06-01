@@ -117,16 +117,17 @@ export const ListaOrcamentosPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(o => {
+                {filtered.map((o, idx) => {
                   const allItems = [...o.operacaoEstrutura, ...o.equipe, ...o.atracao, ...o.abBebidas, ...o.extras]
                   const totalReceitas = o.bolsaFolia + o.receitasSympla.reduce((s, l) => s + l.total, 0)
                   const totalPago = allItems.reduce((s, i) => s + i.totalPagoReal, 0)
                   const totalBV   = allItems.reduce((s, i) => s + i.bvAbsoluto, 0)
+                  const isNewInst = idx > 0 && filtered[idx - 1].instituicao !== o.instituicao
 
                   return (
                     <tr
                       key={o.id}
-                      className="border-t border-bordercol/50 hover:bg-white/[0.03] cursor-pointer transition-colors"
+                      className={`hover:bg-white/[0.03] cursor-pointer transition-colors ${isNewInst ? 'border-t-2 border-accent/50' : 'border-t border-bordercol/50'}`}
                       onClick={() => navigate(`/pre-eventos/orcamentos/${o.id}`)}
                     >
                       <td className="px-4 py-3">
@@ -142,7 +143,7 @@ export const ListaOrcamentosPage: React.FC = () => {
                         {formatBRL(totalBV)}
                       </td>
                       <td className="px-4 py-3 text-center hidden sm:table-cell">
-                        <span className={`text-xs border rounded px-2 py-0.5 ${STATUS_COLORS[o.status]}`}>
+                        <span className={`text-xs border rounded px-2 py-0.5 whitespace-nowrap ${STATUS_COLORS[o.status]}`}>
                           {o.status.replace('_', ' ')}
                         </span>
                       </td>
