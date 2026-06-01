@@ -270,12 +270,12 @@ function parsearAba(rows: unknown[][], tabName: string): EventoStatus {
 }
 
 function encontrarAba(abas: string[], tap: TAP): string | null {
-  // Project name is typically "INSTITUICAO TURMA" e.g. "CMMG 78"
+  // Match by turma (e.g. "CMMG 78") or instituicao+turma — never institution alone
+  // to avoid "cmmg" matching the wrong tab (e.g. CMMG 74 → CMMG 78)
   const candidates = [
     nm(tap.turma ?? ''),
     `${nm(tap.instituicao ?? '')} ${nm(tap.turma ?? '')}`.trim(),
-    nm(tap.instituicao ?? ''),
-  ].filter(s => s.length >= 2)
+  ].filter(s => s.length >= 4)
 
   for (const cand of candidates) {
     const found = abas.find(aba => nm(aba).includes(cand))

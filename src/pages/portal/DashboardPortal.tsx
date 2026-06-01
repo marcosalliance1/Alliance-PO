@@ -412,8 +412,12 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
       const instBase = projeto.tap.instituicao.toLowerCase().split(' ')[0]
       const filtrados = todos
         .filter(o => {
-          const matchInst = o.instituicao?.toLowerCase().includes(instBase)
-          const isBV = o.turma?.toLowerCase().includes('bv') || o.tipo?.toLowerCase().includes('veterano')
+          const oInst = o.instituicao?.toLowerCase() ?? ''
+          const oTurma = o.turma?.toLowerCase() ?? ''
+          // Match against instituicao OR turma — handles cases where orçamento was
+          // saved with full institution name but portal project uses short code (e.g. "CMMG")
+          const matchInst = oInst.includes(instBase) || oTurma.includes(instBase)
+          const isBV = oTurma.includes('bv') || o.tipo?.toLowerCase().includes('veterano')
           return matchInst && !isBV
         })
         .sort((a, b) => {
