@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { X, LogIn, RefreshCw, AlertTriangle, Check, ExternalLink } from 'lucide-react'
 import { useGoogleAuth } from '../../../../contexts/GoogleAuthContext'
 import { fetchAba, extrairSpreadsheetId } from '../../../../utils/sheetsSync'
-import { parsearAbaGoogle, SECAO_LABELS } from '../../utils/importarPlanilha'
+import { parsearAbaGoogle, parsearPlanilha, SECAO_LABELS } from '../../utils/importarPlanilha'
 import type { ItemImportado, ResultadoImportacao } from '../../utils/importarPlanilha'
 import type { Orcamento, ItemOrcamento } from '../../types'
 import { formatBRL } from '../../utils/formatters'
@@ -43,32 +43,60 @@ export const ModalImportarDoDrive: React.FC<Props> = ({ orc, onConfirmar, onFech
     setCarregando(true)
     setErro('')
     try {
-      const metaResp = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties.title`,
+      // Detect file type via Drive API before calling Sheets API
+      // (Sheets API rejects Office/xlsx files stored in Drive)
+      const driveMetaResp = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(spreadsheetId)}?fields=mimeType`,
         { headers: { Authorization: `Bearer ${token}` } },
       )
-      if (metaResp.status === 401) {
+      if (driveMetaResp.status === 401) {
         invalidarToken()
         setErro('Token expirado. Reconecte ao Google e tente novamente.')
         return
       }
-      if (metaResp.status === 403) {
+      if (driveMetaResp.status === 403) {
         setErro('Sem permissão. Verifique se a planilha está compartilhada com sua conta Google.')
         return
       }
-      if (!metaResp.ok) {
-        const body = await metaResp.json().catch(() => ({})) as { error?: { message?: string } }
-        throw new Error(body.error?.message ?? `Erro ao acessar planilha (HTTP ${metaResp.status})`)
+      if (!driveMetaResp.ok) {
+        const body = await driveMetaResp.json().catch(() => ({})) as { error?: { message?: string } }
+        throw new Error(body.error?.message ?? `Erro ao acessar arquivo (HTTP ${driveMetaResp.status})`)
       }
 
-      const meta = await metaResp.json() as { sheets: { properties: { title: string } }[] }
-      const firstSheet = meta.sheets[0]?.properties.title
-      if (!firstSheet) throw new Error('Planilha vazia ou sem abas.')
+      const driveMeta = await driveMetaResp.json() as { mimeType: string }
+      const isNativeSheets = driveMeta.mimeType === 'application/vnd.google-apps.spreadsheet'
 
-      const values = await fetchAba(spreadsheetId, firstSheet, token)
-      if (!values || values.length === 0) throw new Error('A primeira aba está vazia.')
+      let r: ResultadoImportacao
 
-      const r = parsearAbaGoogle(values, orc)
+      if (!isNativeSheets) {
+        // Office file (.xlsx etc.) — download binary and parse with XLSX
+        const downloadResp = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(spreadsheetId)}?alt=media`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+        if (!downloadResp.ok) {
+          const body = await downloadResp.json().catch(() => ({})) as { error?: { message?: string } }
+          throw new Error(body.error?.message ?? `Erro ao baixar arquivo (HTTP ${downloadResp.status})`)
+        }
+        const buffer = await downloadResp.arrayBuffer()
+        r = parsearPlanilha(buffer, orc)
+      } else {
+        // Native Google Sheets — use Sheets API
+        const metaResp = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties.title`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+        if (!metaResp.ok) {
+          const body = await metaResp.json().catch(() => ({})) as { error?: { message?: string } }
+          throw new Error(body.error?.message ?? `Erro ao acessar planilha (HTTP ${metaResp.status})`)
+        }
+        const meta = await metaResp.json() as { sheets: { properties: { title: string } }[] }
+        const firstSheet = meta.sheets[0]?.properties.title
+        if (!firstSheet) throw new Error('Planilha vazia ou sem abas.')
+        const values = await fetchAba(spreadsheetId, firstSheet, token)
+        if (!values || values.length === 0) throw new Error('A primeira aba está vazia.')
+        r = parsearAbaGoogle(values, orc)
+      }
       if (r.reconhecidos.length === 0 && r.naoReconhecidos.length === 0) {
         setErro(
           'Nenhum item encontrado. Verifique se a planilha tem as colunas: ITEM, QTDE, CUSTO UNITÁRIO, STATUS, ESPECIFICAÇÕES — e linhas de seção como OPERAÇÃO/ESTRUTURA, EQUIPE, ATRAÇÃO.',
