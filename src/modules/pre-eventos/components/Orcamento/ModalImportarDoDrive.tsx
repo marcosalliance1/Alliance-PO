@@ -71,7 +71,7 @@ export const ModalImportarDoDrive: React.FC<Props> = ({ orc, onConfirmar, onFech
       const driveMeta = await driveMetaResp.json() as { mimeType: string }
       const isNativeSheets = driveMeta.mimeType === 'application/vnd.google-apps.spreadsheet'
 
-      let r: ResultadoImportacao
+      let r: ResultadoImportacao = { reconhecidos: [], naoReconhecidos: [] }
 
       if (!isNativeSheets) {
         const downloadResp = await fetch(
