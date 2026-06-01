@@ -94,11 +94,25 @@ export const ModalImportarDoDrive: React.FC<Props> = ({ orc, onConfirmar, onFech
           throw new Error(body.error?.message ?? `Erro ao acessar planilha (HTTP ${metaResp.status})`)
         }
         const meta = await metaResp.json() as { sheets: { properties: { title: string } }[] }
-        const firstSheet = meta.sheets[0]?.properties.title
-        if (!firstSheet) throw new Error('Planilha vazia ou sem abas.')
-        const values = await fetchAba(spreadsheetId, firstSheet, token)
-        if (!values || values.length === 0) throw new Error('A primeira aba está vazia.')
-        r = parsearAbaGoogle(values, orc)
+        const tabs = meta.sheets.map(s => s.properties.title)
+        if (!tabs.length) throw new Error('Planilha vazia ou sem abas.')
+        // Try every tab until one yields items — the data tab may not be the first
+        for (const tab of tabs) {
+          let values: unknown[][] | null = null
+          try {
+            values = await fetchAba(spreadsheetId, tab, token)
+          } catch (e) {
+            const err = e as Error & { tipo?: string }
+            if (err.tipo === 'TOKEN_EXPIRADO') throw e
+            continue
+          }
+          if (!values || values.length === 0) continue
+          const tentativa = parsearAbaGoogle(values, orc)
+          if (tentativa.reconhecidos.length > 0 || tentativa.naoReconhecidos.length > 0) {
+            r = tentativa
+            break
+          }
+        }
       }
 
       if (r.reconhecidos.length === 0 && r.naoReconhecidos.length === 0) {
