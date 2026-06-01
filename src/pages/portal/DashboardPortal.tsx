@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase'
 import { usePortalAuth } from '../../contexts/PortalAuthContext'
 import { calcResumoProjeto, filtrarItensCalculo } from '../../utils/calculos'
 import allianceLogo from '../../assets/alliance-logo.png'
+import { SecaoStatusEvento } from './SecaoStatusEvento'
 import type { Projeto, SecaoCusto, TAP, Receitas, CustoAdicional, ConciliacaoEverest } from '../../types'
 import type { Orcamento, ItemOrcamento } from '../../modules/pre-eventos/types'
 
@@ -51,110 +52,6 @@ interface CapVencimento {
 const PIE_COLORS = ['#E63329', '#F56060', '#C44242', '#FF7A6E', '#B8302A', '#FF9B8C', '#A02525', '#FF6B5B']
 const TOOLTIP_STYLE = { backgroundColor: '#1a1a2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#f1f5f9', fontSize: 12 }
 const AXIS_STYLE = { fill: '#8892a4', fontSize: 11 }
-
-// ─── Seção 1: Status do Evento ────────────────────────────────────────────────
-
-const CATEGORIAS_FORNECEDOR = [
-  { label: 'Buffet',     keywords: ['buffet', 'catering'] },
-  { label: 'Bar',        keywords: ['bar '] },
-  { label: 'Cerveja',    keywords: ['cerveja', 'chopp'] },
-  { label: 'Destilados', keywords: ['destilado'] },
-  { label: 'Japa',       keywords: ['japa', 'japonês', 'sushi'] },
-  { label: 'Som',        keywords: ['som', 'sonorização', 'audio'] },
-  { label: 'Iluminação', keywords: ['iluminação', 'luz'] },
-  { label: 'Cenografia', keywords: ['cenografia', 'tema'] },
-]
-
-function SecaoEvento({ projeto }: { projeto: Projeto }) {
-  const { tap, secoes } = projeto
-  const todosItens = secoes.flatMap(s => s.itens)
-
-  const categoriasGrid = CATEGORIAS_FORNECEDOR.map(cat => {
-    const item = todosItens.find(i =>
-      cat.keywords.some(k => i.item.toLowerCase().includes(k))
-    )
-    const fornecedor = item?.fornecedor?.trim() || ''
-    return { label: cat.label, fornecedor, fechado: !!fornecedor }
-  })
-
-  const secaoArtistica = secoes.find(s =>
-    s.numero === '2.2' || s.nome.toLowerCase().includes('artíst') || s.nome.toLowerCase().includes('artist')
-  )
-  const lineup = secaoArtistica?.itens ?? []
-
-  return (
-    <div className="space-y-6">
-      {/* Dados gerais */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Instituição',  value: tap.instituicao || '—' },
-          { label: 'Turma',        value: tap.turma || '—' },
-          { label: 'Data',         value: tap.dataEvento ? fmtData(tap.dataEvento) : '—' },
-          { label: 'Local',        value: tap.local || '—' },
-        ].map(({ label, value }) => (
-          <div key={label} className="bg-bg rounded-xl px-4 py-3">
-            <div className="text-text-muted text-xs mb-1">{label}</div>
-            <div className="text-text-main text-sm font-semibold leading-snug">{value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Grid fornecedores */}
-      <div>
-        <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-3">Fornecedores</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {categoriasGrid.map(({ label, fornecedor, fechado }) => (
-            <div
-              key={label}
-              className={`rounded-xl px-4 py-3 border ${fechado ? 'border-success/25 bg-success/8' : 'border-white/8 bg-surface'}`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-text-muted">{label}</span>
-                {fechado ? <CheckCircle2 size={13} className="text-success" /> : <AlertTriangle size={13} className="text-warning/70" />}
-              </div>
-              <div className={`text-sm font-semibold ${fechado ? 'text-text-main' : 'text-text-muted'}`}>
-                {fechado ? fornecedor : 'Pendente'}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Lineup artístico */}
-      {lineup.length > 0 && (
-        <div>
-          <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-3">Lineup Artístico</h3>
-          <div className="rounded-xl border border-white/10 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-surface border-b border-white/10">
-                  <th className="text-left px-4 py-2.5 text-text-muted text-xs font-medium">Horário / Atração</th>
-                  <th className="text-left px-4 py-2.5 text-text-muted text-xs font-medium">Artista</th>
-                  <th className="text-right px-4 py-2.5 text-text-muted text-xs font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lineup.map(item => (
-                  <tr key={item.id} className="border-b border-white/5 last:border-0">
-                    <td className="px-4 py-2.5 text-text-main text-xs">{item.item}</td>
-                    <td className="px-4 py-2.5 text-xs font-medium text-text-main">
-                      {item.fornecedor || <span className="text-text-muted">—</span>}
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${item.status === 'fechado' ? 'bg-success/20 text-success' : 'bg-warning/15 text-warning'}`}>
-                        {item.status === 'fechado' ? 'Fechado' : 'Pendente'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ─── Seção 2: Financeiro ──────────────────────────────────────────────────────
 
@@ -797,7 +694,7 @@ export function DashboardPortal() {
 
       {/* Conteúdo */}
       <main className="max-w-4xl mx-auto px-4 sm:px-8 py-8">
-        {tabAtiva === 'evento'      && <SecaoEvento projeto={projeto} />}
+        {tabAtiva === 'evento'      && <SecaoStatusEvento tap={projeto.tap} />}
         {tabAtiva === 'financeiro'  && <SecaoFinanceiro projeto={projeto} vencimentos={vencimentos} />}
         {tabAtiva === 'po'          && <SecaoPO projeto={projeto} />}
         {tabAtiva === 'pre-eventos' && <SecaoPreEventos projeto={projeto} />}
