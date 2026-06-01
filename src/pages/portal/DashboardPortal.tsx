@@ -62,14 +62,14 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
 
   const chartData = resumo.custos
     .filter(c => c.contratado > 0 || c.pago > 0)
-    .map(c => ({ nome: c.nome.split(' ')[0], Contratado: Math.round(c.contratado), Pago: Math.round(c.pago) }))
+    .map(c => ({ nome: c.nome.split(' ')[0], Orçado: Math.round(c.contratado), Pago: Math.round(c.pago) }))
 
   return (
     <div className="space-y-6">
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total Contratado', value: fmtBRL(totalContratado), color: 'text-primary' },
+          { label: 'Total Orçado',    value: fmtBRL(totalContratado), color: 'text-primary' },
           { label: 'Total Pago',       value: fmtBRL(totalPago),       color: 'text-success' },
           { label: 'Falta Pagar',      value: fmtBRL(faltaPagar),      color: 'text-warning' },
           { label: '% Pago',           value: `${pctPago.toFixed(1)}%`, color: pctPago >= 80 ? 'text-success' : 'text-primary' },
@@ -84,7 +84,7 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
       {/* Gráfico Contratado × Pago por seção */}
       {chartData.length > 0 && (
         <div className="bg-bg rounded-xl p-4">
-          <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-4">Contratado × Pago por Seção</h3>
+          <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-4">Orçado × Pago por Seção</h3>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={chartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -92,8 +92,8 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
               <YAxis tick={AXIS_STYLE} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} width={52} />
               <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, name) => [fmtBRL(Number(v)), String(name)]} />
               <Legend wrapperStyle={{ fontSize: 11, color: '#8892a4' }} />
-              <Bar dataKey="Contratado" fill="#E63329" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="Pago"       fill="#00b894" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Orçado" fill="#E63329" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Pago"   fill="#00b894" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -409,16 +409,14 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
       const { data } = await supabase.from('orcamentos').select('dados')
       const todos: Orcamento[] = ((data ?? []) as { dados: Orcamento }[]).map(r => r.dados)
 
-      const instBase = projeto.tap.instituicao.toLowerCase().split(' ')[0]
+      const turmaProjeto = (projeto.tap.turma ?? '').toLowerCase()
       const filtrados = todos
         .filter(o => {
-          const oInst = o.instituicao?.toLowerCase() ?? ''
-          const oTurma = o.turma?.toLowerCase() ?? ''
-          // Match against instituicao OR turma — handles cases where orçamento was
-          // saved with full institution name but portal project uses short code (e.g. "CMMG")
-          const matchInst = oInst.includes(instBase) || oTurma.includes(instBase)
-          const isBV = oTurma.includes('bv') || o.tipo?.toLowerCase().includes('veterano')
-          return matchInst && !isBV
+          const oTurma = (o.turma ?? '').toLowerCase()
+          // Exact turma match: only show pre-eventos for THIS turma specifically
+          const matchTurma = oTurma === turmaProjeto
+          const isBV = oTurma.includes('bv') || (o.tipo ?? '').toLowerCase().includes('veterano')
+          return matchTurma && !isBV
         })
         .sort((a, b) => {
           const aPast = a.data < hoje
