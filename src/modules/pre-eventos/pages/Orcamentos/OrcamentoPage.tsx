@@ -11,6 +11,7 @@ import { exportarPDF } from '../../utils/exportPDF'
 import { exportarExcel } from '../../utils/exportExcel'
 import CampoMoeda from '../../components/UI/CampoMoeda'
 import { ModalImportarPlanilha } from '../../components/Orcamento/ModalImportarPlanilha'
+import { ModalImportarDoDrive } from '../../components/Orcamento/ModalImportarDoDrive'
 import { supabase } from '../../lib/supabase'
 import { recalcularItem } from '../../utils/automacoes'
 import type { Orcamento, EventType, OrcamentoStatus, SymplaLote, ItemOrcamento, Cotacao, DocumentoCotacao } from '../../types'
@@ -178,6 +179,7 @@ export const OrcamentoPage: React.FC = () => {
   const [orc, setOrc] = useState<Orcamento | null>(null)
   const [dirty, setDirty] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
+  const [showDriveModal, setShowDriveModal] = useState(false)
   const [uploadingCotId, setUploadingCotId] = useState<string | null>(null)
   const cotFileRef = useRef<HTMLInputElement>(null)
 
@@ -431,6 +433,12 @@ export const OrcamentoPage: React.FC = () => {
           <FileUp className="w-4 h-4" /> Importar
         </button>
         <button
+          onClick={() => setShowDriveModal(true)}
+          className="hidden md:flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors"
+        >
+          <ExternalLink className="w-4 h-4" /> Drive
+        </button>
+        <button
           onClick={handlePDF}
           className="hidden md:flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors"
         >
@@ -635,12 +643,21 @@ export const OrcamentoPage: React.FC = () => {
       {/* Input oculto para upload de documento de cotação */}
       <input ref={cotFileRef} type="file" className="hidden" onChange={handleFileCotacao} />
 
-      {/* Modal de importar planilha */}
+      {/* Modal de importar planilha (arquivo local) */}
       {showImportModal && (
         <ModalImportarPlanilha
           orc={orc}
           onConfirmar={handleAplicarImportacao}
           onFechar={() => setShowImportModal(false)}
+        />
+      )}
+
+      {/* Modal de importar do Google Drive */}
+      {showDriveModal && (
+        <ModalImportarDoDrive
+          orc={orc}
+          onConfirmar={handleAplicarImportacao}
+          onFechar={() => setShowDriveModal(false)}
         />
       )}
 
