@@ -86,18 +86,31 @@ export const ModalImportarDoDrive: React.FC<Props> = ({ orc, onConfirmar, onFech
         r = parsearPlanilha(buffer, orc)
       } else {
         const metaResp = await fetch(
-          `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties.title`,
+          `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties`,
           { headers: { Authorization: `Bearer ${token}` } },
         )
         if (!metaResp.ok) {
           const body = await metaResp.json().catch(() => ({})) as { error?: { message?: string } }
           throw new Error(body.error?.message ?? `Erro ao acessar planilha (HTTP ${metaResp.status})`)
         }
-        const meta = await metaResp.json() as { sheets: { properties: { title: string } }[] }
-        const tabs = meta.sheets.map(s => s.properties.title)
-        if (!tabs.length) throw new Error('Planilha vazia ou sem abas.')
-        // Try every tab until one yields items — the data tab may not be the first
-        for (const tab of tabs) {
+        // Fetch properties including sheetId to match the gid from the URL
+        const meta = await metaResp.json() as { sheets: { properties: { title: string; sheetId: number } }[] }
+        if (!meta.sheets.length) throw new Error('Planilha vazia ou sem abas.')
+
+        // If the URL has ?gid=... use that exact tab (respects which tab was open when link was copied)
+        const gidMatch = url.match(/[?&#]gid=(\d+)/)
+        const gid = gidMatch?.[1] ?? null
+        const tabFromGid = gid
+          ? (meta.sheets.find(s => String(s.properties.sheetId) === gid)?.properties.title ?? null)
+          : null
+
+        // tabsToTry: if gid found → that tab first, then others as fallback; else all in order
+        const allTabs = meta.sheets.map(s => s.properties.title)
+        const tabsToTry = tabFromGid
+          ? [tabFromGid, ...allTabs.filter(t => t !== tabFromGid)]
+          : allTabs
+
+        for (const tab of tabsToTry) {
           let values: unknown[][] | null = null
           try {
             values = await fetchAba(spreadsheetId, tab, token)
