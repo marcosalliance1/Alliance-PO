@@ -40,7 +40,15 @@ export const ListaOrcamentosPage: React.FC = () => {
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(o)
     }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b))
+    return [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([inst, itens]) => [
+        inst,
+        [...itens].sort((a, b) => {
+          const t = (a.turma || '').localeCompare(b.turma || '')
+          return t !== 0 ? t : (a.data || '').localeCompare(b.data || '')
+        }),
+      ] as [string, typeof filtrados])
   }, [orcamentos, busca, filtroInst])
 
   const totalFiltrado = grupos.reduce((s, [, itens]) => s + itens.length, 0)
