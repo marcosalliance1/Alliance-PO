@@ -13,7 +13,6 @@ import { ProgressBar } from '../components/ui/ProgressBar'
 import { sincronizarComSheets, extrairSpreadsheetId } from '../utils/sheetsSync'
 import { useGoogleAuth } from '../contexts/GoogleAuthContext'
 import { useAuth } from '../contexts/AuthContext'
-import { useCapTotais, resolverTotalPago } from '../hooks/useCapTotais'
 import { Plus, Upload, Trash2, ChevronDown, ChevronRight, RefreshCw, Cloud, Loader, Link, AlertTriangle, X, CheckCircle } from 'lucide-react'
 
 function calcFrescor(atualizadoEm: string): { texto: string; cor: string } {
@@ -73,8 +72,6 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
   const navigate = useNavigate()
   const { accessToken, conectar, invalidarToken } = useGoogleAuth()
   const { isAdmin } = useAuth()
-  const capTotais = useCapTotais()
-
   const [showImportar, setShowImportar] = useState(false)
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null)
   const [deletando, setDeletando] = useState<string | null>(null)
@@ -315,7 +312,7 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
   function renderCardRealizado(p: Projeto) {
     const resumo = calcResumoProjeto(p)
     const totalContratado = resumo.custoTotal.contratado
-    const totalPago = resolverTotalPago(capTotais, p.tap.turma)
+    const totalPago = p.conciliacaoEverest?.linhas.reduce((s, l) => s + (l.valorEverest ?? 0), 0) ?? 0
     const margemReal = resumo.margem.contratado
     const progressPct = totalContratado > 0 ? Math.min((totalPago / totalContratado) * 100, 100) : 0
 
@@ -343,7 +340,7 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
             <p className="font-semibold text-text-main">{formatBRL(totalContratado)}</p>
           </div>
           <div>
-            <span className="text-text-muted">Pago (CAP)</span>
+            <span className="text-text-muted">Pago (Everest)</span>
             <p className="font-semibold text-text-main">{totalPago > 0 ? formatBRL(totalPago) : '—'}</p>
           </div>
           <div>

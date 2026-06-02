@@ -9,7 +9,6 @@ import { calcResumoProjeto, calcPercentFechados, filtrarItensCalculo } from '../
 import { formatBRL, formatPercent } from '../utils/formatters'
 import { FolderOpen, TrendingUp, DollarSign, CheckCircle, SlidersHorizontal, Package, Award, ChevronDown, ChevronRight } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { useCapTotais, resolverTotalPago } from '../hooks/useCapTotais'
 
 interface DashboardGeralProps {
   projetos: Projeto[]
@@ -32,7 +31,6 @@ const STATUS_OPTS: { value: FiltroStatus; label: string }[] = [
 
 export function DashboardGeral({ projetos }: DashboardGeralProps) {
   const navigate = useNavigate()
-  const capTotais = useCapTotais()
   const [filtroFornecedor, setFiltroFornecedor] = useState('')
   const [filtroTipoEscola, setFiltroTipoEscola] = useState<'TODOS' | TipoEscola>('TODOS')
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('em_andamento')
@@ -94,11 +92,11 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
     for (const p of projetosRealizados) {
       const resumo = calcResumoProjeto(p)
       totalContratado += resumo.custoTotal.contratado
-      totalPago += resolverTotalPago(capTotais, p.tap.turma)
+      totalPago += p.conciliacaoEverest?.linhas.reduce((s, l) => s + (l.valorEverest ?? 0), 0) ?? 0
       margemReal += resumo.margem.contratado
     }
     return { totalContratado, totalPago, margemReal }
-  }, [projetosRealizados, capTotais])
+  }, [projetosRealizados])
 
   const TIPO_LABELS: Record<string, string> = {
     SUPERIOR: 'Ensino Superior',
@@ -133,10 +131,10 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
       return {
         nome: p.tap.turma || p.id.slice(0, 6),
         contratado: resumo.custoTotal.contratado,
-        pago: resolverTotalPago(capTotais, p.tap.turma),
+        pago: p.conciliacaoEverest?.linhas.reduce((s, l) => s + (l.valorEverest ?? 0), 0) ?? 0,
       }
     })
-  }, [projetosRealizados, capTotais])
+  }, [projetosRealizados])
 
   const custoFornecedorTotal = useMemo(() => {
     if (!filtroFornecedor) return 0
@@ -295,7 +293,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
             <p className="text-xs font-semibold text-success/70 uppercase tracking-wider mb-3">Realizados · {projetosRealizados.length}</p>
             <div className="grid grid-cols-2 gap-3">
               <KPICard title="Total Contratado" value={formatBRL(kpisRealizados.totalContratado)} icon={DollarSign} color="#6366F1" />
-              <KPICard title="Total Pago (CAP)" value={formatBRL(kpisRealizados.totalPago)} icon={CheckCircle} color="#00b894" />
+              <KPICard title="Total Pago (Everest)" value={formatBRL(kpisRealizados.totalPago)} icon={CheckCircle} color="#00b894" />
               <KPICard title="Margem Real" value={formatBRL(kpisRealizados.margemReal)} icon={TrendingUp} color={kpisRealizados.margemReal >= 0 ? '#00b894' : '#e17055'} />
               <KPICard title="Projetos" value={String(projetosRealizados.length)} icon={FolderOpen} color="#74b9ff" />
             </div>
@@ -318,7 +316,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
         <div className="grid grid-cols-4 gap-4 mb-6">
           <KPICard title="Projetos Realizados" value={String(projetosRealizados.length)} icon={FolderOpen} color="#6366F1" />
           <KPICard title="Total Contratado" value={formatBRL(kpisRealizados.totalContratado)} icon={DollarSign} color="#6366F1" />
-          <KPICard title="Total Pago (CAP)" value={formatBRL(kpisRealizados.totalPago)} icon={CheckCircle} color="#00b894" />
+          <KPICard title="Total Pago (Everest)" value={formatBRL(kpisRealizados.totalPago)} icon={CheckCircle} color="#00b894" />
           <KPICard title="Margem Real" value={formatBRL(kpisRealizados.margemReal)} icon={TrendingUp} color={kpisRealizados.margemReal >= 0 ? '#00b894' : '#e17055'} />
         </div>
       )}
