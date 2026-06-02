@@ -124,6 +124,7 @@ export interface Projeto {
   atualizadoEm: string
   importadoDe?: string
   sheetsUrl?: string
+  status: 'em_andamento' | 'realizado'
 }
 
 export interface ItemCatalogo {

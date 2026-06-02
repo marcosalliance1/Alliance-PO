@@ -37,6 +37,7 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
     criadoEm: row.criado_em as string,
     atualizadoEm: row.atualizado_em as string,
     sheetsUrl: (row.sheets_url as string) ?? undefined,
+    status: (row.status as string) === 'realizado' ? 'realizado' : 'em_andamento',
   }
 }
 

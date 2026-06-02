@@ -18,6 +18,7 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
     atualizadoEm: row.atualizado_em as string,
     importadoDe: (row.importado_de as string) ?? undefined,
     sheetsUrl: (row.sheets_url as string) ?? undefined,
+    status: (row.status as string) === 'realizado' ? 'realizado' : 'em_andamento',
   }
 }
 
@@ -35,7 +36,19 @@ export function useProjetos() {
       .select('*')
       .order('criado_em', { ascending: false })
     if (err) { setError(err.message); setLoading(false); return }
-    setProjetos((data ?? []).map(rowToProjeto))
+    const mapped = (data ?? []).map(rowToProjeto)
+
+    // Auto-marcar como realizado projetos cuja data de evento já passou
+    const hoje = new Date().toISOString().slice(0, 10)
+    const paraAtualizar = mapped.filter(
+      (p) => p.status === 'em_andamento' && p.tap.dataEvento && p.tap.dataEvento.slice(0, 10) <= hoje,
+    )
+    if (paraAtualizar.length > 0) {
+      await supabase.from('projetos').update({ status: 'realizado' }).in('id', paraAtualizar.map((p) => p.id))
+      setProjetos(mapped.map((p) => paraAtualizar.some((a) => a.id === p.id) ? { ...p, status: 'realizado' } : p))
+    } else {
+      setProjetos(mapped)
+    }
     setLoading(false)
   }, [])
 
@@ -278,11 +291,18 @@ export function useProjetos() {
     setProjetos((prev) => prev.map((p) => p.id === id ? { ...p, sheetsUrl: url || undefined } : p))
   }, [])
 
+  // ── Marcar como realizado ────────────────────────────────────────────────────
+  const marcarRealizado = useCallback(async (id: string) => {
+    const { error: err } = await supabase.from('projetos').update({ status: 'realizado' }).eq('id', id)
+    if (err) throw new Error(err.message)
+    setProjetos((prev) => prev.map((p) => p.id === id ? { ...p, status: 'realizado' } : p))
+  }, [])
+
   return {
     projetos, loading, error,
     carregar, criarProjeto, salvarProjeto, importarProjeto, reimportarProjeto, excluirProjeto,
     atualizarTAP, atualizarReceitas, atualizarConciliacao, atualizarCustosAdicionais,
     adicionarItem, atualizarItem, excluirItem,
-    getProjeto, sincronizarSecoes, atualizarSheetsUrl,
+    getProjeto, sincronizarSecoes, atualizarSheetsUrl, marcarRealizado,
   }
 }

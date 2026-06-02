@@ -9,10 +9,13 @@ import { calcResumoProjeto, calcPercentFechados, filtrarItensCalculo } from '../
 import { formatBRL, formatPercent } from '../utils/formatters'
 import { FolderOpen, TrendingUp, DollarSign, CheckCircle, SlidersHorizontal, Package, Award, ChevronDown, ChevronRight } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { useCapTotais, resolverTotalPago } from '../hooks/useCapTotais'
 
 interface DashboardGeralProps {
   projetos: Projeto[]
 }
+
+type FiltroStatus = 'todos' | 'em_andamento' | 'realizados'
 
 const TIPO_ESCOLA_OPTS: { value: 'TODOS' | TipoEscola; label: string }[] = [
   { value: 'TODOS', label: 'Todos' },
@@ -21,10 +24,18 @@ const TIPO_ESCOLA_OPTS: { value: 'TODOS' | TipoEscola; label: string }[] = [
   { value: 'FUNDAMENTAL', label: 'Ensino Fundamental' },
 ]
 
+const STATUS_OPTS: { value: FiltroStatus; label: string }[] = [
+  { value: 'todos', label: 'Todos' },
+  { value: 'em_andamento', label: 'Em Andamento' },
+  { value: 'realizados', label: 'Realizados' },
+]
+
 export function DashboardGeral({ projetos }: DashboardGeralProps) {
   const navigate = useNavigate()
+  const capTotais = useCapTotais()
   const [filtroFornecedor, setFiltroFornecedor] = useState('')
   const [filtroTipoEscola, setFiltroTipoEscola] = useState<'TODOS' | TipoEscola>('TODOS')
+  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('em_andamento')
   const [showVendidoVsOrcado, setShowVendidoVsOrcado] = useState(false)
 
   const fornecedoresUsados = useMemo(() => {
@@ -36,26 +47,30 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
     return [...names].sort()
   }, [projetos])
 
-  const projetosFiltrados = useMemo(() => {
-    let lista = projetos
-    if (filtroTipoEscola !== 'TODOS') {
-      lista = lista.filter((p) => p.tap.tipoEscola === filtroTipoEscola)
-    }
-    if (filtroFornecedor) {
-      lista = lista.filter((p) =>
-        p.secoes.some((sec) => sec.itens.some((i) => i.fornecedor?.trim() === filtroFornecedor)),
-      )
-    }
-    return lista
-  }, [projetos, filtroFornecedor, filtroTipoEscola])
+  // Filtro de tipo de escola (aplicado a todos os subsets)
+  function filtrarPorTipo(lista: Projeto[]) {
+    let r = lista
+    if (filtroTipoEscola !== 'TODOS') r = r.filter((p) => p.tap.tipoEscola === filtroTipoEscola)
+    if (filtroFornecedor) r = r.filter((p) => p.secoes.some((sec) => sec.itens.some((i) => i.fornecedor?.trim() === filtroFornecedor)))
+    return r
+  }
 
-  const kpis = useMemo(() => {
+  const projetosEmAndamento = useMemo(() => filtrarPorTipo(projetos.filter((p) => p.status !== 'realizado')), [projetos, filtroTipoEscola, filtroFornecedor]) // eslint-disable-line react-hooks/exhaustive-deps
+  const projetosRealizados = useMemo(() => filtrarPorTipo(projetos.filter((p) => p.status === 'realizado')), [projetos, filtroTipoEscola, filtroFornecedor]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const projetosFiltrados = useMemo(() => {
+    if (filtroStatus === 'em_andamento') return projetosEmAndamento
+    if (filtroStatus === 'realizados') return projetosRealizados
+    return [...projetosEmAndamento, ...projetosRealizados]
+  }, [filtroStatus, projetosEmAndamento, projetosRealizados])
+
+  // KPIs — em andamento
+  const kpisEmAndamento = useMemo(() => {
     let totalReceita = 0
     let totalCusto = 0
     let totalFechados = 0
     let totalItens = 0
-
-    for (const p of projetosFiltrados) {
+    for (const p of projetosEmAndamento) {
       const resumo = calcResumoProjeto(p)
       totalReceita += resumo.receitaBaile.orcado
       totalCusto += resumo.custoTotal.orcado
@@ -64,12 +79,26 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
       totalFechados += pct * itens
       totalItens += itens
     }
+    return {
+      totalReceita,
+      margem: totalReceita - totalCusto,
+      pctFechados: totalItens > 0 ? totalFechados / totalItens : 0,
+    }
+  }, [projetosEmAndamento])
 
-    const margem = totalReceita - totalCusto
-    const pctFechados = totalItens > 0 ? totalFechados / totalItens : 0
-
-    return { totalReceita, totalCusto, margem, pctFechados }
-  }, [projetosFiltrados])
+  // KPIs — realizados
+  const kpisRealizados = useMemo(() => {
+    let totalContratado = 0
+    let totalPago = 0
+    let margemReal = 0
+    for (const p of projetosRealizados) {
+      const resumo = calcResumoProjeto(p)
+      totalContratado += resumo.custoTotal.contratado
+      totalPago += resolverTotalPago(capTotais, p.tap.turma)
+      margemReal += resumo.margem.contratado
+    }
+    return { totalContratado, totalPago, margemReal }
+  }, [projetosRealizados, capTotais])
 
   const TIPO_LABELS: Record<string, string> = {
     SUPERIOR: 'Ensino Superior',
@@ -80,6 +109,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
   const barDataPorTipo = useMemo(() => {
     const grupos = new Map<string, { nome: string; receita: number; custo: number; margem: number }[]>()
     for (const p of projetosFiltrados) {
+      if (p.status === 'realizado') continue
       const tipo = p.tap.tipoEscola ?? 'MEDIO'
       const resumo = calcResumoProjeto(p)
       const custo = filtroFornecedor
@@ -96,6 +126,18 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
       .map(t => ({ tipo: t, label: TIPO_LABELS[t], data: grupos.get(t)! }))
   }, [projetosFiltrados, filtroFornecedor])
 
+  // Dados para gráfico "Contratado vs Pago" (realizados)
+  const barDataRealizados = useMemo(() => {
+    return projetosRealizados.map((p) => {
+      const resumo = calcResumoProjeto(p)
+      return {
+        nome: p.tap.turma || p.id.slice(0, 6),
+        contratado: resumo.custoTotal.contratado,
+        pago: resolverTotalPago(capTotais, p.tap.turma),
+      }
+    })
+  }, [projetosRealizados, capTotais])
+
   const custoFornecedorTotal = useMemo(() => {
     if (!filtroFornecedor) return 0
     return projetosFiltrados.reduce((total, p) =>
@@ -108,6 +150,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
   const lineData = useMemo(() => {
     const byAno = new Map<number, { receita: number; margem: number }>()
     for (const p of projetosFiltrados) {
+      if (p.status === 'realizado') continue
       const ano = p.tap.anoRealizacao
       const resumo = calcResumoProjeto(p)
       const cur = byAno.get(ano) ?? { receita: 0, margem: 0 }
@@ -124,6 +167,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
   const topFornecedores = useMemo(() => {
     const map = new Map<string, { orcado: number; pago: number }>()
     for (const p of projetosFiltrados) {
+      if (p.status === 'realizado') continue
       for (const sec of p.secoes) {
         for (const item of filtrarItensCalculo(sec.itens)) {
           const key = item.fornecedor?.trim() || 'Sem fornecedor'
@@ -140,53 +184,40 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
   }, [projetosFiltrados])
 
   const vendidoVsOrcadoData = useMemo(() =>
-    projetosFiltrados.map((p) => {
-      const resumo = calcResumoProjeto(p)
-      return {
-        nome: p.tap.turma || p.id.slice(0, 6),
-        receitaVendido: resumo.receitaBaile.vendido,
-        receitaOrcado: resumo.receitaBaile.orcado,
-        custoVendido: resumo.custoTotal.vendido,
-        custoOrcado: resumo.custoTotal.orcado,
-      }
-    }),
+    projetosFiltrados
+      .filter(p => p.status !== 'realizado')
+      .map((p) => {
+        const resumo = calcResumoProjeto(p)
+        return {
+          nome: p.tap.turma || p.id.slice(0, 6),
+          receitaVendido: resumo.receitaBaile.vendido,
+          receitaOrcado: resumo.receitaBaile.orcado,
+          custoVendido: resumo.custoTotal.vendido,
+          custoOrcado: resumo.custoTotal.orcado,
+        }
+      }),
   [projetosFiltrados])
 
-  // ── Ranking de projetos por margem (Correção 6) ───────────────────────────
   const ranking = useMemo(() => {
     return projetosFiltrados
+      .filter(p => p.status !== 'realizado')
       .map((p) => {
         const resumo = calcResumoProjeto(p)
         const pct = (n: number, d: number) => (d > 0 ? (n / d) * 100 : 0)
-        const margemProjetadaPct = pct(
-          resumo.receitaBaile.vendido - resumo.custoTotal.projetado,
-          resumo.receitaBaile.vendido,
-        )
-        const margemOrcadaPct = pct(
-          resumo.receitaBaile.orcado - resumo.custoTotal.orcado,
-          resumo.receitaBaile.orcado,
-        )
-        const margemContratadaPct = pct(
-          resumo.receitaBaile.contratado - resumo.custoTotal.contratado,
-          resumo.receitaBaile.contratado,
-        )
+        const margemProjetadaPct = pct(resumo.receitaBaile.vendido - resumo.custoTotal.projetado, resumo.receitaBaile.vendido)
+        const margemOrcadaPct = pct(resumo.receitaBaile.orcado - resumo.custoTotal.orcado, resumo.receitaBaile.orcado)
+        const margemContratadaPct = pct(resumo.receitaBaile.contratado - resumo.custoTotal.contratado, resumo.receitaBaile.contratado)
         const faltaPagarR = resumo.custoTotal.faltaPagar
         const pctFalta = pct(faltaPagarR, resumo.custoTotal.contratado)
-        return {
-          projeto: p,
-          margemProjetadaPct,
-          margemOrcadaPct,
-          margemContratadaPct,
-          faltaPagarR,
-          pctFalta,
-          alertaFalta: pctFalta > 20,
-        }
+        return { projeto: p, margemProjetadaPct, margemOrcadaPct, margemContratadaPct, faltaPagarR, pctFalta, alertaFalta: pctFalta > 20 }
       })
       .sort((a, b) => b.margemOrcadaPct - a.margemOrcadaPct)
   }, [projetosFiltrados])
 
-  const selectCls =
-    'bg-surface border border-white/10 rounded-inner px-3 py-2 text-sm text-text-main outline-none focus:border-primary hover:border-white/20 transition-colors'
+  const selectCls = 'bg-surface border border-white/10 rounded-inner px-3 py-2 text-sm text-text-main outline-none focus:border-primary hover:border-white/20 transition-colors'
+
+  const showEmAndamentoCharts = filtroStatus !== 'realizados'
+  const showRealizadosCharts = filtroStatus === 'realizados'
 
   return (
     <div>
@@ -199,16 +230,14 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
           <span className="text-xs font-medium">Filtros</span>
         </div>
 
-        {/* Toggle tipo de ensino */}
+        {/* Toggle status */}
         <div className="flex gap-1 bg-surface-2 rounded-inner p-0.5">
-          {TIPO_ESCOLA_OPTS.map((opt) => (
+          {STATUS_OPTS.map((opt) => (
             <button
               key={opt.value}
-              onClick={() => setFiltroTipoEscola(opt.value)}
+              onClick={() => setFiltroStatus(opt.value)}
               className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                filtroTipoEscola === opt.value
-                  ? 'bg-primary text-white'
-                  : 'text-text-muted hover:text-text-main'
+                filtroStatus === opt.value ? 'bg-primary text-white' : 'text-text-muted hover:text-text-main'
               }`}
             >
               {opt.label}
@@ -216,22 +245,31 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
           ))}
         </div>
 
-        {fornecedoresUsados.length > 0 && (
-          <select
-            value={filtroFornecedor}
-            onChange={(e) => setFiltroFornecedor(e.target.value)}
-            className={selectCls}
-          >
+        {/* Toggle tipo de ensino */}
+        <div className="flex gap-1 bg-surface-2 rounded-inner p-0.5">
+          {TIPO_ESCOLA_OPTS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setFiltroTipoEscola(opt.value)}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                filtroTipoEscola === opt.value ? 'bg-primary text-white' : 'text-text-muted hover:text-text-main'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {filtroStatus !== 'realizados' && fornecedoresUsados.length > 0 && (
+          <select value={filtroFornecedor} onChange={(e) => setFiltroFornecedor(e.target.value)} className={selectCls}>
             <option value="">Todos os fornecedores</option>
-            {fornecedoresUsados.map((f) => (
-              <option key={f} value={f}>{f}</option>
-            ))}
+            {fornecedoresUsados.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
         )}
 
-        {(filtroFornecedor || filtroTipoEscola !== 'TODOS') && (
+        {(filtroFornecedor || filtroTipoEscola !== 'TODOS' || filtroStatus !== 'em_andamento') && (
           <button
-            onClick={() => { setFiltroFornecedor(''); setFiltroTipoEscola('TODOS') }}
+            onClick={() => { setFiltroFornecedor(''); setFiltroTipoEscola('TODOS'); setFiltroStatus('em_andamento') }}
             className="ml-auto text-xs text-text-muted hover:text-text-main transition-colors underline underline-offset-2"
           >
             Limpar filtros
@@ -239,24 +277,54 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
         )}
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <KPICard title="Projetos" value={String(projetosFiltrados.length)} icon={FolderOpen} color="#74b9ff" />
-        <KPICard title="Receita Orçada" value={formatBRL(kpis.totalReceita)} icon={DollarSign} color="#00b894" />
-        <KPICard
-          title="Margem Orçada"
-          value={formatBRL(kpis.margem)}
-          icon={TrendingUp}
-          color={kpis.margem >= 0 ? '#00b894' : '#e17055'}
-        />
-        <KPICard
-          title="Itens Fechados"
-          value={formatPercent(kpis.pctFechados)}
-          icon={CheckCircle}
-          color="#fdcb6e"
-        />
-      </div>
+      {/* ── KPIs "Todos" — dois blocos separados ──────────────────────── */}
+      {filtroStatus === 'todos' && (
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          {/* Bloco Em Andamento */}
+          <div className="card p-4">
+            <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Em Andamento · {projetosEmAndamento.length}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <KPICard title="Receita Orçada" value={formatBRL(kpisEmAndamento.totalReceita)} icon={DollarSign} color="#00b894" />
+              <KPICard title="Margem Orçada" value={formatBRL(kpisEmAndamento.margem)} icon={TrendingUp} color={kpisEmAndamento.margem >= 0 ? '#00b894' : '#e17055'} />
+              <KPICard title="Projetos" value={String(projetosEmAndamento.length)} icon={FolderOpen} color="#74b9ff" />
+              <KPICard title="Itens Fechados" value={formatPercent(kpisEmAndamento.pctFechados)} icon={CheckCircle} color="#fdcb6e" />
+            </div>
+          </div>
+          {/* Bloco Realizados */}
+          <div className="card p-4">
+            <p className="text-xs font-semibold text-success/70 uppercase tracking-wider mb-3">Realizados · {projetosRealizados.length}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <KPICard title="Total Contratado" value={formatBRL(kpisRealizados.totalContratado)} icon={DollarSign} color="#6366F1" />
+              <KPICard title="Total Pago (CAP)" value={formatBRL(kpisRealizados.totalPago)} icon={CheckCircle} color="#00b894" />
+              <KPICard title="Margem Real" value={formatBRL(kpisRealizados.margemReal)} icon={TrendingUp} color={kpisRealizados.margemReal >= 0 ? '#00b894' : '#e17055'} />
+              <KPICard title="Projetos" value={String(projetosRealizados.length)} icon={FolderOpen} color="#74b9ff" />
+            </div>
+          </div>
+        </div>
+      )}
 
-      {projetosFiltrados.length === 0 ? (
+      {/* ── KPIs "Em Andamento" ───────────────────────────────────────── */}
+      {filtroStatus === 'em_andamento' && (
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <KPICard title="Projetos" value={String(projetosEmAndamento.length)} icon={FolderOpen} color="#74b9ff" />
+          <KPICard title="Receita Orçada" value={formatBRL(kpisEmAndamento.totalReceita)} icon={DollarSign} color="#00b894" />
+          <KPICard title="Margem Orçada" value={formatBRL(kpisEmAndamento.margem)} icon={TrendingUp} color={kpisEmAndamento.margem >= 0 ? '#00b894' : '#e17055'} />
+          <KPICard title="Itens Fechados" value={formatPercent(kpisEmAndamento.pctFechados)} icon={CheckCircle} color="#fdcb6e" />
+        </div>
+      )}
+
+      {/* ── KPIs "Realizados" ─────────────────────────────────────────── */}
+      {filtroStatus === 'realizados' && (
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <KPICard title="Projetos Realizados" value={String(projetosRealizados.length)} icon={FolderOpen} color="#6366F1" />
+          <KPICard title="Total Contratado" value={formatBRL(kpisRealizados.totalContratado)} icon={DollarSign} color="#6366F1" />
+          <KPICard title="Total Pago (CAP)" value={formatBRL(kpisRealizados.totalPago)} icon={CheckCircle} color="#00b894" />
+          <KPICard title="Margem Real" value={formatBRL(kpisRealizados.margemReal)} icon={TrendingUp} color={kpisRealizados.margemReal >= 0 ? '#00b894' : '#e17055'} />
+        </div>
+      )}
+
+      {/* ── Estado vazio ──────────────────────────────────────────────── */}
+      {projetosFiltrados.length === 0 && (
         <div className="card text-center py-12">
           <p className="text-text-muted">Nenhum projeto encontrado.</p>
           <p className="text-text-muted text-sm mt-1">
@@ -265,92 +333,108 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
               : 'Ajuste os filtros para ver resultados.'}
           </p>
         </div>
-      ) : (
+      )}
+
+      {projetosFiltrados.length > 0 && (
         <>
-          <div className="grid grid-cols-2 gap-6 mb-6">
-            <div className="card">
-              <h3 className="text-sm font-semibold text-text-main mb-3">Receita vs Custo por Turma (Orçado)</h3>
-
-              {filtroFornecedor && (
-                <div className="flex items-center justify-between bg-primary/10 border border-primary/20 rounded-inner px-3 py-2 mb-4">
-                  <span className="text-xs text-text-muted">
-                    Total orçado — <span className="text-text-main font-medium">{filtroFornecedor}</span>
-                  </span>
-                  <span className="text-sm font-bold text-primary">{formatBRL(custoFornecedorTotal)}</span>
-                </div>
-              )}
-
-              {barDataPorTipo.map((grupo, idx) => {
-                const chartHeight = barDataPorTipo.length === 1 ? 260 : barDataPorTipo.length === 2 ? 200 : 170
-                return (
-                  <div key={grupo.tipo} className={idx > 0 ? 'mt-4 pt-4 border-t border-white/5' : ''}>
-                    {barDataPorTipo.length > 1 && (
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-2">{grupo.label}</p>
-                    )}
-                    <GraficoBarras
-                      data={grupo.data}
-                      height={chartHeight}
-                      custoLabel={filtroFornecedor ? 'Custo Fornecedor' : 'Custo'}
-                    />
-                  </div>
-                )
-              })}
+          {/* ── Gráfico Contratado vs Pago — Realizados ──────────────── */}
+          {showRealizadosCharts && barDataRealizados.length > 0 && (
+            <div className="card mb-6">
+              <h3 className="text-sm font-semibold text-text-main mb-4">Contratado vs Pago por Turma</h3>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={barDataRealizados} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="nome" tick={{ fill: '#8892b0', fontSize: 11 }} />
+                  <YAxis tick={{ fill: '#8892b0', fontSize: 11 }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip
+                    contentStyle={{ background: 'var(--color-surface, #1a1a2e)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, fontSize: 12 }}
+                    labelStyle={{ color: '#f0f0f0' }}
+                    itemStyle={{ color: '#8892b0' }}
+                    formatter={(v) => formatBRL(Number(v) || 0)}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12, color: '#8892b0' }} />
+                  <Bar dataKey="contratado" name="Custo Contratado" fill="#6366F1" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="pago" name="Pago (CAP)" fill="#00b894" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
+          )}
 
-            {/* Top Fornecedores */}
-            <div className="card">
-              <div className="flex items-center gap-2 mb-4">
-                <div
-                  className="w-6 h-6 rounded flex items-center justify-center shrink-0"
-                  style={{ background: 'rgba(116,185,255,0.15)' }}
-                >
-                  <Package className="w-3.5 h-3.5" style={{ color: '#74b9ff' }} />
-                </div>
-                <h3 className="text-sm font-semibold text-text-main">Top Fornecedores por Custo</h3>
+          {/* ── Gráficos Em Andamento ─────────────────────────────────── */}
+          {showEmAndamentoCharts && barDataPorTipo.length > 0 && (
+            <div className="grid grid-cols-2 gap-6 mb-6">
+              <div className="card">
+                <h3 className="text-sm font-semibold text-text-main mb-3">Receita vs Custo por Turma (Orçado)</h3>
+                {filtroFornecedor && (
+                  <div className="flex items-center justify-between bg-primary/10 border border-primary/20 rounded-inner px-3 py-2 mb-4">
+                    <span className="text-xs text-text-muted">
+                      Total orçado — <span className="text-text-main font-medium">{filtroFornecedor}</span>
+                    </span>
+                    <span className="text-sm font-bold text-primary">{formatBRL(custoFornecedorTotal)}</span>
+                  </div>
+                )}
+                {barDataPorTipo.map((grupo, idx) => {
+                  const chartHeight = barDataPorTipo.length === 1 ? 260 : barDataPorTipo.length === 2 ? 200 : 170
+                  return (
+                    <div key={grupo.tipo} className={idx > 0 ? 'mt-4 pt-4 border-t border-white/5' : ''}>
+                      {barDataPorTipo.length > 1 && (
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-2">{grupo.label}</p>
+                      )}
+                      <GraficoBarras data={grupo.data} height={chartHeight} custoLabel={filtroFornecedor ? 'Custo Fornecedor' : 'Custo'} />
+                    </div>
+                  )
+                })}
               </div>
-              {topFornecedores.length === 0 ? (
-                <p className="text-text-muted text-sm text-center py-8">Sem dados de fornecedores</p>
-              ) : (
-                <div className="space-y-3">
-                  {topFornecedores.map((f, i) => {
-                    const maxOrcado = topFornecedores[0].orcado
-                    const pct = maxOrcado > 0 ? (f.orcado / maxOrcado) * 100 : 0
-                    const pagoPct = f.orcado > 0 ? (f.pago / f.orcado) * 100 : 0
-                    return (
-                      <div key={f.nome}>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] text-text-muted w-3 text-right shrink-0">{i + 1}</span>
-                          <span className="text-xs text-text-main truncate flex-1" title={f.nome}>{f.nome}</span>
-                          <span className="text-xs font-medium text-text-main shrink-0">{formatBRL(f.orcado)}</span>
-                        </div>
-                        <div className="ml-5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                          <div className="h-full rounded-full relative" style={{ width: `${pct}%`, background: 'rgba(59,130,246,0.45)' }}>
-                            <div
-                              className="absolute inset-y-0 left-0 rounded-full"
-                              style={{ width: `${pagoPct}%`, background: 'rgba(0,184,148,0.8)' }}
-                            />
+
+              {/* Top Fornecedores */}
+              <div className="card">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-6 h-6 rounded flex items-center justify-center shrink-0" style={{ background: 'rgba(116,185,255,0.15)' }}>
+                    <Package className="w-3.5 h-3.5" style={{ color: '#74b9ff' }} />
+                  </div>
+                  <h3 className="text-sm font-semibold text-text-main">Top Fornecedores por Custo</h3>
+                </div>
+                {topFornecedores.length === 0 ? (
+                  <p className="text-text-muted text-sm text-center py-8">Sem dados de fornecedores</p>
+                ) : (
+                  <div className="space-y-3">
+                    {topFornecedores.map((f, i) => {
+                      const maxOrcado = topFornecedores[0].orcado
+                      const pct = maxOrcado > 0 ? (f.orcado / maxOrcado) * 100 : 0
+                      const pagoPct = f.orcado > 0 ? (f.pago / f.orcado) * 100 : 0
+                      return (
+                        <div key={f.nome}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] text-text-muted w-3 text-right shrink-0">{i + 1}</span>
+                            <span className="text-xs text-text-main truncate flex-1" title={f.nome}>{f.nome}</span>
+                            <span className="text-xs font-medium text-text-main shrink-0">{formatBRL(f.orcado)}</span>
+                          </div>
+                          <div className="ml-5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                            <div className="h-full rounded-full relative" style={{ width: `${pct}%`, background: 'rgba(59,130,246,0.45)' }}>
+                              <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${pagoPct}%`, background: 'rgba(0,184,148,0.8)' }} />
+                            </div>
+                          </div>
+                          <div className="ml-5 flex gap-3 mt-0.5">
+                            <span className="text-[9px]" style={{ color: '#74b9ff' }}>Orç. {formatBRL(f.orcado)}</span>
+                            <span className="text-[9px]" style={{ color: '#00b894' }}>Pago {formatBRL(f.pago)}</span>
                           </div>
                         </div>
-                        <div className="ml-5 flex gap-3 mt-0.5">
-                          <span className="text-[9px]" style={{ color: '#74b9ff' }}>Orç. {formatBRL(f.orcado)}</span>
-                          <span className="text-[9px]" style={{ color: '#00b894' }}>Pago {formatBRL(f.pago)}</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-              <p className="text-[10px] text-text-muted mt-4 text-center">Barra: azul = orçado · verde = pago</p>
-            </div>
+                      )
+                    })}
+                  </div>
+                )}
+                <p className="text-[10px] text-text-muted mt-4 text-center">Barra: azul = orçado · verde = pago</p>
+              </div>
 
-            <div className="card col-span-2">
-              <h3 className="text-sm font-semibold text-text-main mb-4">Evolução por Ano</h3>
-              <GraficoLinha data={lineData} />
+              <div className="card col-span-2">
+                <h3 className="text-sm font-semibold text-text-main mb-4">Evolução por Ano</h3>
+                <GraficoLinha data={lineData} />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* ── Vendido vs Orçado ─────────────────────────────────────── */}
-          {vendidoVsOrcadoData.length > 0 && (
+          {showEmAndamentoCharts && vendidoVsOrcadoData.length > 0 && (
             <div className="card mb-6">
               <button
                 className="flex items-center gap-2 w-full text-left"
@@ -384,109 +468,65 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
             </div>
           )}
 
-          {/* ── Ranking de projetos (Correção 6) ──────────────────────── */}
-          {ranking.length > 0 && (
+          {/* ── Ranking de projetos ────────────────────────────────────── */}
+          {showEmAndamentoCharts && ranking.length > 0 && (
             <div className="card">
               <div className="flex items-center gap-2 mb-4">
-                <div
-                  className="w-6 h-6 rounded flex items-center justify-center shrink-0"
-                  style={{ background: 'rgba(251,191,36,0.15)' }}
-                >
+                <div className="w-6 h-6 rounded flex items-center justify-center shrink-0" style={{ background: 'rgba(251,191,36,0.15)' }}>
                   <Award className="w-3.5 h-3.5" style={{ color: '#FBBF24' }} />
                 </div>
-                <h3 className="text-sm font-semibold text-text-main">
-                  Top Projetos — Margem de Contribuição
-                </h3>
+                <h3 className="text-sm font-semibold text-text-main">Top Projetos — Margem de Contribuição</h3>
               </div>
-
               <div className="space-y-2">
                 {ranking.map((r, idx) => {
-                  const titulo =
-                    r.projeto.tap.turma ||
-                    `${r.projeto.tap.instituicao} ${r.projeto.tap.curso}`.trim() ||
-                    `Projeto #${r.projeto.id.slice(0, 6)}`
-
+                  const titulo = r.projeto.tap.turma || `${r.projeto.tap.instituicao} ${r.projeto.tap.curso}`.trim() || `Projeto #${r.projeto.id.slice(0, 6)}`
                   return (
                     <div
                       key={r.projeto.id}
                       className="flex items-center gap-3 p-3 rounded-inner hover:bg-white/5 cursor-pointer transition-colors border border-white/5"
                       onClick={() => navigate(`/projetos/${r.projeto.id}`)}
                     >
-                      {/* Posição */}
-                      <span
-                        className="text-xs font-bold w-5 text-center shrink-0"
-                        style={{ color: idx === 0 ? '#FBBF24' : idx === 1 ? '#94A3B8' : idx === 2 ? '#CD7F32' : '#64748B' }}
-                      >
+                      <span className="text-xs font-bold w-5 text-center shrink-0" style={{ color: idx === 0 ? '#FBBF24' : idx === 1 ? '#94A3B8' : idx === 2 ? '#CD7F32' : '#64748B' }}>
                         {idx + 1}
                       </span>
-
-                      {/* Nome + tipo escola */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-text-main truncate">{titulo}</p>
                         <p className="text-[11px] text-text-muted">
-                          {r.projeto.tap.tipoEscola === 'SUPERIOR' ? 'Ensino Superior'
-                            : r.projeto.tap.tipoEscola === 'FUNDAMENTAL' ? 'Ensino Fundamental'
-                            : 'Ensino Médio'}
+                          {r.projeto.tap.tipoEscola === 'SUPERIOR' ? 'Ensino Superior' : r.projeto.tap.tipoEscola === 'FUNDAMENTAL' ? 'Ensino Fundamental' : 'Ensino Médio'}
                           {r.projeto.tap.anoRealizacao ? ` · ${r.projeto.tap.anoRealizacao}` : ''}
                         </p>
                       </div>
-
-                      {/* Margens */}
                       <div className="flex items-center gap-3 shrink-0">
                         <div className="text-center min-w-[52px]">
                           <p className="text-[10px] text-text-muted">Projetada</p>
-                          <p className="text-sm font-semibold" style={{ color: r.margemProjetadaPct >= 0 ? '#16A34A' : '#DC2626' }}>
-                            {r.margemProjetadaPct.toFixed(1)}%
-                          </p>
+                          <p className="text-sm font-semibold" style={{ color: r.margemProjetadaPct >= 0 ? '#16A34A' : '#DC2626' }}>{r.margemProjetadaPct.toFixed(1)}%</p>
                         </div>
                         <div className="text-center min-w-[48px]">
                           <p className="text-[10px] text-text-muted">Orçada</p>
-                          <p className="text-sm font-semibold" style={{ color: r.margemOrcadaPct >= 0 ? '#16A34A' : '#DC2626' }}>
-                            {r.margemOrcadaPct.toFixed(1)}%
-                          </p>
+                          <p className="text-sm font-semibold" style={{ color: r.margemOrcadaPct >= 0 ? '#16A34A' : '#DC2626' }}>{r.margemOrcadaPct.toFixed(1)}%</p>
                         </div>
                         <div className="text-center min-w-[56px]">
                           <p className="text-[10px] text-text-muted">Contratada</p>
-                          <p className="text-sm font-semibold" style={{ color: r.margemContratadaPct >= 0 ? '#16A34A' : '#DC2626' }}>
-                            {r.margemContratadaPct.toFixed(1)}%
-                          </p>
+                          <p className="text-sm font-semibold" style={{ color: r.margemContratadaPct >= 0 ? '#16A34A' : '#DC2626' }}>{r.margemContratadaPct.toFixed(1)}%</p>
                         </div>
                       </div>
-
-                      {/* Falta Pagar */}
                       <div className="text-right shrink-0 min-w-[120px]">
                         <p className="text-[11px] text-text-muted">Falta Pagar</p>
                         <p className="text-sm font-medium text-text-main">{formatBRL(r.faltaPagarR)}</p>
-                        <p className="text-[10px]" style={{ color: r.alertaFalta ? '#F59E0B' : '#64748B' }}>
-                          {r.pctFalta.toFixed(1)}% do contratado
-                        </p>
+                        <p className="text-[10px]" style={{ color: r.alertaFalta ? '#F59E0B' : '#64748B' }}>{r.pctFalta.toFixed(1)}% do contratado</p>
                       </div>
-
-                      {/* Alertas */}
                       <div className="flex items-center gap-1.5 shrink-0 w-14">
                         {r.alertaFalta ? (
-                          <span
-                            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                            style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B' }}
-                          >
-                            ⚠ Falta
-                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B' }}>⚠ Falta</span>
                         ) : r.margemOrcadaPct > 0 ? (
-                          <span
-                            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                            style={{ background: 'rgba(22,163,74,0.12)', color: '#16A34A' }}
-                          >
-                            ✓
-                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(22,163,74,0.12)', color: '#16A34A' }}>✓</span>
                         ) : null}
                       </div>
                     </div>
                   )
                 })}
               </div>
-              <p className="text-[10px] text-text-muted text-center mt-3">
-                Clique em um projeto para abrir o dashboard detalhado
-              </p>
+              <p className="text-[10px] text-text-muted text-center mt-3">Clique em um projeto para abrir o dashboard detalhado</p>
             </div>
           )}
         </>

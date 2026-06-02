@@ -497,6 +497,7 @@ export function importarXlsx(buffer: ArrayBuffer, nomeArquivo: string): ImportRe
     criadoEm: new Date().toISOString(),
     atualizadoEm: new Date().toISOString(),
     importadoDe: nomeArquivo,
+    status: 'em_andamento',
   }
 
   const divergencias: DivergenciaItem[] = secoes.flatMap((sec) =>

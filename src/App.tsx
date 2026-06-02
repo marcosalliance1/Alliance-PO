@@ -117,7 +117,7 @@ function AppRoutes() {
     criarProjeto, importarProjeto, reimportarProjeto, excluirProjeto,
     atualizarTAP, atualizarReceitas, atualizarConciliacao, atualizarCustosAdicionais,
     adicionarItem, atualizarItem, excluirItem, salvarProjeto,
-    sincronizarSecoes, atualizarSheetsUrl,
+    sincronizarSecoes, atualizarSheetsUrl, marcarRealizado,
   } = useProjetos()
 
   const { itens, itens: bancoItens, loading: loadingItens, adicionarItem: addBanco, atualizarItem: updBanco, desativarItem, reativarItem } = useBancoItens()
@@ -204,6 +204,7 @@ function AppRoutes() {
                 onExcluir={(id) => excluirProjeto(id)}
                 onSincronizar={sincronizarSecoes}
                 onAtualizarSheetsUrl={atualizarSheetsUrl}
+                onMarcarRealizado={marcarRealizado}
               />
             )
           }

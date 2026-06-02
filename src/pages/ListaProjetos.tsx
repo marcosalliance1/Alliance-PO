@@ -13,7 +13,8 @@ import { ProgressBar } from '../components/ui/ProgressBar'
 import { sincronizarComSheets, extrairSpreadsheetId } from '../utils/sheetsSync'
 import { useGoogleAuth } from '../contexts/GoogleAuthContext'
 import { useAuth } from '../contexts/AuthContext'
-import { Plus, Upload, Trash2, ChevronDown, ChevronRight, RefreshCw, Cloud, Loader, Link, AlertTriangle, X } from 'lucide-react'
+import { useCapTotais, resolverTotalPago } from '../hooks/useCapTotais'
+import { Plus, Upload, Trash2, ChevronDown, ChevronRight, RefreshCw, Cloud, Loader, Link, AlertTriangle, X, CheckCircle } from 'lucide-react'
 
 function calcFrescor(atualizadoEm: string): { texto: string; cor: string } {
   if (!atualizadoEm) return { texto: 'Nunca salvo', cor: '#e17055' }
@@ -35,12 +36,44 @@ interface ListaProjetosProps {
   onExcluir: (id: string) => Promise<void>
   onSincronizar: (id: string, result: SyncResult) => Promise<void>
   onAtualizarSheetsUrl: (id: string, url: string) => Promise<void>
+  onMarcarRealizado: (id: string) => Promise<void>
 }
 
-export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, onSincronizar, onAtualizarSheetsUrl }: ListaProjetosProps) {
+const TIPO_ORDER: TipoEscola[] = ['SUPERIOR', 'MEDIO', 'FUNDAMENTAL']
+const TIPO_LABEL: Record<TipoEscola, string> = {
+  SUPERIOR: 'Ensino Superior',
+  MEDIO: 'Ensino Médio',
+  FUNDAMENTAL: 'Ensino Fundamental',
+}
+const TIPO_COLOR: Record<TipoEscola, string> = {
+  SUPERIOR: '#6366F1',
+  MEDIO: '#0EA5E9',
+  FUNDAMENTAL: '#10B981',
+}
+
+function agruparPorAnoTipo(lista: Projeto[]): [number, Map<TipoEscola, Projeto[]>][] {
+  const map = new Map<number, Map<TipoEscola, Projeto[]>>()
+  for (const p of lista) {
+    const ano = p.tap.anoRealizacao
+    if (!map.has(ano)) map.set(ano, new Map())
+    const porTipo = map.get(ano)!
+    const tipo = p.tap.tipoEscola
+    if (!porTipo.has(tipo)) porTipo.set(tipo, [])
+    porTipo.get(tipo)!.push(p)
+  }
+  for (const porTipo of map.values()) {
+    for (const lista of porTipo.values()) {
+      lista.sort((a, b) => (a.tap.turma ?? '').localeCompare(b.tap.turma ?? ''))
+    }
+  }
+  return Array.from(map.entries()).sort((a, b) => b[0] - a[0])
+}
+
+export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, onSincronizar, onAtualizarSheetsUrl, onMarcarRealizado }: ListaProjetosProps) {
   const navigate = useNavigate()
   const { accessToken, conectar, invalidarToken } = useGoogleAuth()
   const { isAdmin } = useAuth()
+  const capTotais = useCapTotais()
 
   const [showImportar, setShowImportar] = useState(false)
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null)
@@ -48,6 +81,7 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
   const [filtroAno, setFiltroAno] = useState<number | null>(null)
   const [filtroTipo, setFiltroTipo] = useState<TipoEscola | ''>('')
   const [anosAbertos, setAnosAbertos] = useState<Set<number>>(new Set())
+  const [realizadosAberto, setRealizadosAberto] = useState(false)
 
   // Sync state
   const [sincronizando, setSincronizando] = useState<Record<string, boolean>>({})
@@ -74,36 +108,11 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
     })
   }, [projetos, filtroAno, filtroTipo])
 
-  const TIPO_ORDER: TipoEscola[] = ['SUPERIOR', 'MEDIO', 'FUNDAMENTAL']
-  const TIPO_LABEL: Record<TipoEscola, string> = {
-    SUPERIOR: 'Ensino Superior',
-    MEDIO: 'Ensino Médio',
-    FUNDAMENTAL: 'Ensino Fundamental',
-  }
-  const TIPO_COLOR: Record<TipoEscola, string> = {
-    SUPERIOR: '#6366F1',
-    MEDIO: '#0EA5E9',
-    FUNDAMENTAL: '#10B981',
-  }
+  const emAndamento = useMemo(() => filtrados.filter((p) => p.status !== 'realizado'), [filtrados])
+  const realizados = useMemo(() => filtrados.filter((p) => p.status === 'realizado'), [filtrados])
 
-  // porAno: Map<ano, Map<tipoEscola, Projeto[]>>
-  const porAno = useMemo(() => {
-    const map = new Map<number, Map<TipoEscola, Projeto[]>>()
-    for (const p of filtrados) {
-      const ano = p.tap.anoRealizacao
-      if (!map.has(ano)) map.set(ano, new Map())
-      const porTipo = map.get(ano)!
-      const tipo = p.tap.tipoEscola
-      if (!porTipo.has(tipo)) porTipo.set(tipo, [])
-      porTipo.get(tipo)!.push(p)
-    }
-    for (const porTipo of map.values()) {
-      for (const lista of porTipo.values()) {
-        lista.sort((a, b) => (a.tap.turma ?? '').localeCompare(b.tap.turma ?? ''))
-      }
-    }
-    return Array.from(map.entries()).sort((a, b) => b[0] - a[0])
-  }, [filtrados])
+  const porAnoEmAndamento = useMemo(() => agruparPorAnoTipo(emAndamento), [emAndamento])
+  const porAnoRealizados = useMemo(() => agruparPorAnoTipo(realizados), [realizados])
 
   function toggleAno(ano: number) {
     setAnosAbertos((prev) => {
@@ -164,7 +173,6 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
   function handleSincronizar(projeto: Projeto) {
     const spreadsheetId = extrairSpreadsheetId(projeto.sheetsUrl ?? '')
     if (!spreadsheetId) {
-      // Abrir modal para configurar URL
       setUrlModalId(projeto.id)
       setUrlInput(projeto.sheetsUrl ?? '')
       setShowUrlModal(true)
@@ -194,6 +202,216 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
     }
     setUrlModalId(null)
     setUrlInput('')
+  }
+
+  // ── Card Em Andamento ─────────────────────────────────────────────────────
+  function renderCardEmAndamento(p: Projeto) {
+    const resumo = calcResumoProjeto(p)
+    const pct = calcPercentFechados(p)
+    const temSheets = !!p.sheetsUrl && !!extrairSpreadsheetId(p.sheetsUrl)
+    const isSincronizando = !!sincronizando[p.id]
+    const margemPct = resumo.receitaBaile.orcado > 0
+      ? ((resumo.receitaBaile.orcado - resumo.custoTotal.orcado) / resumo.receitaBaile.orcado) * 100
+      : 0
+
+    return (
+      <div
+        key={p.id}
+        className="p-4 hover:bg-white/5 cursor-pointer transition-colors"
+        onClick={() => navigate(`/projetos/${p.id}`)}
+      >
+        {/* Cabeçalho do card */}
+        <div className="flex items-start justify-between mb-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-text-main text-sm leading-tight">{p.tap.turma || '—'}</p>
+            <p className="text-text-muted text-xs mt-0.5">{p.tap.instituicao || '—'}</p>
+          </div>
+          {temSheets && (
+            <span className="text-[10px] text-success bg-success/10 border border-success/20 rounded-full px-1.5 py-0.5 flex items-center gap-1 ml-2 shrink-0">
+              <Cloud size={8} /> Sheets
+            </span>
+          )}
+        </div>
+
+        {/* Dados financeiros */}
+        <div className="flex items-center gap-3 text-xs mb-2.5">
+          <div>
+            <span className="text-text-muted">Receita Orç.</span>
+            <p className="font-semibold text-text-main">{formatBRL(resumo.receitaBaile.orcado)}</p>
+          </div>
+          <div>
+            <span className="text-text-muted">Custo Orç.</span>
+            <p className="font-semibold text-text-main">{formatBRL(resumo.custoTotal.orcado)}</p>
+          </div>
+          <div>
+            <span className="text-text-muted">Margem Orç.</span>
+            <p className={`font-semibold ${margemPct >= 0 ? 'text-success' : 'text-danger'}`}>
+              {margemPct.toFixed(1)}%
+            </p>
+          </div>
+        </div>
+
+        <ProgressBar value={pct * 100} label={`Fechados: ${formatPercent(pct)}`} color="#00b894" />
+
+        {/* Frescor + ações */}
+        <div className="flex items-center justify-between mt-2" onClick={(e) => e.stopPropagation()}>
+          {(() => {
+            const f = calcFrescor(p.atualizadoEm)
+            return (
+              <div className="flex items-center gap-1.5">
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: f.cor, display: 'inline-block', flexShrink: 0 }} />
+                <span className="text-[10px]" style={{ color: f.cor }}>{f.texto}</span>
+              </div>
+            )
+          })()}
+          {isAdmin && (
+            <div className="flex items-center gap-2">
+              {temSheets ? (
+                <button
+                  className="text-primary/70 hover:text-primary text-xs flex items-center gap-1 transition-colors disabled:opacity-50"
+                  disabled={isSincronizando}
+                  onClick={() => handleSincronizar(p)}
+                >
+                  {isSincronizando
+                    ? <><Loader size={11} className="animate-spin" /> Sinc...</>
+                    : <><Cloud size={11} /> Sincronizar</>}
+                </button>
+              ) : (
+                <button
+                  className="text-primary/60 hover:text-primary text-xs flex items-center gap-1 transition-colors"
+                  onClick={() => setAtualizandoId(p.id)}
+                >
+                  <RefreshCw size={11} /> Atualizar
+                </button>
+              )}
+              <button
+                className="text-text-muted/40 hover:text-text-muted text-xs transition-colors"
+                title="Configurar URL Google Sheets"
+                onClick={() => { setUrlModalId(p.id); setUrlInput(p.sheetsUrl ?? ''); setShowUrlModal(true) }}
+              >
+                <Link size={11} />
+              </button>
+              <button
+                className="text-success/50 hover:text-success text-xs flex items-center gap-1 transition-colors"
+                title="Marcar como realizado"
+                onClick={() => onMarcarRealizado(p.id)}
+              >
+                <CheckCircle size={11} />
+              </button>
+              <button
+                className="text-danger/50 hover:text-danger text-xs flex items-center gap-1 transition-colors"
+                onClick={() => setDeletando(p.id)}
+              >
+                <Trash2 size={11} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Card Realizado ────────────────────────────────────────────────────────
+  function renderCardRealizado(p: Projeto) {
+    const resumo = calcResumoProjeto(p)
+    const totalContratado = resumo.custoTotal.contratado
+    const totalPago = resolverTotalPago(capTotais, p.tap.turma)
+    const margemReal = resumo.margem.contratado
+    const progressPct = totalContratado > 0 ? Math.min((totalPago / totalContratado) * 100, 100) : 0
+
+    return (
+      <div
+        key={p.id}
+        className="p-4 hover:bg-white/5 cursor-pointer transition-colors"
+        onClick={() => navigate(`/projetos/${p.id}`)}
+      >
+        {/* Cabeçalho */}
+        <div className="flex items-start justify-between mb-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-text-main text-sm leading-tight">{p.tap.turma || '—'}</p>
+            <p className="text-text-muted text-xs mt-0.5">{p.tap.instituicao || '—'}</p>
+          </div>
+          <span className="text-[10px] bg-success/15 text-success border border-success/25 rounded-full px-1.5 py-0.5 ml-2 shrink-0 font-medium">
+            Realizado
+          </span>
+        </div>
+
+        {/* Dados financeiros */}
+        <div className="flex items-center gap-3 text-xs mb-2.5">
+          <div>
+            <span className="text-text-muted">Contratado</span>
+            <p className="font-semibold text-text-main">{formatBRL(totalContratado)}</p>
+          </div>
+          <div>
+            <span className="text-text-muted">Pago (CAP)</span>
+            <p className="font-semibold text-text-main">{totalPago > 0 ? formatBRL(totalPago) : '—'}</p>
+          </div>
+          <div>
+            <span className="text-text-muted">Margem Real</span>
+            <p className={`font-semibold ${margemReal >= 0 ? 'text-success' : 'text-danger'}`}>
+              {formatBRL(margemReal)}
+            </p>
+          </div>
+        </div>
+
+        <ProgressBar
+          value={progressPct}
+          label={totalContratado > 0 ? `Pago: ${progressPct.toFixed(0)}%` : 'Sem dados de custo'}
+          color="#6366F1"
+        />
+      </div>
+    )
+  }
+
+  // ── Seção com agrupamento por ano/tipo ────────────────────────────────────
+  function renderSecao(porAno: [number, Map<TipoEscola, Projeto[]>][], renderCard: (p: Projeto) => React.ReactNode) {
+    return (
+      <div className="space-y-4">
+        {porAno.map(([ano, porTipo]) => {
+          const totalAno = Array.from(porTipo.values()).reduce((s, l) => s + l.length, 0)
+          return (
+            <div key={ano} className="card p-0 overflow-hidden">
+              <button
+                className="w-full flex items-center justify-between px-5 py-3 border-b border-white/10 hover:bg-white/5 transition-colors"
+                onClick={() => toggleAno(ano)}
+              >
+                <div className="flex items-center gap-2">
+                  {isOpen(ano) ? <ChevronDown size={16} className="text-text-muted" /> : <ChevronRight size={16} className="text-text-muted" />}
+                  <span className="text-text-main font-semibold">{ano}</span>
+                  <span className="text-text-muted text-xs">{totalAno} projeto{totalAno !== 1 ? 's' : ''}</span>
+                </div>
+              </button>
+
+              {isOpen(ano) && (
+                <div>
+                  {TIPO_ORDER.filter((tipo) => porTipo.has(tipo)).map((tipo) => {
+                    const lista = porTipo.get(tipo)!
+                    return (
+                      <div key={tipo}>
+                        <div
+                          className="flex items-center gap-2 px-5 py-2 border-b border-white/5"
+                          style={{ borderLeft: `3px solid ${TIPO_COLOR[tipo]}` }}
+                        >
+                          <span className="text-xs font-semibold" style={{ color: TIPO_COLOR[tipo] }}>
+                            {TIPO_LABEL[tipo]}
+                          </span>
+                          <span className="text-[11px] text-text-muted">
+                            {lista.length} projeto{lista.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-0 divide-y divide-white/5 border-b border-white/5">
+                          {lista.map(renderCard)}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
   }
 
   return (
@@ -281,152 +499,34 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
           )}
         </div>
       ) : (
-        <div className="space-y-4">
-          {porAno.map(([ano, porTipo]) => {
-            const totalAno = Array.from(porTipo.values()).reduce((s, l) => s + l.length, 0)
-            return (
-            <div key={ano} className="card p-0 overflow-hidden">
-              <button
-                className="w-full flex items-center justify-between px-5 py-3 border-b border-white/10 hover:bg-white/5 transition-colors"
-                onClick={() => toggleAno(ano)}
-              >
-                <div className="flex items-center gap-2">
-                  {isOpen(ano) ? <ChevronDown size={16} className="text-text-muted" /> : <ChevronRight size={16} className="text-text-muted" />}
-                  <span className="text-text-main font-semibold">{ano}</span>
-                  <span className="text-text-muted text-xs">{totalAno} projeto{totalAno !== 1 ? 's' : ''}</span>
-                </div>
-              </button>
-
-              {isOpen(ano) && (
-                <div>
-                  {TIPO_ORDER.filter((tipo) => porTipo.has(tipo)).map((tipo) => {
-                    const lista = porTipo.get(tipo)!
-                    return (
-                      <div key={tipo}>
-                        {/* Cabeçalho do tipo de ensino */}
-                        <div
-                          className="flex items-center gap-2 px-5 py-2 border-b border-white/5"
-                          style={{ borderLeft: `3px solid ${TIPO_COLOR[tipo]}` }}
-                        >
-                          <span className="text-xs font-semibold" style={{ color: TIPO_COLOR[tipo] }}>
-                            {TIPO_LABEL[tipo]}
-                          </span>
-                          <span className="text-[11px] text-text-muted">
-                            {lista.length} projeto{lista.length !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-
-                        {/* Grid de cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-0 divide-y divide-white/5 border-b border-white/5">
-                          {lista.map((p) => {
-                            const resumo = calcResumoProjeto(p)
-                            const pct = calcPercentFechados(p)
-                            const temSheets = !!p.sheetsUrl && !!extrairSpreadsheetId(p.sheetsUrl)
-                            const isSincronizando = !!sincronizando[p.id]
-                            const margemPct = resumo.receitaBaile.orcado > 0
-                              ? ((resumo.receitaBaile.orcado - resumo.custoTotal.orcado) / resumo.receitaBaile.orcado) * 100
-                              : 0
-
-                            return (
-                              <div
-                                key={p.id}
-                                className="p-4 hover:bg-white/5 cursor-pointer transition-colors"
-                                onClick={() => navigate(`/projetos/${p.id}`)}
-                              >
-                                {/* Cabeçalho do card */}
-                                <div className="flex items-start justify-between mb-2.5">
-                                  <div className="min-w-0 flex-1">
-                                    <p className="font-semibold text-text-main text-sm leading-tight">
-                                      {p.tap.turma || '—'}
-                                    </p>
-                                    <p className="text-text-muted text-xs mt-0.5">{p.tap.instituicao || '—'}</p>
-                                  </div>
-                                  {temSheets && (
-                                    <span className="text-[10px] text-success bg-success/10 border border-success/20 rounded-full px-1.5 py-0.5 flex items-center gap-1 ml-2 shrink-0">
-                                      <Cloud size={8} /> Sheets
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* Dados financeiros — 4 campos, uma linha */}
-                                <div className="flex items-center gap-3 text-xs mb-2.5">
-                                  <div>
-                                    <span className="text-text-muted">Receita Orç.</span>
-                                    <p className="font-semibold text-text-main">{formatBRL(resumo.receitaBaile.orcado)}</p>
-                                  </div>
-                                  <div>
-                                    <span className="text-text-muted">Custo Orç.</span>
-                                    <p className="font-semibold text-text-main">{formatBRL(resumo.custoTotal.orcado)}</p>
-                                  </div>
-                                  <div>
-                                    <span className="text-text-muted">Margem Orç.</span>
-                                    <p className={`font-semibold ${margemPct >= 0 ? 'text-success' : 'text-danger'}`}>
-                                      {margemPct.toFixed(1)}%
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <ProgressBar value={pct * 100} label={`Fechados: ${formatPercent(pct)}`} color="#00b894" />
-
-                                {/* Frescor + ações */}
-                                <div className="flex items-center justify-between mt-2" onClick={(e) => e.stopPropagation()}>
-                                  {(() => {
-                                    const f = calcFrescor(p.atualizadoEm)
-                                    return (
-                                      <div className="flex items-center gap-1.5">
-                                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: f.cor, display: 'inline-block', flexShrink: 0 }} />
-                                        <span className="text-[10px]" style={{ color: f.cor }}>{f.texto}</span>
-                                      </div>
-                                    )
-                                  })()}
-                                  {isAdmin && (
-                                    <div className="flex items-center gap-2">
-                                      {temSheets ? (
-                                        <button
-                                          className="text-primary/70 hover:text-primary text-xs flex items-center gap-1 transition-colors disabled:opacity-50"
-                                          disabled={isSincronizando}
-                                          onClick={() => handleSincronizar(p)}
-                                        >
-                                          {isSincronizando
-                                            ? <><Loader size={11} className="animate-spin" /> Sinc...</>
-                                            : <><Cloud size={11} /> Sincronizar</>}
-                                        </button>
-                                      ) : (
-                                        <button
-                                          className="text-primary/60 hover:text-primary text-xs flex items-center gap-1 transition-colors"
-                                          onClick={() => setAtualizandoId(p.id)}
-                                        >
-                                          <RefreshCw size={11} /> Atualizar
-                                        </button>
-                                      )}
-                                      <button
-                                        className="text-text-muted/40 hover:text-text-muted text-xs transition-colors"
-                                        title="Configurar URL Google Sheets"
-                                        onClick={() => { setUrlModalId(p.id); setUrlInput(p.sheetsUrl ?? ''); setShowUrlModal(true) }}
-                                      >
-                                        <Link size={11} />
-                                      </button>
-                                      <button
-                                        className="text-danger/50 hover:text-danger text-xs flex items-center gap-1 transition-colors"
-                                        onClick={() => setDeletando(p.id)}
-                                      >
-                                        <Trash2 size={11} />
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+        <div className="space-y-6">
+          {/* ── Em Andamento ─────────────────────────────────────────────── */}
+          {emAndamento.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
+                Projetos em Andamento · {emAndamento.length}
+              </p>
+              {renderSecao(porAnoEmAndamento, renderCardEmAndamento)}
             </div>
-            )
-          })}
+          )}
+
+          {/* ── Bailes Realizados ─────────────────────────────────────────── */}
+          {realizados.length > 0 && (
+            <div>
+              <button
+                className="flex items-center gap-2 mb-3 group"
+                onClick={() => setRealizadosAberto((v) => !v)}
+              >
+                {realizadosAberto
+                  ? <ChevronDown size={14} className="text-text-muted" />
+                  : <ChevronRight size={14} className="text-text-muted" />}
+                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider group-hover:text-text-main transition-colors">
+                  Bailes Realizados · {realizados.length}
+                </p>
+              </button>
+              {realizadosAberto && renderSecao(porAnoRealizados, renderCardRealizado)}
+            </div>
+          )}
         </div>
       )}
 

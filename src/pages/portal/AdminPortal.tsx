@@ -31,6 +31,7 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
     receitas: (row.receitas as Receitas) ?? {},
     criadoEm: row.criado_em as string,
     atualizadoEm: row.atualizado_em as string,
+    status: (row.status as string) === 'realizado' ? 'realizado' : 'em_andamento',
   }
 }
 
