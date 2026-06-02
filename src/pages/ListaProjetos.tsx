@@ -313,7 +313,7 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
     const resumo = calcResumoProjeto(p)
     const totalContratado = resumo.custoTotal.contratado
     const totalPago = p.conciliacaoEverest?.linhas.reduce((s, l) => s + (l.valorEverest ?? 0), 0) ?? 0
-    const margemReal = resumo.margem.contratado
+    const margemReal = resumo.receitaBaile.contratado - totalPago
     const progressPct = totalContratado > 0 ? Math.min((totalPago / totalContratado) * 100, 100) : 0
 
     return (

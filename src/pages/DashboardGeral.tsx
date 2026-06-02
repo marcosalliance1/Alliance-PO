@@ -92,8 +92,9 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
     for (const p of projetosRealizados) {
       const resumo = calcResumoProjeto(p)
       totalContratado += resumo.custoTotal.contratado
-      totalPago += p.conciliacaoEverest?.linhas.reduce((s, l) => s + (l.valorEverest ?? 0), 0) ?? 0
-      margemReal += resumo.margem.contratado
+      const pagoEverest = p.conciliacaoEverest?.linhas.reduce((s, l) => s + (l.valorEverest ?? 0), 0) ?? 0
+      totalPago += pagoEverest
+      margemReal += resumo.receitaBaile.contratado - pagoEverest
     }
     return { totalContratado, totalPago, margemReal }
   }, [projetosRealizados])
