@@ -16,7 +16,8 @@ const C_RECEITA = '#00b894'
 const C_DESPESA = '#e94560'
 const C_AZUL    = '#0078d4'
 const C_CORAL   = '#f97316'
-const CORES_ENSINO = ['#0078d4', '#a855f7', '#f97316']
+const CORES_MARGEM_ENSINO: Record<string, string> = { Superior: '#185FA5', 'Médio': '#3B6D11', Fundamental: '#854F0B' }
+const CORES_CAT = ['#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#06B6D4', '#84CC16', '#EF4444', '#A78BFA', '#34D399']
 
 const ABAS = [
   { id: 'resultado', label: 'Resultado Projetos', Icon: TrendingUp },
@@ -70,15 +71,27 @@ function ResultadoProjetos({ cap, car, tarifas, filtroProj }: { cap: CAPRecord[]
   }
   const dadosAnos = Object.values(porAno).sort((a, b) => a.ano.localeCompare(b.ano))
 
-  const porNivel: Record<string, number> = {}
-  for (const i of carF) {
-    const n = nivelEnsino(i.desc_centro_custo)
-    porNivel[n] = (porNivel[n] ?? 0) + (i.v_lancamento ?? 0)
-  }
-  const totalNivel = Object.values(porNivel).reduce((s, v) => s + v, 0)
-  const donut = Object.entries(porNivel).map(([name, value]) => ({
-    name, value, pct: totalNivel > 0 ? ((value / totalNivel) * 100).toFixed(1) : '0',
-  }))
+  // Margem % por ensino
+  const porNivelMargem: Record<string, { receita: number; despesa: number }> = {}
+  for (const i of carF)     { const n = nivelEnsino(i.desc_centro_custo); porNivelMargem[n] ??= { receita: 0, despesa: 0 }; porNivelMargem[n].receita += i.v_lancamento ?? 0 }
+  for (const i of capF)     { const n = nivelEnsino(i.desc_centro_custo); porNivelMargem[n] ??= { receita: 0, despesa: 0 }; porNivelMargem[n].despesa += i.v_titulo ?? 0 }
+  for (const i of tarifasF) { const n = nivelEnsino(i.desc_centro_custo); porNivelMargem[n] ??= { receita: 0, despesa: 0 }; porNivelMargem[n].despesa += i.v_lancamento ?? 0 }
+  const donutMargem = Object.entries(porNivelMargem)
+    .filter(([, v]) => v.receita > 0)
+    .map(([name, { receita, despesa }]) => {
+      const margemR = receita - despesa
+      return { name, margemR, margemPct: (margemR / receita) * 100, value: Math.max(0, margemR) }
+    })
+    .sort((a, b) => b.margemR - a.margemR)
+
+  // Receitas por conta gerencial (CAR)
+  const porConta: Record<string, number> = {}
+  for (const i of carF) { const c = i.desc_conta_gerencial || 'Outras'; porConta[c] = (porConta[c] ?? 0) + (i.v_lancamento ?? 0) }
+  const totalConta = Object.values(porConta).reduce((s, v) => s + v, 0)
+  const donutCat = Object.entries(porConta)
+    .filter(([, v]) => v > 0)
+    .map(([name, value]) => ({ name, value, pct: totalConta > 0 ? ((value / totalConta) * 100).toFixed(1) : '0' }))
+    .sort((a, b) => b.value - a.value)
 
   const projMap: Record<string, { receita: number; despesa: number }> = {}
   for (const i of carF)     { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].receita += i.v_lancamento ?? 0 }
@@ -100,7 +113,7 @@ function ResultadoProjetos({ cap, car, tarifas, filtroProj }: { cap: CAPRecord[]
         <KPICard title="Margem"           value={`${margem.toFixed(1)}%`}   color={C_AZUL} />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div className="card col-span-2">
           <h3 className="text-text-main text-sm font-semibold mb-4">Receitas vs Despesas por Ano</h3>
           {dadosAnos.length > 0 ? (
@@ -118,24 +131,54 @@ function ResultadoProjetos({ cap, car, tarifas, filtroProj }: { cap: CAPRecord[]
           ) : <EmptyChart />}
         </div>
 
+        {/* Donut: Margem % por Ensino */}
         <div className="card">
-          <h3 className="text-text-main text-sm font-semibold mb-4">Receita por Nível de Ensino</h3>
-          {donut.length > 0 ? (
+          <h3 className="text-text-main text-sm font-semibold mb-3">Margem % por Ensino</h3>
+          {donutMargem.length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={160}>
+              <ResponsiveContainer width="100%" height={150}>
                 <PieChart>
-                  <Pie data={donut} innerRadius={45} outerRadius={70} paddingAngle={3} dataKey="value" label={({ percent }: { percent?: number }) => percent ? `${(percent * 100).toFixed(1)}%` : ''} labelLine={false}>
-                    {donut.map((_, i) => <Cell key={i} fill={CORES_ENSINO[i % CORES_ENSINO.length]} />)}
+                  <Pie data={donutMargem} cx="50%" cy="50%" innerRadius={42} outerRadius={65} paddingAngle={3} dataKey="value" labelLine={false}>
+                    {donutMargem.map((d) => <Cell key={d.name} fill={CORES_MARGEM_ENSINO[d.name] ?? '#64748B'} />)}
+                  </Pie>
+                  <text x="50%" y="46%" textAnchor="middle" dominantBaseline="central" fill="#f0f0f0" fontSize={13} fontWeight="bold">{margem.toFixed(1)}%</text>
+                  <text x="50%" y="57%" textAnchor="middle" dominantBaseline="central" fill="#8892b0" fontSize={9}>Margem Geral</text>
+                  <Tooltip formatter={(_v, _n, p) => [`${(p.payload as { margemPct: number }).margemPct.toFixed(1)}%`, p.name as string]} contentStyle={{ background: '#1e2235', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-1.5 mt-2">
+                {donutMargem.map((d) => (
+                  <div key={d.name} className="flex items-center gap-2 text-xs">
+                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: CORES_MARGEM_ENSINO[d.name] ?? '#64748B' }} />
+                    <span className="text-text-muted flex-1">{d.name}</span>
+                    <span className={`font-semibold ${d.margemPct >= 0 ? 'text-success' : 'text-danger'}`}>{d.margemPct.toFixed(1)}%</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : <EmptyChart />}
+        </div>
+
+        {/* Donut: Receitas por Categoria (CAR conta gerencial) */}
+        <div className="card">
+          <h3 className="text-text-main text-sm font-semibold mb-3">Receitas por Categoria</h3>
+          {donutCat.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={150}>
+                <PieChart>
+                  <Pie data={donutCat} cx="50%" cy="50%" innerRadius={42} outerRadius={65} paddingAngle={2} dataKey="value" labelLine={false}>
+                    {donutCat.map((_, i) => <Cell key={i} fill={CORES_CAT[i % CORES_CAT.length]} />)}
                   </Pie>
                   <Tooltip formatter={(v) => fmtCompact(Number(v))} contentStyle={{ background: '#1e2235', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="space-y-2 mt-2">
-                {donut.map((d, i) => (
+              <div className="space-y-1.5 mt-2 max-h-28 overflow-y-auto">
+                {donutCat.map((d, i) => (
                   <div key={d.name} className="flex items-center gap-2 text-xs">
-                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: CORES_ENSINO[i % CORES_ENSINO.length] }} />
-                    <span className="text-text-muted flex-1">{d.name}</span>
-                    <span className="text-text-main font-semibold">{d.pct}%</span>
+                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: CORES_CAT[i % CORES_CAT.length] }} />
+                    <span className="text-text-muted flex-1 truncate" title={d.name}>{d.name}</span>
+                    <span className="text-text-muted text-[10px] shrink-0">{d.pct}%</span>
+                    <span className="text-text-main font-semibold shrink-0">{fmtCompact(d.value)}</span>
                   </div>
                 ))}
               </div>
