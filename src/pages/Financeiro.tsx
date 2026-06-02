@@ -107,9 +107,9 @@ function ResultadoProjetos({ cap, car, tarifas, filtroProj }: { cap: CAPRecord[]
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-4">
-        <KPICard title="Receitas Totais"  value={fmtCompact(totalReceitas)} color={C_RECEITA} />
-        <KPICard title="Despesas Totais"  value={fmtCompact(totalDespesas)} color={C_DESPESA} />
-        <KPICard title="Resultado"        value={fmtCompact(resultado)}     color={resultado >= 0 ? C_RECEITA : C_DESPESA} />
+        <KPICard title="Receitas Totais"  value={totalReceitas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} color={C_RECEITA} />
+        <KPICard title="Despesas Totais"  value={totalDespesas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} color={C_DESPESA} />
+        <KPICard title="Resultado"        value={resultado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}     color={resultado >= 0 ? C_RECEITA : C_DESPESA} />
         <KPICard title="Margem"           value={`${margem.toFixed(1)}%`}   color={C_AZUL} />
       </div>
 
