@@ -169,7 +169,7 @@ function ResultadoProjetos({ cap, car, tarifas, filtroProj }: { cap: CAPRecord[]
                   <Pie data={donutCat} cx="50%" cy="50%" innerRadius={42} outerRadius={65} paddingAngle={2} dataKey="value" labelLine={false}>
                     {donutCat.map((_, i) => <Cell key={i} fill={CORES_CAT[i % CORES_CAT.length]} />)}
                   </Pie>
-                  <Tooltip formatter={(v) => fmtCompact(Number(v))} contentStyle={{ background: '#1e2235', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }} />
+                  <Tooltip formatter={(v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} contentStyle={{ background: '#1e2235', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="space-y-1.5 mt-2 max-h-28 overflow-y-auto">
@@ -178,7 +178,7 @@ function ResultadoProjetos({ cap, car, tarifas, filtroProj }: { cap: CAPRecord[]
                     <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: CORES_CAT[i % CORES_CAT.length] }} />
                     <span className="text-text-muted flex-1 truncate" title={d.name}>{d.name}</span>
                     <span className="text-text-muted text-[10px] shrink-0">{d.pct}%</span>
-                    <span className="text-text-main font-semibold shrink-0">{fmtCompact(d.value)}</span>
+                    <span className="text-text-main font-semibold shrink-0">{d.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                   </div>
                 ))}
               </div>
