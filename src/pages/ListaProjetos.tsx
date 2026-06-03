@@ -356,6 +356,54 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
           label={totalContratado > 0 ? `Pago: ${progressPct.toFixed(0)}%` : 'Sem dados de custo'}
           color="#6366F1"
         />
+
+        {/* Frescor + ações */}
+        <div className="flex items-center justify-between mt-2" onClick={(e) => e.stopPropagation()}>
+          {(() => {
+            const f = calcFrescor(p.atualizadoEm)
+            return (
+              <div className="flex items-center gap-1.5">
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: f.cor, display: 'inline-block', flexShrink: 0 }} />
+                <span className="text-[10px]" style={{ color: f.cor }}>{f.texto}</span>
+              </div>
+            )
+          })()}
+          {isAdmin && (
+            <div className="flex items-center gap-2">
+              {!!p.sheetsUrl && !!extrairSpreadsheetId(p.sheetsUrl) ? (
+                <button
+                  className="text-primary/70 hover:text-primary text-xs flex items-center gap-1 transition-colors disabled:opacity-50"
+                  disabled={!!sincronizando[p.id]}
+                  onClick={() => handleSincronizar(p)}
+                >
+                  {sincronizando[p.id]
+                    ? <><Loader size={11} className="animate-spin" /> Sinc...</>
+                    : <><Cloud size={11} /> Sincronizar</>}
+                </button>
+              ) : (
+                <button
+                  className="text-primary/60 hover:text-primary text-xs flex items-center gap-1 transition-colors"
+                  onClick={() => setAtualizandoId(p.id)}
+                >
+                  <RefreshCw size={11} /> Atualizar
+                </button>
+              )}
+              <button
+                className="text-text-muted/40 hover:text-text-muted text-xs transition-colors"
+                title="Configurar URL Google Sheets"
+                onClick={() => { setUrlModalId(p.id); setUrlInput(p.sheetsUrl ?? ''); setShowUrlModal(true) }}
+              >
+                <Link size={11} />
+              </button>
+              <button
+                className="text-danger/50 hover:text-danger text-xs flex items-center gap-1 transition-colors"
+                onClick={() => setDeletando(p.id)}
+              >
+                <Trash2 size={11} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     )
   }
