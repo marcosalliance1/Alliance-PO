@@ -107,16 +107,6 @@ function ResultadoProjetos({ cap, car, tarifas, dimensaoProjetos, filtroProj }: 
     .slice(0, 10)
   const maxRes = Math.abs(top10[0]?.resultado ?? 1) || 1
 
-  const top10Margem = Object.entries(projMap)
-    .filter(([n]) => n)
-    .map(([nome, { receita, despesa }]) => ({
-      nome,
-      margemPct: receita > 0 ? ((receita - despesa) / receita) * 100 : 0,
-    }))
-    .sort((a, b) => b.margemPct - a.margemPct)
-    .slice(0, 10)
-  const maxMargem = Math.max(Math.abs(top10Margem[0]?.margemPct ?? 1), 1)
-
   const dimMapT: Record<string, { ensino: string; instituicao: string }> = {}
   for (const d of dimensaoProjetos) {
     if (d.nome_projeto) dimMapT[d.nome_projeto.trim()] = { ensino: normalizeEnsino(d.ensino), instituicao: d.instituicao.trim() }
@@ -253,30 +243,6 @@ function ResultadoProjetos({ cap, car, tarifas, dimensaoProjetos, filtroProj }: 
                   <div className="flex justify-between mb-1">
                     <span className="text-xs text-text-muted truncate flex-1 pr-3">{idx + 1}. {p.nome}</span>
                     <span className="text-xs font-semibold shrink-0" style={{ color: cor }}>{fmtCompact(p.resultado)}</span>
-                  </div>
-                  <div className="h-1.5 bg-black/30 rounded-full">
-                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: cor, opacity: 0.75 }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ) : <EmptyChart />}
-      </div>
-
-      {/* Top 10 por Margem % */}
-      <div className="card">
-        <h3 className="text-text-main text-sm font-semibold mb-4">Top 10 Projetos por Margem %</h3>
-        {top10Margem.length > 0 ? (
-          <div className="space-y-3">
-            {top10Margem.map((p, idx) => {
-              const cor = p.margemPct >= 0 ? C_RECEITA : C_DESPESA
-              const pct = (Math.abs(p.margemPct) / maxMargem) * 100
-              return (
-                <div key={p.nome}>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-xs text-text-muted truncate flex-1 pr-3">{idx + 1}. {p.nome}</span>
-                    <span className="text-xs font-semibold shrink-0" style={{ color: cor }}>{p.margemPct.toFixed(1)}%</span>
                   </div>
                   <div className="h-1.5 bg-black/30 rounded-full">
                     <div className="h-full rounded-full" style={{ width: `${pct}%`, background: cor, opacity: 0.75 }} />
