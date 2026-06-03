@@ -41,7 +41,10 @@ function TTip({ active, payload, label }: { active?: boolean; payload?: { name: 
 }
 
 // ─── Aba 1: Resultado Projetos ────────────────────────────────────
-function ResultadoProjetos({ cap, car, tarifas, filtroProj }: { cap: CAPRecord[]; car: CARRecord[]; tarifas: TarifasRecord[]; filtroProj: string }) {
+function ResultadoProjetos({ cap, car, tarifas, dimensaoProjetos, filtroProj }: { cap: CAPRecord[]; car: CARRecord[]; tarifas: TarifasRecord[]; dimensaoProjetos: DimensaoProjetoRecord[]; filtroProj: string }) {
+  const [ensinoAberto, setEnsinoAberto] = useState<Record<string, boolean>>({})
+  const [instAberta, setInstAberta] = useState<Record<string, boolean>>({})
+
   const fp = filtroProj.toLowerCase()
   const capF     = fp ? cap.filter(r => r.desc_centro_custo.toLowerCase().includes(fp))     : cap
   const carF     = fp ? car.filter(r => r.desc_centro_custo.toLowerCase().includes(fp))     : car
@@ -103,6 +106,57 @@ function ResultadoProjetos({ cap, car, tarifas, filtroProj }: { cap: CAPRecord[]
     .sort((a, b) => b.resultado - a.resultado)
     .slice(0, 10)
   const maxRes = Math.abs(top10[0]?.resultado ?? 1) || 1
+
+  const top10Margem = Object.entries(projMap)
+    .filter(([n]) => n)
+    .map(([nome, { receita, despesa }]) => ({
+      nome,
+      margemPct: receita > 0 ? ((receita - despesa) / receita) * 100 : 0,
+    }))
+    .sort((a, b) => b.margemPct - a.margemPct)
+    .slice(0, 10)
+  const maxMargem = Math.max(Math.abs(top10Margem[0]?.margemPct ?? 1), 1)
+
+  const dimMapT: Record<string, { ensino: string; instituicao: string }> = {}
+  for (const d of dimensaoProjetos) {
+    if (d.nome_projeto) dimMapT[d.nome_projeto.trim()] = { ensino: normalizeEnsino(d.ensino), instituicao: d.instituicao.trim() }
+  }
+  const gruposTab: Record<string, Record<string, { receita: number; despesa: number; projetos: Record<string, { receita: number; despesa: number }> }>> = {}
+  for (const [proj, { receita, despesa }] of Object.entries(projMap)) {
+    if (!proj) continue
+    const dim = dimMapT[proj]
+    const ensino = dim?.ensino || 'Outros'
+    const inst   = dim?.instituicao || 'Outros'
+    gruposTab[ensino] ??= {}
+    gruposTab[ensino][inst] ??= { receita: 0, despesa: 0, projetos: {} }
+    gruposTab[ensino][inst].receita += receita
+    gruposTab[ensino][inst].despesa += despesa
+    gruposTab[ensino][inst].projetos[proj] = { receita, despesa }
+  }
+  type TabelaProj  = { nome: string; receita: number; despesa: number }
+  type TabelaInst  = { nome: string; receita: number; despesa: number; projetos: TabelaProj[] }
+  type TabelaEnsino = { nome: string; receita: number; despesa: number; instituicoes: TabelaInst[] }
+  const tabelaEnsinos: TabelaEnsino[] = [
+    ...ORDEM_ENSINO.filter(e => gruposTab[e]),
+    ...Object.keys(gruposTab).filter(e => !ORDEM_ENSINO.includes(e)),
+  ].map(ensino => {
+    const instMap = gruposTab[ensino]
+    let eRec = 0, eDesp = 0
+    const instituicoes: TabelaInst[] = Object.entries(instMap)
+      .sort((a, b) => (b[1].receita - b[1].despesa) - (a[1].receita - a[1].despesa))
+      .map(([nome, { receita, despesa, projetos }]) => {
+        eRec += receita; eDesp += despesa
+        return {
+          nome, receita, despesa,
+          projetos: Object.entries(projetos)
+            .sort((a, b) => (b[1].receita - b[1].despesa) - (a[1].receita - a[1].despesa))
+            .map(([n, rv]) => ({ nome: n, receita: rv.receita, despesa: rv.despesa })),
+        }
+      })
+    return { nome: ensino, receita: eRec, despesa: eDesp, instituicoes }
+  })
+  const totalGeralRec  = tabelaEnsinos.reduce((s, e) => s + e.receita, 0)
+  const totalGeralDesp = tabelaEnsinos.reduce((s, e) => s + e.despesa, 0)
 
   return (
     <div className="space-y-5">
@@ -209,6 +263,126 @@ function ResultadoProjetos({ cap, car, tarifas, filtroProj }: { cap: CAPRecord[]
           </div>
         ) : <EmptyChart />}
       </div>
+
+      {/* Top 10 por Margem % */}
+      <div className="card">
+        <h3 className="text-text-main text-sm font-semibold mb-4">Top 10 Projetos por Margem %</h3>
+        {top10Margem.length > 0 ? (
+          <div className="space-y-3">
+            {top10Margem.map((p, idx) => {
+              const cor = p.margemPct >= 0 ? C_RECEITA : C_DESPESA
+              const pct = (Math.abs(p.margemPct) / maxMargem) * 100
+              return (
+                <div key={p.nome}>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-xs text-text-muted truncate flex-1 pr-3">{idx + 1}. {p.nome}</span>
+                    <span className="text-xs font-semibold shrink-0" style={{ color: cor }}>{p.margemPct.toFixed(1)}%</span>
+                  </div>
+                  <div className="h-1.5 bg-black/30 rounded-full">
+                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: cor, opacity: 0.75 }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : <EmptyChart />}
+      </div>
+
+      {/* Tabela Geral de Projetos */}
+      {tabelaEnsinos.length > 0 && (
+        <div className="card p-0 overflow-hidden">
+          <div className="px-5 py-3 border-b border-white/10 text-text-main text-sm font-semibold">Tabela Geral de Projetos</div>
+          {/* Cabeçalho das colunas */}
+          <div className="flex items-center px-5 py-2.5 border-b border-white/10 bg-white/5 text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+            <span className="flex-1">Projeto / Instituição / Ensino</span>
+            <span className="w-28 text-right shrink-0">Receita</span>
+            <span className="w-28 text-right shrink-0">Despesa</span>
+            <span className="w-28 text-right shrink-0">Resultado</span>
+            <span className="w-20 text-right shrink-0">Margem %</span>
+          </div>
+
+          {tabelaEnsinos.map(ensino => {
+            const cores = NIVEL_CORES[ensino.nome] ?? NIVEL_CORES['Outros']
+            const eRes  = ensino.receita - ensino.despesa
+            const eMarg = ensino.receita > 0 ? (eRes / ensino.receita) * 100 : 0
+            const eAberto = !!ensinoAberto[ensino.nome]
+            return (
+              <div key={ensino.nome}>
+                {/* Nível 1: Ensino */}
+                <button
+                  onClick={() => setEnsinoAberto(p => ({ ...p, [ensino.nome]: !p[ensino.nome] }))}
+                  className="w-full flex items-center px-5 py-3 text-left text-xs font-bold border-b border-white/10 hover:opacity-80 transition-opacity"
+                  style={{ background: `${cores.forte}26`, borderLeft: `3px solid ${cores.forte}`, color: cores.claro }}
+                >
+                  <span className="flex items-center gap-2 flex-1 uppercase tracking-wider">
+                    {eAberto ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    {ensino.nome}
+                  </span>
+                  <span className="w-28 text-right shrink-0">{fmtCompact(ensino.receita)}</span>
+                  <span className="w-28 text-right shrink-0">{fmtCompact(ensino.despesa)}</span>
+                  <span className="w-28 text-right shrink-0" style={{ color: eRes >= 0 ? C_RECEITA : C_DESPESA }}>{fmtCompact(eRes)}</span>
+                  <span className="w-20 text-right shrink-0 font-semibold" style={{ color: eMarg >= 0 ? C_RECEITA : C_DESPESA }}>{eMarg.toFixed(1)}%</span>
+                </button>
+
+                {eAberto && ensino.instituicoes.map(inst => {
+                  const ik     = `${ensino.nome}::${inst.nome}`
+                  const iRes   = inst.receita - inst.despesa
+                  const iMarg  = inst.receita > 0 ? (iRes / inst.receita) * 100 : 0
+                  const iAberta = !!instAberta[ik]
+                  return (
+                    <div key={inst.nome}>
+                      {/* Nível 2: Instituição */}
+                      <button
+                        onClick={() => setInstAberta(p => ({ ...p, [ik]: !p[ik] }))}
+                        className="w-full flex items-center px-5 py-2.5 pl-10 text-left text-xs font-semibold border-b border-white/5 hover:opacity-80 transition-opacity"
+                        style={{ background: `${cores.claro}12`, borderLeft: `2px solid ${cores.claro}`, color: cores.claro }}
+                      >
+                        <span className="flex items-center gap-2 flex-1 uppercase tracking-wide">
+                          {iAberta ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                          {inst.nome}
+                        </span>
+                        <span className="w-28 text-right shrink-0">{fmtCompact(inst.receita)}</span>
+                        <span className="w-28 text-right shrink-0">{fmtCompact(inst.despesa)}</span>
+                        <span className="w-28 text-right shrink-0" style={{ color: iRes >= 0 ? C_RECEITA : C_DESPESA }}>{fmtCompact(iRes)}</span>
+                        <span className="w-20 text-right shrink-0 font-semibold" style={{ color: iMarg >= 0 ? C_RECEITA : C_DESPESA }}>{iMarg.toFixed(1)}%</span>
+                      </button>
+
+                      {iAberta && inst.projetos.map(proj => {
+                        const pRes  = proj.receita - proj.despesa
+                        const pMarg = proj.receita > 0 ? (pRes / proj.receita) * 100 : 0
+                        return (
+                          <div key={proj.nome} className="flex items-center px-5 py-2 pl-16 text-xs border-b border-white/5 bg-black/15">
+                            <span className="flex-1 truncate pr-3 text-text-main">{proj.nome}</span>
+                            <span className="w-28 text-right shrink-0 text-text-muted">{fmtCompact(proj.receita)}</span>
+                            <span className="w-28 text-right shrink-0 text-text-muted">{fmtCompact(proj.despesa)}</span>
+                            <span className="w-28 text-right shrink-0 font-medium" style={{ color: pRes >= 0 ? C_RECEITA : C_DESPESA }}>{fmtCompact(pRes)}</span>
+                            <span className="w-20 text-right shrink-0 font-semibold" style={{ color: pMarg >= 0 ? C_RECEITA : C_DESPESA }}>{pMarg.toFixed(1)}%</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+
+          {/* Rodapé: Total Geral */}
+          {(() => {
+            const totRes  = totalGeralRec - totalGeralDesp
+            const totMarg = totalGeralRec > 0 ? (totRes / totalGeralRec) * 100 : 0
+            return (
+              <div className="flex items-center px-5 py-3 border-t border-white/15 bg-white/5 text-xs font-bold text-text-main">
+                <span className="flex-1">Total Geral</span>
+                <span className="w-28 text-right shrink-0">{fmtCompact(totalGeralRec)}</span>
+                <span className="w-28 text-right shrink-0">{fmtCompact(totalGeralDesp)}</span>
+                <span className="w-28 text-right shrink-0" style={{ color: totRes >= 0 ? C_RECEITA : C_DESPESA }}>{fmtCompact(totRes)}</span>
+                <span className="w-20 text-right shrink-0" style={{ color: totMarg >= 0 ? C_RECEITA : C_DESPESA }}>{totMarg.toFixed(1)}%</span>
+              </div>
+            )
+          })()}
+        </div>
+      )}
     </div>
   )
 }
@@ -978,7 +1152,7 @@ export function Financeiro() {
         </div>
       ) : (
         <>
-          {abaAtiva === 'resultado' && <ResultadoProjetos cap={cap} car={car} tarifas={tarifas} filtroProj={filtroProj} />}
+          {abaAtiva === 'resultado' && <ResultadoProjetos cap={cap} car={car} tarifas={tarifas} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
           {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} filtroProj={filtroProj} />}
           {abaAtiva === 'despesas' && <ControleDespesas cap={cap} tarifas={tarifas} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
           {abaAtiva === 'dados'    && <TabelaDados cap={cap} car={car} filtroProj={filtroProj} />}
