@@ -12,7 +12,7 @@ export const ResumoFinanceiro: React.FC<Props> = ({ orc }) => {
     for (const s of secoes) {
       totalOrcado += s.reduce((acc, i) => acc + i.totalOrcado, 0)
       totalPago   += s.reduce((acc, i) => acc + i.totalPagoReal, 0)
-      totalBV     += s.reduce((acc, i) => acc + i.bvAbsoluto, 0)
+      totalBV     += s.reduce((acc, i) => acc + (i.valorPassadoCliente - i.totalPagoReal), 0)
     }
     const saldo  = totalReceitas - totalPago
     const bvPct  = totalPago > 0 ? (totalBV / totalPago) * 100 : 0

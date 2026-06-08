@@ -143,7 +143,7 @@ export const ListaOrcamentosPage: React.FC = () => {
                           const allItems = [...o.operacaoEstrutura, ...o.equipe, ...o.atracao, ...o.abBebidas, ...o.extras]
                           const totalReceitas = o.bolsaFolia + o.receitasSympla.reduce((s, l) => s + l.total, 0)
                           const totalPago = allItems.reduce((s, i) => s + i.totalPagoReal, 0)
-                          const totalBV   = allItems.reduce((s, i) => s + i.bvAbsoluto, 0)
+                          const totalBV   = allItems.reduce((s, i) => s + (i.valorPassadoCliente - i.totalPagoReal), 0)
 
                           return (
                             <tr

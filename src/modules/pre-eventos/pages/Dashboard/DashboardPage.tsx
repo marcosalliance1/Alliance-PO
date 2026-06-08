@@ -78,7 +78,7 @@ export const DashboardPage: React.FC = () => {
       const items = allItemsOf(o)
       totalOrcado += items.reduce((s, i) => s + i.totalOrcado, 0)
       totalPago   += items.reduce((s, i) => s + i.totalPagoReal, 0)
-      totalBV     += items.reduce((s, i) => s + i.bvAbsoluto, 0)
+      totalBV     += items.reduce((s, i) => s + (i.valorPassadoCliente - i.totalPagoReal), 0)
       bolsaFolia  += o.bolsaFolia
       sympla      += o.receitasSympla.reduce((s, l) => s + l.total, 0)
     }
