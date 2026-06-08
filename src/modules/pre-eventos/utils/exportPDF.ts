@@ -98,6 +98,18 @@ function secaoTable(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
   })
 }
 
+function logoParaBranco(img: HTMLImageElement): string {
+  const canvas = document.createElement('canvas')
+  canvas.width  = img.naturalWidth
+  canvas.height = img.naturalHeight
+  const ctx = canvas.getContext('2d')!
+  ctx.drawImage(img, 0, 0)
+  ctx.globalCompositeOperation = 'source-in'
+  ctx.fillStyle = 'white'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  return canvas.toDataURL('image/png')
+}
+
 export async function exportarPDF(orc: Orcamento) {
   const logoImg = await new Promise<HTMLImageElement>((resolve) => {
     const img = new Image()
@@ -105,12 +117,13 @@ export async function exportarPDF(orc: Orcamento) {
     img.onerror = () => resolve(img)
     img.src = allianceLogo
   })
-  const hasLogo  = logoImg.naturalWidth > 0
+  const hasLogo   = logoImg.naturalWidth > 0
   const logoRatio = hasLogo ? logoImg.naturalWidth / logoImg.naturalHeight : 4
-  const logoH    = 11                        // mm — cabeçalho (~40px)
-  const logoW    = logoH * logoRatio
-  const logoHF   = 4.5                       // mm — rodapé (~20px)
-  const logoWF   = logoHF * logoRatio
+  const logoBranco = hasLogo ? logoParaBranco(logoImg) : ''
+  const logoH     = 11                        // mm — cabeçalho (~40px)
+  const logoW     = logoH * logoRatio
+  const logoHF    = 4.5                       // mm — rodapé (~20px)
+  const logoWF    = logoHF * logoRatio
 
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
 
@@ -120,7 +133,7 @@ export async function exportarPDF(orc: Orcamento) {
   // Cabeçalho
   doc.setFillColor(...ACC)
   doc.rect(0, 0, 297, 16, 'F')
-  if (hasLogo) doc.addImage(logoImg, 'PNG', 10, 2.5, logoW, logoH)
+  if (hasLogo) doc.addImage(logoBranco, 'PNG', 10, 2.5, logoW, logoH)
   doc.setFontSize(13)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(...HDR_TEXT)
@@ -197,7 +210,7 @@ export async function exportarPDF(orc: Orcamento) {
     doc.setFillColor(245, 245, 248)
     doc.rect(0, 203, 297, 7, 'F')
     doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...TEXT_MUT)
-    if (hasLogo) doc.addImage(logoImg, 'PNG', 10, 204, logoWF, logoHF)
+    if (hasLogo) doc.addImage(logoBranco, 'PNG', 10, 204, logoWF, logoHF)
     doc.text('Alliance Formaturas — Documento Confidencial', hasLogo ? 10 + logoWF + 2 : 10, 207.5)
     doc.text(`Página ${p} de ${total}`, 287, 207.5, { align: 'right' })
   }
