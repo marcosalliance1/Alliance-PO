@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable'
 import type { Orcamento, ItemOrcamento } from '../types'
 import { EVENT_TYPE_LABELS } from '../data/defaults'
 import { formatBRL, formatDate } from './formatters'
+import allianceLogo from '../../../assets/alliance-logo.png'
 
 const HDR_BG   = [26, 26, 46]   as [number,number,number]
 const HDR_TEXT = [255,255,255]  as [number,number,number]
@@ -42,7 +43,7 @@ function secaoTable(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
       String(i.qtde),
       formatBRL(i.custoUnitario),
       formatBRL(i.totalOrcado),
-      formatBRL(i.totalPagoReal),
+      formatBRL(i.valorPassadoCliente),
       i.dataPagamento ? formatDate(i.dataPagamento) : '—',
     ]
   })
@@ -50,13 +51,13 @@ function secaoTable(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
   const subtotalRow = [
     'SUBTOTAL', '', '', '',
     formatBRL(filtered.reduce((s, i) => s + i.totalOrcado, 0)),
-    formatBRL(filtered.reduce((s, i) => s + i.totalPagoReal, 0)),
+    formatBRL(filtered.reduce((s, i) => s + i.valorPassadoCliente, 0)),
     '',
   ]
 
   autoTable(doc, {
     startY: y + 12,
-    head: [['Item', 'Fornecedor', 'Qtde', 'Custo Unitário', 'Total Orçado', 'Total Pago', 'Data Pgto.']],
+    head: [['Item', 'Fornecedor', 'Qtde', 'Custo Unitário', 'Total Orçado', 'V. Pago', 'Data Pgto.']],
     body: rows,
     foot: [subtotalRow],
     theme: 'grid',
@@ -97,7 +98,20 @@ function secaoTable(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
   })
 }
 
-export function exportarPDF(orc: Orcamento) {
+export async function exportarPDF(orc: Orcamento) {
+  const logoImg = await new Promise<HTMLImageElement>((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(img)
+    img.src = allianceLogo
+  })
+  const hasLogo  = logoImg.naturalWidth > 0
+  const logoRatio = hasLogo ? logoImg.naturalWidth / logoImg.naturalHeight : 4
+  const logoH    = 11                        // mm — cabeçalho (~40px)
+  const logoW    = logoH * logoRatio
+  const logoHF   = 4.5                       // mm — rodapé (~20px)
+  const logoWF   = logoHF * logoRatio
+
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
 
   doc.setFillColor(255, 255, 255)
@@ -106,10 +120,11 @@ export function exportarPDF(orc: Orcamento) {
   // Cabeçalho
   doc.setFillColor(...ACC)
   doc.rect(0, 0, 297, 16, 'F')
+  if (hasLogo) doc.addImage(logoImg, 'PNG', 10, 2.5, logoW, logoH)
   doc.setFontSize(13)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(...HDR_TEXT)
-  doc.text('ALLIANCE FORMATURAS', 10, 11)
+  doc.text('ALLIANCE FORMATURAS', hasLogo ? 10 + logoW + 3 : 10, 11)
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
   doc.text('Orçamento de Pré-Evento — Documento Confidencial', 287, 11, { align: 'right' })
@@ -182,7 +197,8 @@ export function exportarPDF(orc: Orcamento) {
     doc.setFillColor(245, 245, 248)
     doc.rect(0, 203, 297, 7, 'F')
     doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...TEXT_MUT)
-    doc.text('Alliance Formaturas — Documento Confidencial', 10, 207.5)
+    if (hasLogo) doc.addImage(logoImg, 'PNG', 10, 204, logoWF, logoHF)
+    doc.text('Alliance Formaturas — Documento Confidencial', hasLogo ? 10 + logoWF + 2 : 10, 207.5)
     doc.text(`Página ${p} de ${total}`, 287, 207.5, { align: 'right' })
   }
 

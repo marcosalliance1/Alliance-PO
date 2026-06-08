@@ -216,9 +216,9 @@ export const OrcamentoPage: React.FC = () => {
     addToast('Orçamento salvo com sucesso!', 'success')
   }
 
-  function handlePDF() {
+  async function handlePDF() {
     if (!orc) return
-    exportarPDF(orc)
+    await exportarPDF(orc)
     addToast('PDF gerado!', 'success')
   }
 

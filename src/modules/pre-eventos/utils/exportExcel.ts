@@ -9,20 +9,20 @@ function temDados(i: ItemOrcamento): boolean {
 
 function itemsParaRows(items: ItemOrcamento[]) {
   const filtered = items.filter(temDados)
-  const header = ['Item', 'Fornecedor', 'Qtde', 'Custo Unitário', 'Total Orçado', 'Total Pago']
+  const header = ['Item', 'Fornecedor', 'Qtde', 'Custo Unitário', 'Total Orçado', 'V. Pago']
   const rows = filtered.map(i => [
     i.item,
     i.fornecedor,
     i.qtde,
     i.custoUnitario,
     i.totalOrcado,
-    i.totalPagoReal,
+    i.valorPassadoCliente,
   ])
   const sub = [
     'SUBTOTAL', '', '',
     '',
     filtered.reduce((s, i) => s + i.totalOrcado, 0),
-    filtered.reduce((s, i) => s + i.totalPagoReal, 0),
+    filtered.reduce((s, i) => s + i.valorPassadoCliente, 0),
   ]
   return [header, ...rows, sub]
 }
