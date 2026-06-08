@@ -24,7 +24,13 @@ function secaoTable(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
   const filtered = items.filter(temDados)
   if (filtered.length === 0) return
 
-  const y = (doc as any).lastAutoTable?.finalY ?? 40
+  let y = (doc as any).lastAutoTable?.finalY ?? 40
+  const estimatedH = 20 + (filtered.length + 1) * 7
+  if (200 - y < Math.min(estimatedH, 45)) {
+    doc.addPage()
+    y = 8
+    ;(doc as any).lastAutoTable = { finalY: 8 }
+  }
 
   doc.setFillColor(...HDR_BG)
   doc.rect(10, y + 3, 277, 7, 'F')
@@ -98,6 +104,51 @@ function secaoTable(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
   })
 }
 
+function receitasTable(doc: jsPDF, orc: Orcamento) {
+  const totalSympla   = orc.receitasSympla.reduce((s, l) => s + l.total, 0)
+  const totalReceitas = orc.bolsaFolia + totalSympla
+
+  const rows = [
+    ['Bolsa Folia', '1', formatBRL(orc.bolsaFolia), formatBRL(orc.bolsaFolia)],
+    ...orc.receitasSympla.map(l => [l.nome, String(l.qtde), formatBRL(l.valorUnitario), formatBRL(l.total)]),
+  ]
+
+  let y = (doc as any).lastAutoTable?.finalY ?? 40
+  const estimatedH = 20 + (rows.length + 1) * 7
+  if (200 - y < Math.min(estimatedH, 45)) {
+    doc.addPage()
+    y = 8
+    ;(doc as any).lastAutoTable = { finalY: 8 }
+  }
+
+  doc.setFillColor(...HDR_BG)
+  doc.rect(10, y + 3, 277, 7, 'F')
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...HDR_TEXT)
+  doc.text('RECEITAS', 13, y + 8.5)
+
+  autoTable(doc, {
+    startY: y + 12,
+    head: [['Lote / Descrição', 'Qtde', 'Valor Unitário', 'Total']],
+    body: rows,
+    foot: [['TOTAL', '', '', formatBRL(totalReceitas)]],
+    theme: 'grid',
+    headStyles: { fillColor: [60, 60, 90] as [number,number,number], textColor: HDR_TEXT, fontSize: 9, fontStyle: 'bold' },
+    bodyStyles: { textColor: TEXT, fontSize: 9, fillColor: ROW_ODD },
+    alternateRowStyles: { fillColor: ROW_EVEN },
+    footStyles: { fillColor: SUB_BG, textColor: TEXT, fontStyle: 'bold', fontSize: 9 },
+    styles: { lineColor: [220, 220, 230] as [number,number,number], lineWidth: 0.1 },
+    margin: { left: 10, right: 10 },
+    columnStyles: {
+      0: { cellWidth: 120 },
+      1: { cellWidth: 25, halign: 'right' },
+      2: { cellWidth: 56, halign: 'right' },
+      3: { cellWidth: 56, halign: 'right' },
+    },
+  })
+}
+
 function logoParaBranco(img: HTMLImageElement): string {
   const canvas = document.createElement('canvas')
   canvas.width  = img.naturalWidth
@@ -166,6 +217,7 @@ export async function exportarPDF(orc: Orcamento) {
   secaoTable(doc, 'ATRAÇÃO',                     orc.atracao)
   secaoTable(doc, 'A&B — ALIMENTOS E BEBIDAS',   orc.abBebidas)
   secaoTable(doc, 'EXTRAS',                      orc.extras)
+  receitasTable(doc, orc)
 
   // Resumo financeiro
   const finalY = (doc as any).lastAutoTable?.finalY ?? 140
@@ -210,7 +262,7 @@ export async function exportarPDF(orc: Orcamento) {
     doc.setFillColor(245, 245, 248)
     doc.rect(0, 203, 297, 7, 'F')
     doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...TEXT_MUT)
-    if (hasLogo) doc.addImage(logoBranco, 'PNG', 10, 204, logoWF, logoHF)
+    if (hasLogo) doc.addImage(logoImg, 'PNG', 10, 204, logoWF, logoHF)
     doc.text('Alliance Formaturas — Documento Confidencial', hasLogo ? 10 + logoWF + 2 : 10, 207.5)
     doc.text(`Página ${p} de ${total}`, 287, 207.5, { align: 'right' })
   }
