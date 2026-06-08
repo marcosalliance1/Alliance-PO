@@ -110,7 +110,7 @@ function parseTipoCusto(val: unknown): TipoCusto {
 }
 
 function parseItens(
-  values: unknown[][], _secaoNumero: string, secaoNome: string,
+  values: unknown[][], _secaoNumero: string, secaoNome: string, layout: 'A' | 'B' = 'A',
 ): { itens: ItemCusto[], avisos: string[] } {
   const itens: ItemCusto[] = []
   const avisos: string[] = []
@@ -154,7 +154,7 @@ function parseItens(
     // ORÇADO — espelho direto da planilha
     const qtdeOrcada = parseNum(get(13))
     const valorUnitarioOrcado = parseNum(get(14))
-    const valorOrcado = parseNum(get(15))          // ← lê direto da col P, não recalcula
+    const valorOrcado = parseNum(get(layout === 'B' ? 14 : 15))  // Layout A=P(15) Layout B=O(14)
 
     // Aviso de inconsistência: Qtde × VU ≠ Valor Orçado na planilha
     if (valorOrcado > 0 && qtdeOrcada > 0 && valorUnitarioOrcado > 0) {
@@ -168,7 +168,7 @@ function parseItens(
     // CONTRATADO — espelho direto da planilha
     const qtdeContratada = parseNum(get(17))
     const valorUnitarioContratado = parseNum(get(18))
-    const valorContratado = parseNum(get(19))      // ← lê direto da col T, não recalcula
+    const valorContratado = parseNum(get(layout === 'B' ? 18 : 19))  // Layout A=T(19) Layout B=S(18)
 
     // Aviso de inconsistência: Qtde × VU ≠ Valor Contratado na planilha
     if (valorContratado > 0 && qtdeContratada > 0 && valorUnitarioContratado > 0) {
@@ -183,8 +183,8 @@ function parseItens(
     const status = parseStatus(get(21))
     const statusPagamento = parsePgto(get(24))
     const valorFinal = parseNum(get(26))
-    const valorPago = parseNum(get(27))
-    const faltaPagar = parseNum(get(28))           // ← lê direto da col AC
+    const valorPago = parseNum(get(layout === 'B' ? 26 : 27))  // Layout A=AB(27) Layout B=AA(26)
+    const faltaPagar = parseNum(get(28))
 
     itens.push({
       id: uuid(), codigo, area, subcategoria, item, fornecedor, tipoCusto, moscow,
@@ -448,6 +448,7 @@ export async function sincronizarComSheets(
   accessToken: string,
   projeto: Projeto,
   onProgress: (msg: string) => void,
+  layout: 'A' | 'B' = 'A',
 ): Promise<SyncResult> {
   onProgress('Lendo estrutura da planilha...')
 
@@ -518,7 +519,7 @@ export async function sincronizarComSheets(
     try {
       const values = await fetchAba(spreadsheetId, nomeAba, accessToken)
       if (values) {
-        const { itens, avisos: avisosAba } = parseItens(values, secaoProjeto.numero, secaoProjeto.nome)
+        const { itens, avisos: avisosAba } = parseItens(values, secaoProjeto.numero, secaoProjeto.nome, layout)
         novasSecoes.set(secaoProjeto.numero, itens)
         avisosItens.push(...avisosAba)
       }

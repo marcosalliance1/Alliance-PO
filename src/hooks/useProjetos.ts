@@ -18,6 +18,7 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
     atualizadoEm: row.atualizado_em as string,
     importadoDe: (row.importado_de as string) ?? undefined,
     sheetsUrl: (row.sheets_url as string) ?? undefined,
+    sheetLayout: ((row.sheet_layout as string) === 'B' ? 'B' : undefined),
     status: (row.status as string) === 'realizado' ? 'realizado' : 'em_andamento',
   }
 }
@@ -291,6 +292,15 @@ export function useProjetos() {
     setProjetos((prev) => prev.map((p) => p.id === id ? { ...p, sheetsUrl: url || undefined } : p))
   }, [])
 
+  const atualizarSheetLayout = useCallback(async (id: string, layout: 'A' | 'B') => {
+    const { error: err } = await supabase
+      .from('projetos')
+      .update({ sheet_layout: layout })
+      .eq('id', id)
+    if (err) throw new Error(err.message)
+    setProjetos((prev) => prev.map((p) => p.id === id ? { ...p, sheetLayout: layout } : p))
+  }, [])
+
   // ── Marcar como realizado ────────────────────────────────────────────────────
   const marcarRealizado = useCallback(async (id: string) => {
     const { error: err } = await supabase.from('projetos').update({ status: 'realizado' }).eq('id', id)
@@ -303,6 +313,6 @@ export function useProjetos() {
     carregar, criarProjeto, salvarProjeto, importarProjeto, reimportarProjeto, excluirProjeto,
     atualizarTAP, atualizarReceitas, atualizarConciliacao, atualizarCustosAdicionais,
     adicionarItem, atualizarItem, excluirItem,
-    getProjeto, sincronizarSecoes, atualizarSheetsUrl, marcarRealizado,
+    getProjeto, sincronizarSecoes, atualizarSheetsUrl, atualizarSheetLayout, marcarRealizado,
   }
 }

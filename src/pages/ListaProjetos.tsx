@@ -35,6 +35,7 @@ interface ListaProjetosProps {
   onExcluir: (id: string) => Promise<void>
   onSincronizar: (id: string, result: SyncResult) => Promise<void>
   onAtualizarSheetsUrl: (id: string, url: string) => Promise<void>
+  onAtualizarSheetLayout: (id: string, layout: 'A' | 'B') => Promise<void>
   onMarcarRealizado: (id: string) => Promise<void>
 }
 
@@ -68,7 +69,7 @@ function agruparPorAnoTipo(lista: Projeto[]): [number, Map<TipoEscola, Projeto[]
   return Array.from(map.entries()).sort((a, b) => b[0] - a[0])
 }
 
-export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, onSincronizar, onAtualizarSheetsUrl, onMarcarRealizado }: ListaProjetosProps) {
+export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, onSincronizar, onAtualizarSheetsUrl, onAtualizarSheetLayout, onMarcarRealizado }: ListaProjetosProps) {
   const navigate = useNavigate()
   const { accessToken, conectar, invalidarToken } = useGoogleAuth()
   const { isAdmin } = useAuth()
@@ -91,6 +92,10 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
   const [showUrlModal, setShowUrlModal] = useState(false)
   const [urlModalId, setUrlModalId] = useState<string | null>(null)
   const [urlInput, setUrlInput] = useState('')
+
+  // Modal de escolha de layout
+  const [showLayoutModal, setShowLayoutModal] = useState(false)
+  const [layoutPendingProjeto, setLayoutPendingProjeto] = useState<Projeto | null>(null)
 
   const anos = useMemo(() => {
     const set = new Set(projetos.map((p) => p.tap.anoRealizacao))
@@ -138,6 +143,7 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
         accessToken,
         projeto,
         (msg) => setProgressoSync(msg),
+        projeto.sheetLayout ?? 'A',
       )
       await onSincronizar(projeto.id, resultado)
       setToast({ mensagem: `Sincronizado com sucesso — TAP, receitas e custos atualizados`, tipo: 'sucesso' })
@@ -175,12 +181,31 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
       setShowUrlModal(true)
       return
     }
+    if (!projeto.sheetLayout) {
+      setLayoutPendingProjeto(projeto)
+      setShowLayoutModal(true)
+      return
+    }
     if (!accessToken) {
       setPendingSyncId(projeto.id)
       conectar()
       return
     }
     executarSync(projeto)
+  }
+
+  async function handleEscolherLayout(layout: 'A' | 'B') {
+    if (!layoutPendingProjeto) return
+    setShowLayoutModal(false)
+    await onAtualizarSheetLayout(layoutPendingProjeto.id, layout)
+    const projetoAtualizado = { ...layoutPendingProjeto, sheetLayout: layout }
+    setLayoutPendingProjeto(null)
+    if (!accessToken) {
+      setPendingSyncId(projetoAtualizado.id)
+      conectar()
+    } else {
+      executarSync(projetoAtualizado)
+    }
   }
 
   async function salvarUrlESync() {
@@ -599,6 +624,26 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
               className="w-full bg-bg border border-white/10 rounded-lg px-3 py-2.5 text-sm text-text-main focus:outline-none focus:border-primary mb-4"
               autoFocus
             />
+            {urlModalId && (() => {
+              const proj = projetos.find(p => p.id === urlModalId)
+              const layout = proj?.sheetLayout
+              return (
+                <div className="mb-4">
+                  <p className="text-text-muted text-xs mb-2">Layout da planilha</p>
+                  <div className="flex gap-2">
+                    {(['A', 'B'] as const).map(l => (
+                      <button
+                        key={l}
+                        onClick={() => proj && onAtualizarSheetLayout(proj.id, l)}
+                        className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-colors ${layout === l ? 'bg-primary text-white border-primary' : 'bg-bg text-text-muted border-white/10 hover:border-primary/50'}`}
+                      >
+                        {l === 'A' ? 'Layout Antigo (padrão)' : 'Layout Novo (2026)'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
             <div className="flex gap-3 justify-end">
               <button
                 className="btn-secondary text-sm"
@@ -613,6 +658,38 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
                 <Cloud size={14} /> Salvar e Sincronizar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal escolha de layout */}
+      {showLayoutModal && layoutPendingProjeto && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface border border-white/10 rounded-xl w-full max-w-sm p-6">
+            <h3 className="text-text-main font-semibold text-base mb-1">Layout da planilha</h3>
+            <p className="text-text-muted text-xs mb-5">Qual layout de planilha este projeto usa? Esta escolha será salva e não será perguntada novamente.</p>
+            <div className="flex flex-col gap-3">
+              <button
+                className="w-full py-3 rounded-lg text-sm font-medium bg-bg border border-white/10 text-text-main hover:border-primary/60 hover:bg-primary/5 transition-colors text-left px-4"
+                onClick={() => handleEscolherLayout('A')}
+              >
+                <span className="font-semibold text-text-main">Layout Antigo (padrão)</span>
+                <span className="block text-text-muted text-xs mt-0.5">Orçado: col P · Contratado: col T · Pago: col AB</span>
+              </button>
+              <button
+                className="w-full py-3 rounded-lg text-sm font-medium bg-bg border border-white/10 text-text-main hover:border-primary/60 hover:bg-primary/5 transition-colors text-left px-4"
+                onClick={() => handleEscolherLayout('B')}
+              >
+                <span className="font-semibold text-text-main">Layout Novo (2026)</span>
+                <span className="block text-text-muted text-xs mt-0.5">Orçado: col O · Contratado: col S · Pago: col AA</span>
+              </button>
+            </div>
+            <button
+              className="mt-4 w-full text-text-muted text-xs hover:text-text-main transition-colors"
+              onClick={() => { setShowLayoutModal(false); setLayoutPendingProjeto(null) }}
+            >
+              Cancelar
+            </button>
           </div>
         </div>
       )}
