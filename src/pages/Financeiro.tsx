@@ -60,10 +60,11 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
   const resultado = totalReceitas - totalDespesas
   const margem = totalReceitas > 0 ? (resultado / totalReceitas) * 100 : 0
 
-  // Projetado (Boletim + CAP ATIVO)
-  const totalDespesasP = totalDespesas + capF.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-  const resultadoP     = totalReceitas - totalDespesasP
-  const margemP        = totalReceitas > 0 ? (resultadoP / totalReceitas) * 100 : 0
+  // Projetado (CAP total + Tarifas do Boletim)
+  const tarifasBoletimF = boletimF.filter(r => r.desc_conta_gerencial.toUpperCase() === 'TARIFAS BANCARIAS').reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const totalDespesasP  = capF.reduce((s, i) => s + (i.v_titulo ?? 0), 0) + tarifasBoletimF
+  const resultadoP      = totalReceitas - totalDespesasP
+  const margemP         = totalReceitas > 0 ? (resultadoP / totalReceitas) * 100 : 0
 
   const porAno: Record<string, { ano: string; receitas: number; despesas: number }> = {}
   for (const i of receitas) {
