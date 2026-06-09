@@ -3,10 +3,9 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts'
-import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight, Table2, Search, ChevronLeft, RefreshCw } from 'lucide-react'
-import { useFinanceiro, type CAPRecord, type CARRecord, type TarifasRecord, type DimensaoProjetoRecord } from '../hooks/useFinanceiro'
+import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight, Table2, Search, ChevronLeft } from 'lucide-react'
+import { useFinanceiro, type BoletimRecord, type DimensaoProjetoRecord } from '../hooks/useFinanceiro'
 import { fmtCompact, tempoDesde, mesAno, nivelEnsino } from '../utils/parseFinanceiro'
-import { useGoogleAuth } from '../contexts/GoogleAuthContext'
 import { useAuth } from '../contexts/AuthContext'
 import { Toast } from '../components/ui/Toast'
 import { KPICard } from '../components/dashboard/KPICard'
@@ -16,6 +15,7 @@ const C_RECEITA = '#00b894'
 const C_DESPESA = '#e94560'
 const C_AZUL    = '#0078d4'
 const C_CORAL   = '#f97316'
+const C_ROXO    = '#8B5CF6'
 const CORES_MARGEM_ENSINO: Record<string, string> = { Superior: '#185FA5', 'Médio': '#3B6D11', Fundamental: '#854F0B' }
 const CORES_CAT = ['#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#06B6D4', '#84CC16', '#EF4444', '#A78BFA', '#34D399']
 
@@ -41,33 +41,30 @@ function TTip({ active, payload, label }: { active?: boolean; payload?: { name: 
 }
 
 // ─── Aba 1: Resultado Projetos ────────────────────────────────────
-function ResultadoProjetos({ cap, car, tarifas, dimensaoProjetos, filtroProj }: { cap: CAPRecord[]; car: CARRecord[]; tarifas: TarifasRecord[]; dimensaoProjetos: DimensaoProjetoRecord[]; filtroProj: string }) {
+function ResultadoProjetos({ boletim, dimensaoProjetos, filtroProj }: { boletim: BoletimRecord[]; dimensaoProjetos: DimensaoProjetoRecord[]; filtroProj: string }) {
   const [ensinoAberto, setEnsinoAberto] = useState<Record<string, boolean>>({})
   const [instAberta, setInstAberta] = useState<Record<string, boolean>>({})
 
   const fp = filtroProj.toLowerCase()
-  const capF     = fp ? cap.filter(r => r.desc_centro_custo.toLowerCase().includes(fp))     : cap
-  const carF     = fp ? car.filter(r => r.desc_centro_custo.toLowerCase().includes(fp))     : car
-  const tarifasF = fp ? tarifas.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : tarifas
+  const boletimF = fp ? boletim.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : boletim
 
-  const totalReceitas = carF.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
-  const totalDespesas = capF.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-                      + tarifasF.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const receitas    = boletimF.filter(r => r.tipo === 'RECEITA')
+  const despesas    = boletimF.filter(r => r.tipo === 'DESPESA')
+  const rendimentos = boletimF.filter(r => r.tipo === 'RENDIMENTO')
+
+  const totalReceitas    = receitas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const totalDespesas    = despesas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const totalRendimentos = rendimentos.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const resultado = totalReceitas - totalDespesas
   const margem = totalReceitas > 0 ? (resultado / totalReceitas) * 100 : 0
 
   const porAno: Record<string, { ano: string; receitas: number; despesas: number }> = {}
-  for (const i of carF) {
-    const ano = i.competencia?.slice(0, 4); if (!ano) continue
+  for (const i of receitas) {
+    const ano = i.d_competencia?.slice(0, 4); if (!ano) continue
     porAno[ano] ??= { ano, receitas: 0, despesas: 0 }
     porAno[ano].receitas += i.v_lancamento ?? 0
   }
-  for (const i of capF) {
-    const ano = i.d_competencia?.slice(0, 4); if (!ano) continue
-    porAno[ano] ??= { ano, receitas: 0, despesas: 0 }
-    porAno[ano].despesas += i.v_titulo ?? 0
-  }
-  for (const i of tarifasF) {
+  for (const i of despesas) {
     const ano = i.d_competencia?.slice(0, 4); if (!ano) continue
     porAno[ano] ??= { ano, receitas: 0, despesas: 0 }
     porAno[ano].despesas += i.v_lancamento ?? 0
@@ -76,9 +73,8 @@ function ResultadoProjetos({ cap, car, tarifas, dimensaoProjetos, filtroProj }: 
 
   // Margem % por ensino
   const porNivelMargem: Record<string, { receita: number; despesa: number }> = {}
-  for (const i of carF)     { const n = nivelEnsino(i.desc_centro_custo); porNivelMargem[n] ??= { receita: 0, despesa: 0 }; porNivelMargem[n].receita += i.v_lancamento ?? 0 }
-  for (const i of capF)     { const n = nivelEnsino(i.desc_centro_custo); porNivelMargem[n] ??= { receita: 0, despesa: 0 }; porNivelMargem[n].despesa += i.v_titulo ?? 0 }
-  for (const i of tarifasF) { const n = nivelEnsino(i.desc_centro_custo); porNivelMargem[n] ??= { receita: 0, despesa: 0 }; porNivelMargem[n].despesa += i.v_lancamento ?? 0 }
+  for (const i of receitas) { const n = nivelEnsino(i.desc_centro_custo); porNivelMargem[n] ??= { receita: 0, despesa: 0 }; porNivelMargem[n].receita += i.v_lancamento ?? 0 }
+  for (const i of despesas) { const n = nivelEnsino(i.desc_centro_custo); porNivelMargem[n] ??= { receita: 0, despesa: 0 }; porNivelMargem[n].despesa += i.v_lancamento ?? 0 }
   const donutMargem = Object.entries(porNivelMargem)
     .filter(([, v]) => v.receita > 0)
     .map(([name, { receita, despesa }]) => {
@@ -87,9 +83,9 @@ function ResultadoProjetos({ cap, car, tarifas, dimensaoProjetos, filtroProj }: 
     })
     .sort((a, b) => b.margemR - a.margemR)
 
-  // Receitas por conta gerencial (CAR)
+  // Receitas por conta gerencial
   const porConta: Record<string, number> = {}
-  for (const i of carF) { const c = i.desc_conta_gerencial || 'Outras'; porConta[c] = (porConta[c] ?? 0) + (i.v_lancamento ?? 0) }
+  for (const i of receitas) { const c = i.desc_conta_gerencial || 'Outras'; porConta[c] = (porConta[c] ?? 0) + (i.v_lancamento ?? 0) }
   const totalConta = Object.values(porConta).reduce((s, v) => s + v, 0)
   const donutCat = Object.entries(porConta)
     .filter(([, v]) => v > 0)
@@ -97,9 +93,8 @@ function ResultadoProjetos({ cap, car, tarifas, dimensaoProjetos, filtroProj }: 
     .sort((a, b) => b.value - a.value)
 
   const projMap: Record<string, { receita: number; despesa: number }> = {}
-  for (const i of carF)     { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].receita += i.v_lancamento ?? 0 }
-  for (const i of capF)     { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].despesa += i.v_titulo ?? 0 }
-  for (const i of tarifasF) { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].despesa += i.v_lancamento ?? 0 }
+  for (const i of receitas) { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].receita += i.v_lancamento ?? 0 }
+  for (const i of despesas) { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].despesa += i.v_lancamento ?? 0 }
   const top10 = Object.entries(projMap)
     .filter(([n]) => n)
     .map(([nome, { receita, despesa }]) => ({ nome, resultado: receita - despesa }))
@@ -156,6 +151,11 @@ function ResultadoProjetos({ cap, car, tarifas, dimensaoProjetos, filtroProj }: 
         <KPICard title="Resultado"        value={resultado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}     color={resultado >= 0 ? C_RECEITA : C_DESPESA} />
         <KPICard title="Margem"           value={`${margem.toFixed(1)}%`}   color={C_AZUL} />
       </div>
+      {totalRendimentos > 0 && (
+        <div className="max-w-xs">
+          <KPICard title="Rendimentos Financeiros" value={totalRendimentos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} color={C_ROXO} />
+        </div>
+      )}
 
       <div className="grid grid-cols-4 gap-4">
         <div className="card col-span-2">
@@ -203,7 +203,7 @@ function ResultadoProjetos({ cap, car, tarifas, dimensaoProjetos, filtroProj }: 
           ) : <EmptyChart />}
         </div>
 
-        {/* Donut: Receitas por Categoria (CAR conta gerencial) */}
+        {/* Donut: Receitas por Categoria */}
         <div className="card">
           <h3 className="text-text-main text-sm font-semibold mb-3">Receitas por Categoria</h3>
           {donutCat.length > 0 ? (
@@ -258,7 +258,6 @@ function ResultadoProjetos({ cap, car, tarifas, dimensaoProjetos, filtroProj }: 
       {tabelaEnsinos.length > 0 && (
         <div className="card p-0 overflow-hidden">
           <div className="px-5 py-3 border-b border-white/10 text-text-main text-sm font-semibold">Tabela Geral de Projetos</div>
-          {/* Cabeçalho das colunas */}
           <div className="flex items-center px-5 py-2.5 border-b border-white/10 bg-white/5 text-[11px] font-semibold text-text-muted uppercase tracking-wider">
             <span className="flex-1">Projeto / Instituição / Ensino</span>
             <span className="w-28 text-right shrink-0">Receita</span>
@@ -274,7 +273,6 @@ function ResultadoProjetos({ cap, car, tarifas, dimensaoProjetos, filtroProj }: 
             const eAberto = !!ensinoAberto[ensino.nome]
             return (
               <div key={ensino.nome}>
-                {/* Nível 1: Ensino */}
                 <button
                   onClick={() => setEnsinoAberto(p => ({ ...p, [ensino.nome]: !p[ensino.nome] }))}
                   className="w-full flex items-center px-5 py-3 text-left text-xs font-bold border-b border-white/10 hover:opacity-80 transition-opacity"
@@ -297,7 +295,6 @@ function ResultadoProjetos({ cap, car, tarifas, dimensaoProjetos, filtroProj }: 
                   const iAberta = !!instAberta[ik]
                   return (
                     <div key={inst.nome}>
-                      {/* Nível 2: Instituição */}
                       <button
                         onClick={() => setInstAberta(p => ({ ...p, [ik]: !p[ik] }))}
                         className="w-full flex items-center px-5 py-2.5 pl-10 text-left text-xs font-semibold border-b border-white/5 hover:opacity-80 transition-opacity"
@@ -333,7 +330,6 @@ function ResultadoProjetos({ cap, car, tarifas, dimensaoProjetos, filtroProj }: 
             )
           })}
 
-          {/* Rodapé: Total Geral */}
           {(() => {
             const totRes  = totalGeralRec - totalGeralDesp
             const totMarg = totalGeralRec > 0 ? (totRes / totalGeralRec) * 100 : 0
@@ -354,9 +350,13 @@ function ResultadoProjetos({ cap, car, tarifas, dimensaoProjetos, filtroProj }: 
 }
 
 // ─── Aba 2: Fluxo de Caixa ────────────────────────────────────────
-function FluxoCaixa({ cap: capRaw, filtroProj }: { cap: CAPRecord[]; filtroProj: string }) {
+function FluxoCaixa({ boletim: boletimRaw, filtroProj }: { boletim: BoletimRecord[]; filtroProj: string }) {
   const fp = filtroProj.toLowerCase().trim()
-  const cap = fp ? capRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : capRaw
+  const despAtivo = (fp
+    ? boletimRaw.filter(r => r.tipo === 'DESPESA' && r.desc_centro_custo.toLowerCase().includes(fp))
+    : boletimRaw.filter(r => r.tipo === 'DESPESA')
+  ).filter(r => r.situacao === 'ATIVO')
+
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const [expandidosProjetos, setExpandidosProjetos] = useState<Record<string, boolean>>({})
   const [expandidosContas, setExpandidosContas] = useState<Record<string, boolean>>({})
@@ -364,17 +364,16 @@ function FluxoCaixa({ cap: capRaw, filtroProj }: { cap: CAPRecord[]; filtroProj:
   const em7  = new Date(Date.now() + 7  * 86400000).toISOString().slice(0, 10)
   const em30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
 
-  const capAtivo = cap.filter(i => i.situacao === 'ATIVO')
-  const totalAberto  = capAtivo.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-  const totalVencido = capAtivo.filter(i => i.d_vencimento && i.d_vencimento < hoje).reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-  const aVencer7     = capAtivo.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em7).reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-  const aVencer30    = capAtivo.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em30).reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+  const totalAberto  = despAtivo.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const totalVencido = despAtivo.filter(i => i.d_vencimento && i.d_vencimento < hoje).reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const aVencer7     = despAtivo.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em7).reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const aVencer30    = despAtivo.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em30).reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
 
   const porMes: Record<string, { mes: string; sortKey: string; valor: number }> = {}
-  for (const i of capAtivo) {
+  for (const i of despAtivo) {
     const key = mesAno(i.d_vencimento); if (!key || !i.d_vencimento) continue
     porMes[key] ??= { mes: key, sortKey: i.d_vencimento.slice(0, 7), valor: 0 }
-    porMes[key].valor += i.v_titulo ?? 0
+    porMes[key].valor += i.v_lancamento ?? 0
   }
   const dadosMes = Object.values(porMes).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
@@ -383,18 +382,18 @@ function FluxoCaixa({ cap: capRaw, filtroProj }: { cap: CAPRecord[]; filtroProj:
   type ProjFC  = { total: number; contas: Record<string, ContaFC> }
   type MesFC   = { mes: string; sortKey: string; total: number; vencido: boolean; projetos: Record<string, ProjFC> }
   const pagPorMes: Record<string, MesFC> = {}
-  for (const i of capAtivo) {
+  for (const i of despAtivo) {
     const key  = mesAno(i.d_vencimento); if (!key || !i.d_vencimento) continue
-    const proj = i.desc_centro_custo     || '(sem projeto)'
-    const g    = i.desc_conta_gerencial  || '(sem categoria)'
-    const forn = i.fantasia_fornecedor   || '(sem fornecedor)'
+    const proj = i.desc_centro_custo    || '(sem projeto)'
+    const g    = i.desc_conta_gerencial || '(sem categoria)'
+    const forn = i.fantasia             || '(sem fornecedor)'
     pagPorMes[key] ??= { mes: key, sortKey: i.d_vencimento.slice(0, 7), total: 0, vencido: i.d_vencimento < hoje, projetos: {} }
-    pagPorMes[key].total += i.v_titulo ?? 0
+    pagPorMes[key].total += i.v_lancamento ?? 0
     pagPorMes[key].projetos[proj] ??= { total: 0, contas: {} }
-    pagPorMes[key].projetos[proj].total += i.v_titulo ?? 0
+    pagPorMes[key].projetos[proj].total += i.v_lancamento ?? 0
     pagPorMes[key].projetos[proj].contas[g] ??= { total: 0, fornecedores: {} }
-    pagPorMes[key].projetos[proj].contas[g].total += i.v_titulo ?? 0
-    pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] = (pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_titulo ?? 0)
+    pagPorMes[key].projetos[proj].contas[g].total += i.v_lancamento ?? 0
+    pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] = (pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_lancamento ?? 0)
   }
   const linhasPag = Object.values(pagPorMes).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
@@ -495,34 +494,31 @@ function normalizeEnsino(raw: string): string {
   return raw.trim() || 'Outros'
 }
 
-function ControleDespesas({ cap: capRaw, tarifas: tarifasRaw, dimensaoProjetos, filtroProj }: {
-  cap: CAPRecord[]
-  tarifas: TarifasRecord[]
+function ControleDespesas({ boletim: boletimRaw, dimensaoProjetos, filtroProj }: {
+  boletim: BoletimRecord[]
   dimensaoProjetos: DimensaoProjetoRecord[]
   filtroProj: string
 }) {
   const fp = filtroProj.toLowerCase().trim()
-  const cap     = fp ? capRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp))     : capRaw
-  const tarifas = fp ? tarifasRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : tarifasRaw
+  const despesas = (fp
+    ? boletimRaw.filter(r => r.tipo === 'DESPESA' && r.desc_centro_custo.toLowerCase().includes(fp))
+    : boletimRaw.filter(r => r.tipo === 'DESPESA')
+  )
   const [expandidosEnsino, setExpandidosEnsino] = useState<Record<string, boolean>>({})
   const [expandidosInst, setExpandidosInst] = useState<Record<string, boolean>>({})
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const [expandidosContas, setExpandidosContas] = useState<Record<string, boolean>>({})
 
-  const totalDespesasCap = cap.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-  const totalDespesasTar = tarifas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
-  const totalDespesas    = totalDespesasCap + totalDespesasTar
-  const totalLiquidado   = cap.filter(i => i.situacao === 'LIQUIDADO').reduce((s, i) => s + (i.v_titulo ?? 0), 0)
-  const totalAberto      = cap.filter(i => i.situacao === 'ATIVO').reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+  const totalDespesas  = despesas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const totalLiquidado = despesas.filter(i => i.situacao === 'LIQUIDADO').reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const totalAberto    = despesas.filter(i => i.situacao === 'ATIVO').reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
 
   const porGerencial: Record<string, number> = {}
-  for (const i of cap)     { const g = i.desc_conta_gerencial || '(sem categoria)'; porGerencial[g] = (porGerencial[g] ?? 0) + (i.v_titulo ?? 0) }
-  for (const i of tarifas) { const g = i.desc_conta_gerencial || 'TARIFAS BANCARIAS'; porGerencial[g] = (porGerencial[g] ?? 0) + (i.v_lancamento ?? 0) }
+  for (const i of despesas) { const g = i.desc_conta_gerencial || '(sem categoria)'; porGerencial[g] = (porGerencial[g] ?? 0) + (i.v_lancamento ?? 0) }
   const top10Ger = Object.entries(porGerencial).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, value]) => ({ name, value }))
 
   const porAno: Record<string, number> = {}
-  for (const i of cap)     { const ano = i.d_competencia?.slice(0, 4); if (!ano) continue; porAno[ano] = (porAno[ano] ?? 0) + (i.v_titulo ?? 0) }
-  for (const i of tarifas) { const ano = i.d_competencia?.slice(0, 4); if (!ano) continue; porAno[ano] = (porAno[ano] ?? 0) + (i.v_lancamento ?? 0) }
+  for (const i of despesas) { const ano = i.d_competencia?.slice(0, 4); if (!ano) continue; porAno[ano] = (porAno[ano] ?? 0) + (i.v_lancamento ?? 0) }
   const dadosAno = Object.entries(porAno).sort((a, b) => a[0].localeCompare(b[0])).map(([ano, valor]) => ({ ano, valor }))
 
   const dimMap = useMemo(() => {
@@ -539,20 +535,10 @@ function ControleDespesas({ cap: capRaw, tarifas: tarifasRaw, dimensaoProjetos, 
 
   const grupos = useMemo(() => {
     const porProj: Record<string, ProjData> = {}
-    for (const i of cap) {
-      const proj = i.desc_centro_custo || '(sem projeto)'
+    for (const i of despesas) {
+      const proj = i.desc_centro_custo    || '(sem projeto)'
       const g    = i.desc_conta_gerencial || '(sem categoria)'
-      const forn = i.fantasia_fornecedor || '(sem fornecedor)'
-      porProj[proj] ??= { total: 0, contas: {} }
-      porProj[proj].total += i.v_titulo ?? 0
-      porProj[proj].contas[g] ??= { total: 0, fornecedores: {} }
-      porProj[proj].contas[g].total += i.v_titulo ?? 0
-      porProj[proj].contas[g].fornecedores[forn] = (porProj[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_titulo ?? 0)
-    }
-    for (const i of tarifas) {
-      const proj = i.desc_centro_custo || '(sem projeto)'
-      const g    = i.desc_conta_gerencial || 'TARIFAS BANCARIAS'
-      const forn = i.fantasia_empresa || i.razao_social || '(tarifa bancária)'
+      const forn = i.fantasia             || '(sem fornecedor)'
       porProj[proj] ??= { total: 0, contas: {} }
       porProj[proj].total += i.v_lancamento ?? 0
       porProj[proj].contas[g] ??= { total: 0, fornecedores: {} }
@@ -573,7 +559,7 @@ function ControleDespesas({ cap: capRaw, tarifas: tarifasRaw, dimensaoProjetos, 
       result[ensino].instituicoes[inst].projetos[proj] = data
     }
     return result
-  }, [cap, tarifas, dimMap])
+  }, [despesas, dimMap])
 
   const gruposOrdenados: [string, GrupoEnsino][] = [
     ...ORDEM_ENSINO.filter(e => grupos[e]).map(e => [e, grupos[e]] as [string, GrupoEnsino]),
@@ -632,7 +618,6 @@ function ControleDespesas({ cap: capRaw, tarifas: tarifasRaw, dimensaoProjetos, 
           const cores = NIVEL_CORES[ensino] ?? NIVEL_CORES['Outros']
           const instSort = Object.entries(instituicoes).sort((a, b) => b[1].total - a[1].total)
 
-          // ── Cabeçalho de nível Ensino (comum a todos) ──
           const ensinoHeader = (
             <button
               onClick={() => setExpandidosEnsino(p => ({ ...p, [ensino]: !p[ensino] }))}
@@ -645,7 +630,6 @@ function ControleDespesas({ cap: capRaw, tarifas: tarifasRaw, dimensaoProjetos, 
             </button>
           )
 
-          // ── Outros: projetos direto, sem sub-nível de instituição ──
           if (ensino === 'Outros') {
             const projMap: Record<string, ProjData> = {}
             for (const { projetos } of Object.values(instituicoes)) {
@@ -702,7 +686,6 @@ function ControleDespesas({ cap: capRaw, tarifas: tarifasRaw, dimensaoProjetos, 
             )
           }
 
-          // ── Superior / Médio / Fundamental: 3 níveis ──
           return (
             <div key={ensino}>
               {ensinoHeader}
@@ -711,7 +694,6 @@ function ControleDespesas({ cap: capRaw, tarifas: tarifasRaw, dimensaoProjetos, 
                 const projSort = Object.entries(projetos).sort((a, b) => b[1].total - a[1].total)
                 return (
                   <div key={inst}>
-                    {/* Nível 2: Instituição */}
                     <button
                       onClick={() => setExpandidosInst(p => ({ ...p, [ik]: !p[ik] }))}
                       className="w-full flex items-center gap-2 px-5 py-2.5 pl-10 text-left text-xs font-semibold border-b border-white/5 hover:opacity-80 transition-opacity"
@@ -723,7 +705,6 @@ function ControleDespesas({ cap: capRaw, tarifas: tarifasRaw, dimensaoProjetos, 
                     </button>
                     {expandidosInst[ik] && projSort.map(([proj, { total: projTotal, contas }]) => (
                       <div key={proj}>
-                        {/* Nível 3: Projeto */}
                         <button
                           onClick={() => setExpandidos(p => ({ ...p, [proj]: !p[proj] }))}
                           className="w-full flex items-center gap-2 px-5 py-2.5 pl-16 text-left text-xs text-text-muted hover:bg-white/5 transition-colors border-b border-white/5 bg-black/15"
@@ -766,69 +747,43 @@ function ControleDespesas({ cap: capRaw, tarifas: tarifasRaw, dimensaoProjetos, 
   )
 }
 
-// ─── Aba 4: Dados (tabelas brutas) ────────────────────────────────
+// ─── Aba 4: Dados (tabela bruta boletim) ─────────────────────────
 const PAGE_SIZE = 100
 
-function TabelaDados({ cap: capRaw, car: carRaw, filtroProj }: { cap: CAPRecord[]; car: CARRecord[]; filtroProj: string }) {
+function TabelaDados({ boletim: boletimRaw, filtroProj }: { boletim: BoletimRecord[]; filtroProj: string }) {
   const fp = filtroProj.toLowerCase().trim()
-  const cap = fp ? capRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : capRaw
-  const car = fp ? carRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : carRaw
-  const [tabela, setTabela] = useState<'CAP' | 'CAR'>('CAP')
+  const boletim = fp ? boletimRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : boletimRaw
   const [filtro, setFiltro] = useState('')
   const [pagina, setPagina] = useState(0)
 
   const filtradas = useMemo(() => {
     const f = filtro.toLowerCase().trim()
-    if (tabela === 'CAP') {
-      return f
-        ? cap.filter(r => r.desc_centro_custo.toLowerCase().includes(f) || r.fantasia_fornecedor.toLowerCase().includes(f) || r.desc_conta_gerencial.toLowerCase().includes(f))
-        : cap
-    } else {
-      return f
-        ? car.filter(r => r.desc_centro_custo.toLowerCase().includes(f) || r.desc_conta_gerencial.toLowerCase().includes(f))
-        : car
-    }
-  }, [cap, car, tabela, filtro])
+    if (!f) return boletim
+    return boletim.filter(r =>
+      r.desc_centro_custo.toLowerCase().includes(f) ||
+      r.fantasia.toLowerCase().includes(f) ||
+      r.desc_conta_gerencial.toLowerCase().includes(f)
+    )
+  }, [boletim, filtro])
 
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / PAGE_SIZE))
   const paginaAtual  = Math.min(pagina, totalPaginas - 1)
   const inicio       = paginaAtual * PAGE_SIZE
   const pagina_dados = filtradas.slice(inicio, inicio + PAGE_SIZE)
 
-  function trocarTabela(t: 'CAP' | 'CAR') { setTabela(t); setFiltro(''); setPagina(0) }
-  function trocarFiltro(v: string)          { setFiltro(v); setPagina(0) }
+  function trocarFiltro(v: string) { setFiltro(v); setPagina(0) }
 
-  const totalFiltrado = tabela === 'CAP'
-    ? (filtradas as CAPRecord[]).reduce((s, r) => s + (r.v_titulo ?? 0), 0)
-    : (filtradas as CARRecord[]).reduce((s, r) => s + (r.v_lancamento ?? 0), 0)
+  const totalFiltrado = filtradas.reduce((s, r) => s + (r.v_lancamento ?? 0), 0)
 
   return (
     <div className="space-y-4">
-      {/* Seletor CAP / CAR */}
-      <div className="flex gap-2">
-        {(['CAP', 'CAR'] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => trocarTabela(t)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
-              tabela === t
-                ? 'bg-primary/20 border-primary/40 text-primary'
-                : 'bg-white/5 border-white/10 text-text-muted hover:text-text-main'
-            }`}
-          >
-            {t === 'CAP' ? 'Contas a Pagar (CAP)' : 'Contas a Receber (CAR)'}
-          </button>
-        ))}
-      </div>
-
-      {/* Barra de busca + totalizador */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
           <input
             value={filtro}
             onChange={e => trocarFiltro(e.target.value)}
-            placeholder={tabela === 'CAP' ? 'Filtrar por fornecedor, c. custo ou gerencial…' : 'Filtrar por c. custo ou gerencial…'}
+            placeholder="Filtrar por fantasia, c. custo ou gerencial…"
             className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:border-primary/50"
           />
         </div>
@@ -841,79 +796,51 @@ function TabelaDados({ cap: capRaw, car: carRaw, filtroProj }: { cap: CAPRecord[
         </div>
       </div>
 
-      {/* Tabela CAP */}
-      {tabela === 'CAP' && (
-        <div className="card p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-white/10 bg-white/5">
-                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Fornecedor</th>
-                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">C. Custo</th>
-                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">C. Gerencial</th>
-                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Portador</th>
-                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Vencimento</th>
-                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Competência</th>
-                  <th className="text-right px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">V. Título</th>
-                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Situação</th>
-                  <th className="text-right px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Dias Atraso</th>
+      <div className="card p-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-white/10 bg-white/5">
+                <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Tipo</th>
+                <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Fantasia</th>
+                <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">C. Custo</th>
+                <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">C. Gerencial</th>
+                <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Vencimento</th>
+                <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Liquidação</th>
+                <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Competência</th>
+                <th className="text-right px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">V. Lançamento</th>
+                <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Situação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagina_dados.map((r, i) => (
+                <tr key={r.id ?? i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <td className="px-3 py-2">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                      r.tipo === 'RECEITA'    ? 'bg-emerald-500/15 text-emerald-400' :
+                      r.tipo === 'DESPESA'    ? 'bg-red-500/15 text-red-400' :
+                                               'bg-purple-500/15 text-purple-400'
+                    }`}>{r.tipo}</span>
+                  </td>
+                  <td className="px-3 py-2 text-text-main max-w-[160px] truncate" title={r.fantasia}>{r.fantasia || '—'}</td>
+                  <td className="px-3 py-2 text-text-main max-w-[180px] truncate" title={r.desc_centro_custo}>{r.desc_centro_custo || '—'}</td>
+                  <td className="px-3 py-2 text-text-muted max-w-[160px] truncate" title={r.desc_conta_gerencial}>{r.desc_conta_gerencial || '—'}</td>
+                  <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.d_vencimento ?? '—'}</td>
+                  <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.d_liquidacao ?? '—'}</td>
+                  <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.d_competencia ?? '—'}</td>
+                  <td className="px-3 py-2 text-right font-medium text-text-main whitespace-nowrap">{r.v_lancamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                  <td className="px-3 py-2">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${r.situacao === 'LIQUIDADO' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
+                      {r.situacao}
+                    </span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {(pagina_dados as CAPRecord[]).map((r, i) => (
-                  <tr key={r.id ?? i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td className="px-3 py-2 text-text-main max-w-[160px] truncate" title={r.fantasia_fornecedor}>{r.fantasia_fornecedor || '—'}</td>
-                    <td className="px-3 py-2 text-text-main max-w-[180px] truncate" title={r.desc_centro_custo}>{r.desc_centro_custo || '—'}</td>
-                    <td className="px-3 py-2 text-text-muted max-w-[160px] truncate" title={r.desc_conta_gerencial}>{r.desc_conta_gerencial || '—'}</td>
-                    <td className="px-3 py-2 text-text-muted max-w-[120px] truncate" title={r.portador}>{r.portador || '—'}</td>
-                    <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.d_vencimento ?? '—'}</td>
-                    <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.d_competencia ?? '—'}</td>
-                    <td className="px-3 py-2 text-right font-medium text-text-main whitespace-nowrap">{r.v_titulo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                    <td className="px-3 py-2">
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${r.situacao === 'LIQUIDADO' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
-                        {r.situacao}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-right text-text-muted">{r.dias_atraso > 0 ? r.dias_atraso : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
 
-      {/* Tabela CAR */}
-      {tabela === 'CAR' && (
-        <div className="card p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-white/10 bg-white/5">
-                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">C. Custo</th>
-                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">C. Gerencial</th>
-                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Competência</th>
-                  <th className="text-left px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">Liquidação</th>
-                  <th className="text-right px-3 py-2.5 text-text-muted font-semibold whitespace-nowrap">V. Lançamento</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(pagina_dados as CARRecord[]).map((r, i) => (
-                  <tr key={r.id ?? i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td className="px-3 py-2 text-text-main max-w-[200px] truncate" title={r.desc_centro_custo}>{r.desc_centro_custo || '—'}</td>
-                    <td className="px-3 py-2 text-text-muted max-w-[180px] truncate" title={r.desc_conta_gerencial}>{r.desc_conta_gerencial || '—'}</td>
-                    <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.competencia ?? '—'}</td>
-                    <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.liquidacao ?? '—'}</td>
-                    <td className="px-3 py-2 text-right font-medium text-text-main whitespace-nowrap">{r.v_lancamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Paginação */}
       {totalPaginas > 1 && (
         <div className="flex items-center justify-center gap-2">
           <button
@@ -960,54 +887,32 @@ function EmptyChart({ label = 'Sem dados' }: { label?: string }) {
 
 // ─── Página principal ─────────────────────────────────────────────
 export function Financeiro() {
-  const { cap, car, tarifas, dimensaoProjetos, uploads, carregando, uploadCAP, uploadCAR, atualizarTarifas } = useFinanceiro()
-  const { accessToken, conectado, logando, conectar } = useGoogleAuth()
+  const { boletim, dimensaoProjetos, uploadMeta, carregando, uploadBoletim } = useFinanceiro()
   const { isAdmin } = useAuth()
   const [abaAtiva, setAbaAtiva] = useState<AbaId>('resultado')
   const [filtroProj, setFiltroProj] = useState('')
-  const [processando, setProcessando] = useState({ CAP: false, CAR: false, TARIFAS: false })
+  const [processando, setProcessando] = useState(false)
   const [toast, setToast] = useState<{ mensagem: string; tipo: 'sucesso' | 'erro' } | null>(null)
-  const capRef = useRef<HTMLInputElement>(null)
-  const carRef = useRef<HTMLInputElement>(null)
+  const boletimRef = useRef<HTMLInputElement>(null)
 
-  const semDados = cap.length === 0 && car.length === 0
+  const semDados = boletim.length === 0
 
-  async function handleArquivo(tipo: 'CAP' | 'CAR', arquivo: File | undefined) {
+  async function handleArquivo(arquivo: File | undefined) {
     if (!arquivo) return
     if (!arquivo.name.toLowerCase().endsWith('.xlsx')) {
       setToast({ mensagem: 'Envie um arquivo .xlsx válido.', tipo: 'erro' })
       return
     }
-    setProcessando(p => ({ ...p, [tipo]: true }))
+    setProcessando(true)
     try {
-      const fn = tipo === 'CAP' ? uploadCAP : uploadCAR
-      const { totalLinhas } = await fn(arquivo)
-      setToast({ mensagem: `${tipo} atualizado — ${totalLinhas.toLocaleString('pt-BR')} registros importados.`, tipo: 'sucesso' })
+      const { totalLinhas } = await uploadBoletim(arquivo)
+      setToast({ mensagem: `Boletim atualizado — ${totalLinhas.toLocaleString('pt-BR')} registros importados.`, tipo: 'sucesso' })
     } catch (err: unknown) {
       const e = err as { message?: string; tipo?: string }
-      setToast({ mensagem: e.tipo === 'ABA_NAO_ENCONTRADA' ? (e.message ?? 'Erro') : `Erro ao processar ${tipo}: ${e.message}`, tipo: 'erro' })
+      setToast({ mensagem: e.tipo === 'ABA_NAO_ENCONTRADA' ? (e.message ?? 'Erro') : `Erro ao processar Boletim: ${e.message}`, tipo: 'erro' })
     } finally {
-      setProcessando(p => ({ ...p, [tipo]: false }))
-      if (tipo === 'CAP' && capRef.current) capRef.current.value = ''
-      if (tipo === 'CAR' && carRef.current) carRef.current.value = ''
-    }
-  }
-
-  async function handleAtualizarTarifas() {
-    if (!conectado || !accessToken) { conectar(); return }
-    setProcessando(p => ({ ...p, TARIFAS: true }))
-    try {
-      const { totalLinhas, totalValor } = await atualizarTarifas(accessToken)
-      setToast({
-        mensagem: `Tarifas atualizadas — ${totalLinhas.toLocaleString('pt-BR')} registros · ${fmtCompact(totalValor)}`,
-        tipo: 'sucesso',
-      })
-    } catch (err: unknown) {
-      const e = err as { message?: string; tipo?: string }
-      if (e.tipo === 'TOKEN_EXPIRADO') { conectar(); return }
-      setToast({ mensagem: `Erro ao importar Tarifas: ${e.message}`, tipo: 'erro' })
-    } finally {
-      setProcessando(p => ({ ...p, TARIFAS: false }))
+      setProcessando(false)
+      if (boletimRef.current) boletimRef.current.value = ''
     }
   }
 
@@ -1017,56 +922,26 @@ export function Financeiro() {
       <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div>
           <h1 className="text-text-main text-xl font-bold">Financeiro</h1>
-          <p className="text-text-muted text-xs mt-0.5">Contas a Pagar (CAP), Contas a Receber (CAR) e Tarifas Bancárias</p>
+          <p className="text-text-muted text-xs mt-0.5">Boletim Financeiro Consolidado</p>
         </div>
 
         {isAdmin && (
-          <div className="flex gap-3 flex-wrap">
-            {(['CAP', 'CAR'] as const).map(tipo => {
-              const ref = tipo === 'CAP' ? capRef : carRef
-              const uploado = tipo === 'CAP' ? uploads.CAP : uploads.CAR
-              const busy = processando[tipo]
-              return (
-                <div key={tipo} className="flex flex-col items-end gap-1">
-                  <input ref={ref} type="file" accept=".xlsx" className="hidden"
-                    onChange={e => handleArquivo(tipo, e.target.files?.[0])} />
-                  <button
-                    onClick={() => ref.current?.click()}
-                    disabled={busy}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
-                      tipo === 'CAP'
-                        ? 'bg-white/5 border border-white/10 text-text-muted hover:text-text-main hover:bg-white/10'
-                        : 'bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20'
-                    }`}
-                  >
-                    {busy ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
-                    Atualizar {tipo}
-                  </button>
-                  {uploado && (
-                    <span className="text-xs text-text-muted">
-                      Atualizado {tempoDesde(uploado.uploaded_at)} · {(uploado.total_linhas ?? 0).toLocaleString('pt-BR')} linhas
-                    </span>
-                  )}
-                </div>
-              )
-            })}
-
-            {/* Botão Atualizar Tarifas */}
-            <div className="flex flex-col items-end gap-1">
-              <button
-                onClick={handleAtualizarTarifas}
-                disabled={processando.TARIFAS || logando}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
-              >
-                {processando.TARIFAS || logando ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                {!conectado ? 'Conectar Google' : 'Atualizar Tarifas'}
-              </button>
-              {uploads.TARIFAS && (
-                <span className="text-xs text-text-muted">
-                  Atualizado {tempoDesde(uploads.TARIFAS.uploaded_at)} · {(uploads.TARIFAS.total_linhas ?? 0).toLocaleString('pt-BR')} linhas
-                </span>
-              )}
-            </div>
+          <div className="flex flex-col items-end gap-1">
+            <input ref={boletimRef} type="file" accept=".xlsx" className="hidden"
+              onChange={e => handleArquivo(e.target.files?.[0])} />
+            <button
+              onClick={() => boletimRef.current?.click()}
+              disabled={processando}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20"
+            >
+              {processando ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
+              Atualizar Boletim
+            </button>
+            {uploadMeta && (
+              <span className="text-xs text-text-muted">
+                Atualizado {tempoDesde(uploadMeta.uploaded_at)} · {(uploadMeta.total_linhas ?? 0).toLocaleString('pt-BR')} linhas
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -1112,16 +987,15 @@ export function Financeiro() {
           </div>
           <p className="text-text-muted font-medium">Nenhum dado financeiro carregado</p>
           <p className="text-text-muted text-xs max-w-sm leading-relaxed">
-            Use os botões <strong className="text-text-main">Atualizar CAP</strong> e{' '}
-            <strong className="text-primary">Atualizar CAR</strong> para importar os dados.
+            Use o botão <strong className="text-primary">Atualizar Boletim</strong> para importar o Boletim Financeiro Consolidado.
           </p>
         </div>
       ) : (
         <>
-          {abaAtiva === 'resultado' && <ResultadoProjetos cap={cap} car={car} tarifas={tarifas} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
-          {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} filtroProj={filtroProj} />}
-          {abaAtiva === 'despesas' && <ControleDespesas cap={cap} tarifas={tarifas} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
-          {abaAtiva === 'dados'    && <TabelaDados cap={cap} car={car} filtroProj={filtroProj} />}
+          {abaAtiva === 'resultado' && <ResultadoProjetos boletim={boletim} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
+          {abaAtiva === 'fluxo'    && <FluxoCaixa boletim={boletim} filtroProj={filtroProj} />}
+          {abaAtiva === 'despesas' && <ControleDespesas boletim={boletim} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
+          {abaAtiva === 'dados'    && <TabelaDados boletim={boletim} filtroProj={filtroProj} />}
         </>
       )}
 

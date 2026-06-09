@@ -42,10 +42,10 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
 }
 
 interface CapVencimento {
-  fantasia_fornecedor: string
+  fantasia: string
   desc_conta_gerencial: string
   d_vencimento: string | null
-  v_titulo: number
+  v_lancamento: number
 }
 
 // ─── Chart constants ──────────────────────────────────────────────────────────
@@ -615,8 +615,9 @@ export function DashboardPortal() {
         const hoje = new Date().toISOString().slice(0, 10)
         const em30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
         const { data: capData } = await supabase
-          .from('financeiro_cap')
-          .select('fantasia_fornecedor, desc_conta_gerencial, d_vencimento, v_titulo')
+          .from('financeiro_boletim')
+          .select('fantasia, desc_conta_gerencial, d_vencimento, v_lancamento')
+          .eq('tipo', 'DESPESA')
           .eq('situacao', 'ATIVO')
           .gte('d_vencimento', hoje)
           .lte('d_vencimento', em30)

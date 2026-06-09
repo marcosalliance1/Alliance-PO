@@ -58,6 +58,19 @@ function encontrarHeaderIdx(rows: unknown[][], termo: string): number {
 
 // ─── Tipos públicos ───────────────────────────────────────────────
 
+export interface BoletimRow {
+  desc_conta_gerencial: string
+  fantasia: string
+  d_vencimento: string | null
+  d_liquidacao: string | null
+  d_competencia: string | null
+  desc_centro_custo: string
+  v_original: number
+  v_lancamento: number
+  tipo: 'RECEITA' | 'DESPESA' | 'RENDIMENTO'
+  situacao: 'ATIVO' | 'LIQUIDADO'
+}
+
 export interface CAPRow {
   fantasia_fornecedor: string
   desc_conta_gerencial: string
@@ -80,6 +93,87 @@ export interface CARRow {
 }
 
 // ─── Parsers ──────────────────────────────────────────────────────
+
+const EXCLUIR_BOLETIM = new Set([
+  'transferencia entre contas',
+  'mutuo debito',
+  'mutuo receita',
+  'saldo inicial de bancos',
+  'aplicacao financeira',
+  'resgate aplicacao',
+  'emprestimo bancarios',
+])
+const RENDIMENTO_BOLETIM = new Set([
+  'rendimentos de aplicacoes financeiras',
+  'demais receitas financeiras',
+])
+
+export async function parseBoletimArquivo(arquivo: File): Promise<{ linhas: BoletimRow[]; totalLinhas: number }> {
+  const buffer = await arquivo.arrayBuffer()
+  const wb = XLSX.read(buffer, { type: 'array', cellDates: false })
+
+  const abaNome = wb.SheetNames.find(n => n.toUpperCase().trim() === 'CONSOLIDADO')
+    ?? wb.SheetNames.find(n => n.toLowerCase().includes('consolidado'))
+  if (!abaNome) throw Object.assign(new Error("Arquivo inválido — aba 'CONSOLIDADO' não encontrada"), { tipo: 'ABA_NAO_ENCONTRADA' })
+
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[abaNome], { header: 1, defval: null, raw: true }) as unknown[][]
+  if (rows.length < 2) throw new Error('Arquivo inválido — dados insuficientes')
+
+  // Header na linha 1 (índice 0)
+  const headers = (rows[0] as unknown[]).map(c => c != null ? String(c) : '')
+
+  const col = {
+    gerencial:   findCol(headers, 'descricao c gerencial', 'desc c gerencial', 'desc conta gerencial', 'c gerencial', 'gerencial'),
+    fantasia:    findCol(headers, 'fantasia cliente fornecedor', 'fantasia cliente', 'fantasia fornecedor', 'fantasia'),
+    vencimento:  findCol(headers, 'd vencimento', 'vencimento'),
+    liquidacao:  findCol(headers, 'd liquidacao', 'liquidacao'),
+    competencia: findCol(headers, 'd competencia', 'competencia'),
+    centroCusto: findCol(headers, 'descricao c centro custo', 'desc c centro custo', 'desc centro custo', 'centro custo', 'c custo'),
+    vOriginal:   findCol(headers, 'v original', 'original'),
+    vLancamento: findCol(headers, 'v lancamento', 'lancamento'),
+  }
+
+  const linhas: BoletimRow[] = []
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i] as unknown[]
+    if (!r || r.every(c => c == null)) continue
+    const get = (c: number) => (c >= 0 ? r[c] : null)
+
+    const gerencial = String(get(col.gerencial) ?? '').trim()
+    const normedGer = norm(gerencial)
+
+    if (EXCLUIR_BOLETIM.has(normedGer)) continue
+
+    const vLanc = limparNumero(get(col.vLancamento))
+    if (vLanc === 0) continue
+
+    const liquidacao = parseDate(get(col.liquidacao))
+    const situacao: 'ATIVO' | 'LIQUIDADO' = liquidacao ? 'LIQUIDADO' : 'ATIVO'
+
+    let tipo: 'RECEITA' | 'DESPESA' | 'RENDIMENTO'
+    if (RENDIMENTO_BOLETIM.has(normedGer)) {
+      tipo = 'RENDIMENTO'
+    } else if (vLanc > 0) {
+      tipo = 'RECEITA'
+    } else {
+      tipo = 'DESPESA'
+    }
+
+    linhas.push({
+      desc_conta_gerencial: gerencial,
+      fantasia:             String(get(col.fantasia) ?? '').trim(),
+      d_vencimento:         parseDate(get(col.vencimento)),
+      d_liquidacao:         liquidacao,
+      d_competencia:        parseDate(get(col.competencia)),
+      desc_centro_custo:    String(get(col.centroCusto) ?? '').trim(),
+      v_original:           limparNumero(get(col.vOriginal)),
+      v_lancamento:         tipo === 'DESPESA' ? Math.abs(vLanc) : vLanc,
+      tipo,
+      situacao,
+    })
+  }
+  return { linhas, totalLinhas: linhas.length }
+}
 
 export async function parseCAPArquivo(arquivo: File): Promise<{ linhas: CAPRow[]; totalLinhas: number }> {
   const buffer = await arquivo.arrayBuffer()

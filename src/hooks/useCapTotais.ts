@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-// Retorna Map<desc_centro_custo, total_pago> para entradas LIQUIDADO no CAP/Everest.
+// Retorna Map<desc_centro_custo, total_pago> para despesas LIQUIDADO no boletim.
 // A chave é o desc_centro_custo original (lowercase normalizado).
 export function useCapTotais(): Map<string, number> {
   const [totais, setTotais] = useState<Map<string, number>>(new Map())
@@ -10,16 +10,17 @@ export function useCapTotais(): Map<string, number> {
     let cancelled = false
     async function fetch() {
       const PAGE = 1000
-      const all: Array<{ desc_centro_custo: string; v_titulo: number }> = []
+      const all: Array<{ desc_centro_custo: string; v_lancamento: number }> = []
       let from = 0
       for (;;) {
         const { data, error } = await supabase
-          .from('financeiro_cap')
-          .select('desc_centro_custo, v_titulo')
+          .from('financeiro_boletim')
+          .select('desc_centro_custo, v_lancamento')
+          .eq('tipo', 'DESPESA')
           .eq('situacao', 'LIQUIDADO')
           .range(from, from + PAGE - 1)
         if (error || !data) break
-        all.push(...(data as Array<{ desc_centro_custo: string; v_titulo: number }>))
+        all.push(...(data as Array<{ desc_centro_custo: string; v_lancamento: number }>))
         if (data.length < PAGE) break
         from += PAGE
       }
@@ -28,7 +29,7 @@ export function useCapTotais(): Map<string, number> {
       for (const row of all) {
         const key = (row.desc_centro_custo ?? '').trim().toLowerCase()
         if (!key) continue
-        map.set(key, (map.get(key) ?? 0) + (row.v_titulo ?? 0))
+        map.set(key, (map.get(key) ?? 0) + (row.v_lancamento ?? 0))
       }
       setTotais(map)
     }
