@@ -219,7 +219,7 @@ export async function parseCAPArquivo(arquivo: File): Promise<{ linhas: CAPRow[]
       d_vencimento:         venc,
       d_competencia:        parseDate(get(col.competencia)),
       v_titulo:             limparNumero(get(col.vTitulo)),
-      situacao:             String(get(col.situacao) ?? '').toUpperCase().trim() === 'LIQUIDADO' ? 'LIQUIDADO' : 'ATIVO',
+      situacao:             corrigirSituacao(String(get(col.situacao) ?? ''), venc),
       portador:             String(get(col.portador) ?? '').trim(),
       dias_atraso:          parseInt(String(get(col.diasAtraso) ?? '0')) || 0,
     })
