@@ -348,9 +348,6 @@ export function parseTarifasBuffer(buffer: ArrayBuffer): { linhas: TarifasRow[];
 // ─── Utilitários de apresentação ──────────────────────────────────
 
 export function fmtCompact(value: number): string {
-  const abs = Math.abs(value)
-  const neg = value < 0 ? '-' : ''
-  if (abs >= 1_000_000) return `${neg}R$ ${(abs / 1_000_000).toFixed(2).replace('.', ',')} Mi`
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
