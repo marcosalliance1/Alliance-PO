@@ -4,7 +4,7 @@ import {
   Tooltip, Legend, PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts'
 import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight, Table2, Search, ChevronLeft } from 'lucide-react'
-import { useFinanceiro, type BoletimRecord, type DimensaoProjetoRecord } from '../hooks/useFinanceiro'
+import { useFinanceiro, type BoletimRecord, type CAPRecord, type DimensaoProjetoRecord } from '../hooks/useFinanceiro'
 import { fmtCompact, tempoDesde, mesAno, nivelEnsino } from '../utils/parseFinanceiro'
 import { useAuth } from '../contexts/AuthContext'
 import { Toast } from '../components/ui/Toast'
@@ -41,22 +41,29 @@ function TTip({ active, payload, label }: { active?: boolean; payload?: { name: 
 }
 
 // ─── Aba 1: Resultado Projetos ────────────────────────────────────
-function ResultadoProjetos({ boletim, dimensaoProjetos, filtroProj }: { boletim: BoletimRecord[]; dimensaoProjetos: DimensaoProjetoRecord[]; filtroProj: string }) {
+function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { boletim: BoletimRecord[]; cap: CAPRecord[]; dimensaoProjetos: DimensaoProjetoRecord[]; filtroProj: string }) {
   const [ensinoAberto, setEnsinoAberto] = useState<Record<string, boolean>>({})
   const [instAberta, setInstAberta] = useState<Record<string, boolean>>({})
 
   const fp = filtroProj.toLowerCase()
   const boletimF = fp ? boletim.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : boletim
+  const capF     = fp ? cap.filter(r => r.desc_centro_custo.toLowerCase().includes(fp))     : cap
 
   const receitas    = boletimF.filter(r => r.tipo === 'RECEITA')
   const despesas    = boletimF.filter(r => r.tipo === 'DESPESA')
   const rendimentos = boletimF.filter(r => r.tipo === 'RENDIMENTO')
 
+  // Realizado (só Boletim)
   const totalReceitas    = receitas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const totalDespesas    = despesas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const totalRendimentos = rendimentos.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const resultado = totalReceitas - totalDespesas
   const margem = totalReceitas > 0 ? (resultado / totalReceitas) * 100 : 0
+
+  // Projetado (Boletim + CAP ATIVO)
+  const totalDespesasP = totalDespesas + capF.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+  const resultadoP     = totalReceitas - totalDespesasP
+  const margemP        = totalReceitas > 0 ? (resultadoP / totalReceitas) * 100 : 0
 
   const porAno: Record<string, { ano: string; receitas: number; despesas: number }> = {}
   for (const i of receitas) {
@@ -145,17 +152,33 @@ function ResultadoProjetos({ boletim, dimensaoProjetos, filtroProj }: { boletim:
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-4 gap-4">
-        <KPICard title="Receitas Totais"  value={totalReceitas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} color={C_RECEITA} />
-        <KPICard title="Despesas Totais"  value={totalDespesas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} color={C_DESPESA} />
-        <KPICard title="Resultado"        value={resultado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}     color={resultado >= 0 ? C_RECEITA : C_DESPESA} />
-        <KPICard title="Margem"           value={`${margem.toFixed(1)}%`}   color={C_AZUL} />
-      </div>
-      {totalRendimentos > 0 && (
-        <div className="max-w-xs">
-          <KPICard title="Rendimentos Financeiros" value={totalRendimentos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} color={C_ROXO} />
+      <div className="grid grid-cols-2 gap-4">
+        {/* Resultado Realizado */}
+        <div className="card">
+          <h3 className="text-text-main text-sm font-semibold mb-3 pb-2 border-b border-white/10">Resultado Realizado</h3>
+          <div className="space-y-2.5">
+            <div className="flex justify-between text-sm"><span className="text-text-muted">Receitas</span><span className="font-semibold" style={{ color: C_RECEITA }}>{fmtCompact(totalReceitas)}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-text-muted">Despesas</span><span className="font-semibold" style={{ color: C_DESPESA }}>{fmtCompact(totalDespesas)}</span></div>
+            <div className="flex justify-between text-sm border-t border-white/10 pt-2"><span className="text-text-muted">Resultado</span><span className="font-bold" style={{ color: resultado >= 0 ? C_RECEITA : C_DESPESA }}>{fmtCompact(resultado)}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-text-muted">Margem</span><span className="font-bold" style={{ color: C_AZUL }}>{margem.toFixed(1)}%</span></div>
+            {totalRendimentos > 0 && (
+              <div className="flex justify-between text-sm border-t border-white/10 pt-2"><span className="text-text-muted">Rendimentos Financeiros</span><span className="font-semibold" style={{ color: C_ROXO }}>{fmtCompact(totalRendimentos)}</span></div>
+            )}
+          </div>
         </div>
-      )}
+        {/* Resultado Projetado */}
+        <div className="card">
+          <h3 className="text-text-main text-sm font-semibold mb-3 pb-2 border-b border-white/10">
+            Resultado Projetado <span className="text-xs text-text-muted font-normal">+ CAP Ativo</span>
+          </h3>
+          <div className="space-y-2.5">
+            <div className="flex justify-between text-sm"><span className="text-text-muted">Receitas</span><span className="font-semibold" style={{ color: C_RECEITA }}>{fmtCompact(totalReceitas)}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-text-muted">Despesas</span><span className="font-semibold" style={{ color: C_DESPESA }}>{fmtCompact(totalDespesasP)}</span></div>
+            <div className="flex justify-between text-sm border-t border-white/10 pt-2"><span className="text-text-muted">Resultado</span><span className="font-bold" style={{ color: resultadoP >= 0 ? C_RECEITA : C_DESPESA }}>{fmtCompact(resultadoP)}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-text-muted">Margem</span><span className="font-bold" style={{ color: C_AZUL }}>{margemP.toFixed(1)}%</span></div>
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-4 gap-4">
         <div className="card col-span-2">
@@ -350,12 +373,9 @@ function ResultadoProjetos({ boletim, dimensaoProjetos, filtroProj }: { boletim:
 }
 
 // ─── Aba 2: Fluxo de Caixa ────────────────────────────────────────
-function FluxoCaixa({ boletim: boletimRaw, filtroProj }: { boletim: BoletimRecord[]; filtroProj: string }) {
+function FluxoCaixa({ cap: capRaw, filtroProj }: { cap: CAPRecord[]; filtroProj: string }) {
   const fp = filtroProj.toLowerCase().trim()
-  const despAtivo = (fp
-    ? boletimRaw.filter(r => r.tipo === 'DESPESA' && r.desc_centro_custo.toLowerCase().includes(fp))
-    : boletimRaw.filter(r => r.tipo === 'DESPESA')
-  ).filter(r => r.situacao === 'ATIVO')
+  const cap = fp ? capRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : capRaw
 
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const [expandidosProjetos, setExpandidosProjetos] = useState<Record<string, boolean>>({})
@@ -364,16 +384,16 @@ function FluxoCaixa({ boletim: boletimRaw, filtroProj }: { boletim: BoletimRecor
   const em7  = new Date(Date.now() + 7  * 86400000).toISOString().slice(0, 10)
   const em30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
 
-  const totalAberto  = despAtivo.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
-  const totalVencido = despAtivo.filter(i => i.d_vencimento && i.d_vencimento < hoje).reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
-  const aVencer7     = despAtivo.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em7).reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
-  const aVencer30    = despAtivo.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em30).reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const totalAberto  = cap.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+  const totalVencido = cap.filter(i => i.d_vencimento && i.d_vencimento < hoje).reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+  const aVencer7     = cap.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em7).reduce((s, i) => s + (i.v_titulo ?? 0), 0)
+  const aVencer30    = cap.filter(i => i.d_vencimento && i.d_vencimento >= hoje && i.d_vencimento <= em30).reduce((s, i) => s + (i.v_titulo ?? 0), 0)
 
   const porMes: Record<string, { mes: string; sortKey: string; valor: number }> = {}
-  for (const i of despAtivo) {
+  for (const i of cap) {
     const key = mesAno(i.d_vencimento); if (!key || !i.d_vencimento) continue
     porMes[key] ??= { mes: key, sortKey: i.d_vencimento.slice(0, 7), valor: 0 }
-    porMes[key].valor += i.v_lancamento ?? 0
+    porMes[key].valor += i.v_titulo ?? 0
   }
   const dadosMes = Object.values(porMes).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
@@ -382,18 +402,18 @@ function FluxoCaixa({ boletim: boletimRaw, filtroProj }: { boletim: BoletimRecor
   type ProjFC  = { total: number; contas: Record<string, ContaFC> }
   type MesFC   = { mes: string; sortKey: string; total: number; vencido: boolean; projetos: Record<string, ProjFC> }
   const pagPorMes: Record<string, MesFC> = {}
-  for (const i of despAtivo) {
+  for (const i of cap) {
     const key  = mesAno(i.d_vencimento); if (!key || !i.d_vencimento) continue
-    const proj = i.desc_centro_custo    || '(sem projeto)'
-    const g    = i.desc_conta_gerencial || '(sem categoria)'
-    const forn = i.fantasia_cliente_fornecedor             || '(sem fornecedor)'
+    const proj = i.desc_centro_custo     || '(sem projeto)'
+    const g    = i.desc_conta_gerencial  || '(sem categoria)'
+    const forn = i.fantasia_fornecedor   || '(sem fornecedor)'
     pagPorMes[key] ??= { mes: key, sortKey: i.d_vencimento.slice(0, 7), total: 0, vencido: i.d_vencimento < hoje, projetos: {} }
-    pagPorMes[key].total += i.v_lancamento ?? 0
+    pagPorMes[key].total += i.v_titulo ?? 0
     pagPorMes[key].projetos[proj] ??= { total: 0, contas: {} }
-    pagPorMes[key].projetos[proj].total += i.v_lancamento ?? 0
+    pagPorMes[key].projetos[proj].total += i.v_titulo ?? 0
     pagPorMes[key].projetos[proj].contas[g] ??= { total: 0, fornecedores: {} }
-    pagPorMes[key].projetos[proj].contas[g].total += i.v_lancamento ?? 0
-    pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] = (pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_lancamento ?? 0)
+    pagPorMes[key].projetos[proj].contas[g].total += i.v_titulo ?? 0
+    pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] = (pagPorMes[key].projetos[proj].contas[g].fornecedores[forn] ?? 0) + (i.v_titulo ?? 0)
   }
   const linhasPag = Object.values(pagPorMes).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
@@ -887,23 +907,21 @@ function EmptyChart({ label = 'Sem dados' }: { label?: string }) {
 
 // ─── Página principal ─────────────────────────────────────────────
 export function Financeiro() {
-  const { boletim, dimensaoProjetos, uploadMeta, carregando, uploadBoletim } = useFinanceiro()
+  const { boletim, cap, dimensaoProjetos, uploadMeta, carregando, uploadBoletim, uploadCAP } = useFinanceiro()
   const { isAdmin } = useAuth()
   const [abaAtiva, setAbaAtiva] = useState<AbaId>('resultado')
   const [filtroProj, setFiltroProj] = useState('')
-  const [processando, setProcessando] = useState(false)
+  const [processando, setProcessando] = useState({ BOLETIM: false, CAP: false })
   const [toast, setToast] = useState<{ mensagem: string; tipo: 'sucesso' | 'erro' } | null>(null)
   const boletimRef = useRef<HTMLInputElement>(null)
+  const capRef     = useRef<HTMLInputElement>(null)
 
   const semDados = boletim.length === 0
 
-  async function handleArquivo(arquivo: File | undefined) {
+  async function handleBoletim(arquivo: File | undefined) {
     if (!arquivo) return
-    if (!arquivo.name.toLowerCase().endsWith('.xlsx')) {
-      setToast({ mensagem: 'Envie um arquivo .xlsx válido.', tipo: 'erro' })
-      return
-    }
-    setProcessando(true)
+    if (!arquivo.name.toLowerCase().endsWith('.xlsx')) { setToast({ mensagem: 'Envie um arquivo .xlsx válido.', tipo: 'erro' }); return }
+    setProcessando(p => ({ ...p, BOLETIM: true }))
     try {
       const { totalLinhas } = await uploadBoletim(arquivo)
       setToast({ mensagem: `Boletim atualizado — ${totalLinhas.toLocaleString('pt-BR')} registros importados.`, tipo: 'sucesso' })
@@ -911,8 +929,24 @@ export function Financeiro() {
       const e = err as { message?: string; tipo?: string }
       setToast({ mensagem: e.tipo === 'ABA_NAO_ENCONTRADA' ? (e.message ?? 'Erro') : `Erro ao processar Boletim: ${e.message}`, tipo: 'erro' })
     } finally {
-      setProcessando(false)
+      setProcessando(p => ({ ...p, BOLETIM: false }))
       if (boletimRef.current) boletimRef.current.value = ''
+    }
+  }
+
+  async function handleCAP(arquivo: File | undefined) {
+    if (!arquivo) return
+    if (!arquivo.name.toLowerCase().endsWith('.xlsx')) { setToast({ mensagem: 'Envie um arquivo .xlsx válido.', tipo: 'erro' }); return }
+    setProcessando(p => ({ ...p, CAP: true }))
+    try {
+      const { totalLinhas } = await uploadCAP(arquivo)
+      setToast({ mensagem: `CAP atualizado — ${totalLinhas.toLocaleString('pt-BR')} títulos ATIVO importados.`, tipo: 'sucesso' })
+    } catch (err: unknown) {
+      const e = err as { message?: string; tipo?: string }
+      setToast({ mensagem: e.tipo === 'ABA_NAO_ENCONTRADA' ? (e.message ?? 'Erro') : `Erro ao processar CAP: ${e.message}`, tipo: 'erro' })
+    } finally {
+      setProcessando(p => ({ ...p, CAP: false }))
+      if (capRef.current) capRef.current.value = ''
     }
   }
 
@@ -926,22 +960,43 @@ export function Financeiro() {
         </div>
 
         {isAdmin && (
-          <div className="flex flex-col items-end gap-1">
-            <input ref={boletimRef} type="file" accept=".xlsx" className="hidden"
-              onChange={e => handleArquivo(e.target.files?.[0])} />
-            <button
-              onClick={() => boletimRef.current?.click()}
-              disabled={processando}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20"
-            >
-              {processando ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
-              Atualizar Boletim
-            </button>
-            {uploadMeta && (
-              <span className="text-xs text-text-muted">
-                Atualizado {tempoDesde(uploadMeta.uploaded_at)} · {(uploadMeta.total_linhas ?? 0).toLocaleString('pt-BR')} linhas
-              </span>
-            )}
+          <div className="flex gap-3 flex-wrap items-start">
+            {/* Boletim */}
+            <div className="flex flex-col items-end gap-1">
+              <input ref={boletimRef} type="file" accept=".xlsx" className="hidden"
+                onChange={e => handleBoletim(e.target.files?.[0])} />
+              <button
+                onClick={() => boletimRef.current?.click()}
+                disabled={processando.BOLETIM}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20"
+              >
+                {processando.BOLETIM ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
+                Atualizar Boletim
+              </button>
+              {uploadMeta.BOLETIM && (
+                <span className="text-xs text-text-muted">
+                  {tempoDesde(uploadMeta.BOLETIM.uploaded_at)} · {(uploadMeta.BOLETIM.total_linhas ?? 0).toLocaleString('pt-BR')} linhas
+                </span>
+              )}
+            </div>
+            {/* CAP */}
+            <div className="flex flex-col items-end gap-1">
+              <input ref={capRef} type="file" accept=".xlsx" className="hidden"
+                onChange={e => handleCAP(e.target.files?.[0])} />
+              <button
+                onClick={() => capRef.current?.click()}
+                disabled={processando.CAP}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-white/5 border border-white/10 text-text-muted hover:text-text-main hover:bg-white/10"
+              >
+                {processando.CAP ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
+                Atualizar CAP
+              </button>
+              {uploadMeta.CAP && (
+                <span className="text-xs text-text-muted">
+                  {tempoDesde(uploadMeta.CAP.uploaded_at)} · {(uploadMeta.CAP.total_linhas ?? 0).toLocaleString('pt-BR')} linhas
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -992,8 +1047,8 @@ export function Financeiro() {
         </div>
       ) : (
         <>
-          {abaAtiva === 'resultado' && <ResultadoProjetos boletim={boletim} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
-          {abaAtiva === 'fluxo'    && <FluxoCaixa boletim={boletim} filtroProj={filtroProj} />}
+          {abaAtiva === 'resultado' && <ResultadoProjetos boletim={boletim} cap={cap} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
+          {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} filtroProj={filtroProj} />}
           {abaAtiva === 'despesas' && <ControleDespesas boletim={boletim} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
           {abaAtiva === 'dados'    && <TabelaDados boletim={boletim} filtroProj={filtroProj} />}
         </>
