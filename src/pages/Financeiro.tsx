@@ -390,14 +390,27 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
 // ─── Aba 2: Fluxo de Caixa ────────────────────────────────────────
 function FluxoCaixa({ cap: capRaw, filtroProj }: { cap: CAPRecord[]; filtroProj: string }) {
   const fp = filtroProj.toLowerCase().trim()
-  const cap = fp ? capRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : capRaw
+  const capProj = fp ? capRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : capRaw
+
+  const hoje     = new Date().toISOString().slice(0, 10)
+  const anoAtual = new Date().getFullYear()
+  const [de,  setDe]  = useState('2025-01-01')
+  const [ate, setAte] = useState(`${anoAtual}-12-31`)
+
+  const em7  = new Date(Date.now() + 7  * 86400000).toISOString().slice(0, 10)
+  const em30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
+  const em90 = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10)
+
+  const cap = capProj.filter(i => {
+    if (!i.d_vencimento) return true
+    if (de  && i.d_vencimento < de)  return false
+    if (ate && i.d_vencimento > ate) return false
+    return true
+  })
 
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const [expandidosProjetos, setExpandidosProjetos] = useState<Record<string, boolean>>({})
   const [expandidosContas, setExpandidosContas] = useState<Record<string, boolean>>({})
-  const hoje = new Date().toISOString().slice(0, 10)
-  const em7  = new Date(Date.now() + 7  * 86400000).toISOString().slice(0, 10)
-  const em30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
 
   const totalAberto  = cap.reduce((s, i) => s + (i.v_titulo ?? 0), 0)
   const totalVencido = cap.filter(i => i.d_vencimento && i.d_vencimento < hoje).reduce((s, i) => s + (i.v_titulo ?? 0), 0)
@@ -432,8 +445,33 @@ function FluxoCaixa({ cap: capRaw, filtroProj }: { cap: CAPRecord[]; filtroProj:
   }
   const linhasPag = Object.values(pagPorMes).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
+  const ATALHOS = [
+    { label: '2025',      de: '2025-01-01', ate: '2025-12-31' },
+    { label: '2026',      de: '2026-01-01', ate: '2026-12-31' },
+    { label: 'Próx. 30d', de: hoje,         ate: em30 },
+    { label: 'Próx. 90d', de: hoje,         ate: em90 },
+    { label: 'Tudo',      de: '',           ate: '' },
+  ]
+
   return (
     <div className="space-y-5">
+      <div className="card flex items-center gap-3 flex-wrap py-3">
+        <span className="text-xs text-text-muted shrink-0 font-medium">Período:</span>
+        <input type="date" value={de} onChange={e => setDe(e.target.value)}
+          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-main focus:outline-none focus:border-primary/50" />
+        <span className="text-xs text-text-muted">até</span>
+        <input type="date" value={ate} onChange={e => setAte(e.target.value)}
+          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-main focus:outline-none focus:border-primary/50" />
+        <div className="flex gap-1.5 flex-wrap">
+          {ATALHOS.map(({ label, de: d, ate: a }) => (
+            <button key={label} onClick={() => { setDe(d); setAte(a) }}
+              className="px-2.5 py-1 rounded text-[11px] bg-white/5 border border-white/10 text-text-muted hover:text-text-main hover:bg-white/10 transition-colors whitespace-nowrap">
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-4 gap-4">
         <KPICard title="Total em Aberto"    value={fmtCompact(totalAberto)}  color="#94a3b8" />
         <KPICard title="Total Vencido"      value={fmtCompact(totalVencido)} color={C_DESPESA} subtitle="ATIVO com data passada" />
