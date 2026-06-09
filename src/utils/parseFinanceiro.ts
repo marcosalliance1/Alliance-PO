@@ -60,7 +60,7 @@ function encontrarHeaderIdx(rows: unknown[][], termo: string): number {
 
 export interface BoletimRow {
   desc_conta_gerencial: string
-  fantasia: string
+  fantasia_cliente_fornecedor: string
   d_vencimento: string | null
   d_liquidacao: string | null
   d_competencia: string | null
@@ -161,7 +161,7 @@ export async function parseBoletimArquivo(arquivo: File): Promise<{ linhas: Bole
 
     linhas.push({
       desc_conta_gerencial: gerencial,
-      fantasia:             String(get(col.fantasia) ?? '').trim(),
+      fantasia_cliente_fornecedor: String(get(col.fantasia) ?? '').trim(),
       d_vencimento:         parseDate(get(col.vencimento)),
       d_liquidacao:         liquidacao,
       d_competencia:        parseDate(get(col.competencia)),

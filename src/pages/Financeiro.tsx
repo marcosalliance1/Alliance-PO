@@ -386,7 +386,7 @@ function FluxoCaixa({ boletim: boletimRaw, filtroProj }: { boletim: BoletimRecor
     const key  = mesAno(i.d_vencimento); if (!key || !i.d_vencimento) continue
     const proj = i.desc_centro_custo    || '(sem projeto)'
     const g    = i.desc_conta_gerencial || '(sem categoria)'
-    const forn = i.fantasia             || '(sem fornecedor)'
+    const forn = i.fantasia_cliente_fornecedor             || '(sem fornecedor)'
     pagPorMes[key] ??= { mes: key, sortKey: i.d_vencimento.slice(0, 7), total: 0, vencido: i.d_vencimento < hoje, projetos: {} }
     pagPorMes[key].total += i.v_lancamento ?? 0
     pagPorMes[key].projetos[proj] ??= { total: 0, contas: {} }
@@ -538,7 +538,7 @@ function ControleDespesas({ boletim: boletimRaw, dimensaoProjetos, filtroProj }:
     for (const i of despesas) {
       const proj = i.desc_centro_custo    || '(sem projeto)'
       const g    = i.desc_conta_gerencial || '(sem categoria)'
-      const forn = i.fantasia             || '(sem fornecedor)'
+      const forn = i.fantasia_cliente_fornecedor             || '(sem fornecedor)'
       porProj[proj] ??= { total: 0, contas: {} }
       porProj[proj].total += i.v_lancamento ?? 0
       porProj[proj].contas[g] ??= { total: 0, fornecedores: {} }
@@ -761,7 +761,7 @@ function TabelaDados({ boletim: boletimRaw, filtroProj }: { boletim: BoletimReco
     if (!f) return boletim
     return boletim.filter(r =>
       r.desc_centro_custo.toLowerCase().includes(f) ||
-      r.fantasia.toLowerCase().includes(f) ||
+      r.fantasia_cliente_fornecedor.toLowerCase().includes(f) ||
       r.desc_conta_gerencial.toLowerCase().includes(f)
     )
   }, [boletim, filtro])
@@ -822,7 +822,7 @@ function TabelaDados({ boletim: boletimRaw, filtroProj }: { boletim: BoletimReco
                                                'bg-purple-500/15 text-purple-400'
                     }`}>{r.tipo}</span>
                   </td>
-                  <td className="px-3 py-2 text-text-main max-w-[160px] truncate" title={r.fantasia}>{r.fantasia || '—'}</td>
+                  <td className="px-3 py-2 text-text-main max-w-[160px] truncate" title={r.fantasia_cliente_fornecedor}>{r.fantasia_cliente_fornecedor || '—'}</td>
                   <td className="px-3 py-2 text-text-main max-w-[180px] truncate" title={r.desc_centro_custo}>{r.desc_centro_custo || '—'}</td>
                   <td className="px-3 py-2 text-text-muted max-w-[160px] truncate" title={r.desc_conta_gerencial}>{r.desc_conta_gerencial || '—'}</td>
                   <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.d_vencimento ?? '—'}</td>

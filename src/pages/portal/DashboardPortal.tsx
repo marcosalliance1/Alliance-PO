@@ -42,7 +42,7 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
 }
 
 interface CapVencimento {
-  fantasia: string
+  fantasia_cliente_fornecedor: string
   desc_conta_gerencial: string
   d_vencimento: string | null
   v_lancamento: number
@@ -616,7 +616,7 @@ export function DashboardPortal() {
         const em30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
         const { data: capData } = await supabase
           .from('financeiro_boletim')
-          .select('fantasia, desc_conta_gerencial, d_vencimento, v_lancamento')
+          .select('fantasia_cliente_fornecedor, desc_conta_gerencial, d_vencimento, v_lancamento')
           .eq('tipo', 'DESPESA')
           .eq('situacao', 'ATIVO')
           .gte('d_vencimento', hoje)
