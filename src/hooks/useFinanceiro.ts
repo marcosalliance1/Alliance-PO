@@ -116,7 +116,7 @@ export function useFinanceiro() {
 
   async function uploadCAP(arquivo: File): Promise<{ totalLinhas: number }> {
     const { linhas: todas } = await parseCAPArquivo(arquivo)
-    const linhas = todas.filter(l => l.situacao === 'ATIVO')
+    const linhas = todas.filter(l => l.situacao === 'ATIVO' && l.d_vencimento != null && l.d_vencimento >= '2025-01-01')
     const totalLinhas = linhas.length
     await _substituir('CAP', 'financeiro_cap', arquivo.name, linhas, totalLinhas)
     await carregar()
