@@ -53,18 +53,26 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
   const despesas    = boletimF.filter(r => r.tipo === 'DESPESA')
   const rendimentos = boletimF.filter(r => r.tipo === 'RENDIMENTO')
 
-  // Realizado (só Boletim)
+  // Despesas totais por projeto (CAP + Tarifas Boletim) — base do Resultado Total
+  const despTotalPorProj: Record<string, number> = {}
+  for (const i of capF) { const p = i.desc_centro_custo || ''; despTotalPorProj[p] = (despTotalPorProj[p] ?? 0) + (i.v_titulo ?? 0) }
+  for (const i of boletimF) {
+    if (i.desc_conta_gerencial.toUpperCase() !== 'TARIFAS BANCARIAS') continue
+    const p = i.desc_centro_custo || ''
+    despTotalPorProj[p] = (despTotalPorProj[p] ?? 0) + (i.v_lancamento ?? 0)
+  }
+
+  // Resultado Caixa (só Boletim)
   const totalReceitas    = receitas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const totalDespesas    = despesas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const totalRendimentos = rendimentos.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const resultado = totalReceitas - totalDespesas
   const margem = totalReceitas > 0 ? (resultado / totalReceitas) * 100 : 0
 
-  // Projetado (CAP total + Tarifas do Boletim)
-  const tarifasBoletimF = boletimF.filter(r => r.desc_conta_gerencial.toUpperCase() === 'TARIFAS BANCARIAS').reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
-  const totalDespesasP  = capF.reduce((s, i) => s + (i.v_titulo ?? 0), 0) + tarifasBoletimF
-  const resultadoP      = totalReceitas - totalDespesasP
-  const margemP         = totalReceitas > 0 ? (resultadoP / totalReceitas) * 100 : 0
+  // Resultado Total (CAP + Tarifas Boletim)
+  const totalDespesasP = Object.values(despTotalPorProj).reduce((s, v) => s + v, 0)
+  const resultadoP     = totalReceitas - totalDespesasP
+  const margemP        = totalReceitas > 0 ? (resultadoP / totalReceitas) * 100 : 0
 
   const porAno: Record<string, { ano: string; receitas: number; despesas: number }> = {}
   for (const i of receitas) {
@@ -72,7 +80,13 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
     porAno[ano] ??= { ano, receitas: 0, despesas: 0 }
     porAno[ano].receitas += i.v_lancamento ?? 0
   }
-  for (const i of despesas) {
+  for (const i of capF) {
+    const ano = i.d_competencia?.slice(0, 4); if (!ano) continue
+    porAno[ano] ??= { ano, receitas: 0, despesas: 0 }
+    porAno[ano].despesas += i.v_titulo ?? 0
+  }
+  for (const i of boletimF) {
+    if (i.desc_conta_gerencial.toUpperCase() !== 'TARIFAS BANCARIAS') continue
     const ano = i.d_competencia?.slice(0, 4); if (!ano) continue
     porAno[ano] ??= { ano, receitas: 0, despesas: 0 }
     porAno[ano].despesas += i.v_lancamento ?? 0
@@ -82,7 +96,7 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
   // Margem % por ensino
   const porNivelMargem: Record<string, { receita: number; despesa: number }> = {}
   for (const i of receitas) { const n = nivelEnsino(i.desc_centro_custo); porNivelMargem[n] ??= { receita: 0, despesa: 0 }; porNivelMargem[n].receita += i.v_lancamento ?? 0 }
-  for (const i of despesas) { const n = nivelEnsino(i.desc_centro_custo); porNivelMargem[n] ??= { receita: 0, despesa: 0 }; porNivelMargem[n].despesa += i.v_lancamento ?? 0 }
+  for (const [p, d] of Object.entries(despTotalPorProj)) { const n = nivelEnsino(p); porNivelMargem[n] ??= { receita: 0, despesa: 0 }; porNivelMargem[n].despesa += d }
   const donutMargem = Object.entries(porNivelMargem)
     .filter(([, v]) => v.receita > 0)
     .map(([name, { receita, despesa }]) => {
@@ -100,10 +114,10 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
     .map(([name, value]) => ({ name, value, pct: totalConta > 0 ? ((value / totalConta) * 100).toFixed(1) : '0' }))
     .sort((a, b) => b.value - a.value)
 
-  const projMap: Record<string, { receita: number; despesa: number }> = {}
-  for (const i of receitas) { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].receita += i.v_lancamento ?? 0 }
-  for (const i of despesas) { projMap[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMap[i.desc_centro_custo].despesa += i.v_lancamento ?? 0 }
-  const top10 = Object.entries(projMap)
+  const projMapTotal: Record<string, { receita: number; despesa: number }> = {}
+  for (const i of receitas) { projMapTotal[i.desc_centro_custo] ??= { receita: 0, despesa: 0 }; projMapTotal[i.desc_centro_custo].receita += i.v_lancamento ?? 0 }
+  for (const [p, d] of Object.entries(despTotalPorProj)) { if (!p) continue; projMapTotal[p] ??= { receita: 0, despesa: 0 }; projMapTotal[p].despesa += d }
+  const top10 = Object.entries(projMapTotal)
     .filter(([n]) => n)
     .map(([nome, { receita, despesa }]) => ({ nome, resultado: receita - despesa }))
     .sort((a, b) => b.resultado - a.resultado)
@@ -115,7 +129,7 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
     if (d.nome_projeto) dimMapT[d.nome_projeto.trim()] = { ensino: normalizeEnsino(d.ensino), instituicao: d.instituicao.trim() }
   }
   const gruposTab: Record<string, Record<string, { receita: number; despesa: number; projetos: Record<string, { receita: number; despesa: number }> }>> = {}
-  for (const [proj, { receita, despesa }] of Object.entries(projMap)) {
+  for (const [proj, { receita, despesa }] of Object.entries(projMapTotal)) {
     if (!proj) continue
     const dim = dimMapT[proj]
     const ensino = dim?.ensino || 'Outros'
@@ -156,7 +170,7 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
       <div className="grid grid-cols-2 gap-4">
         {/* Resultado Realizado */}
         <div className="card">
-          <h3 className="text-text-main text-sm font-semibold mb-3 pb-2 border-b border-white/10">Resultado Realizado</h3>
+          <h3 className="text-text-main text-sm font-semibold mb-3 pb-2 border-b border-white/10">Resultado Caixa <span className="text-xs text-text-muted font-normal">Movimentos bancários realizados</span></h3>
           <div className="space-y-2.5">
             <div className="flex justify-between text-sm"><span className="text-text-muted">Receitas</span><span className="font-semibold" style={{ color: C_RECEITA }}>{fmtCompact(totalReceitas)}</span></div>
             <div className="flex justify-between text-sm"><span className="text-text-muted">Despesas</span><span className="font-semibold" style={{ color: C_DESPESA }}>{fmtCompact(totalDespesas)}</span></div>
@@ -170,7 +184,7 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
         {/* Resultado Projetado */}
         <div className="card">
           <h3 className="text-text-main text-sm font-semibold mb-3 pb-2 border-b border-white/10">
-            Resultado Projetado <span className="text-xs text-text-muted font-normal">+ CAP Ativo</span>
+            Resultado Total <span className="text-xs text-text-muted font-normal">Todos os lançamentos do ERP</span>
           </h3>
           <div className="space-y-2.5">
             <div className="flex justify-between text-sm"><span className="text-text-muted">Receitas</span><span className="font-semibold" style={{ color: C_RECEITA }}>{fmtCompact(totalReceitas)}</span></div>
@@ -209,7 +223,7 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
                   <Pie data={donutMargem} cx="50%" cy="50%" innerRadius={42} outerRadius={65} paddingAngle={3} dataKey="value" labelLine={false}>
                     {donutMargem.map((d) => <Cell key={d.name} fill={CORES_MARGEM_ENSINO[d.name] ?? '#64748B'} />)}
                   </Pie>
-                  <text x="50%" y="46%" textAnchor="middle" dominantBaseline="central" fill="#f0f0f0" fontSize={13} fontWeight="bold">{margem.toFixed(1)}%</text>
+                  <text x="50%" y="46%" textAnchor="middle" dominantBaseline="central" fill="#f0f0f0" fontSize={13} fontWeight="bold">{margemP.toFixed(1)}%</text>
                   <text x="50%" y="57%" textAnchor="middle" dominantBaseline="central" fill="#8892b0" fontSize={9}>Margem Geral</text>
                   <Tooltip formatter={(_v, _n, p) => [`${(p.payload as { margemPct: number }).margemPct.toFixed(1)}%`, p.name as string]} contentStyle={{ background: '#1e2235', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }} />
                 </PieChart>
