@@ -10,7 +10,6 @@ import { supabase } from '../../lib/supabase'
 import { usePortalAuth } from '../../contexts/PortalAuthContext'
 import { calcResumoProjeto, filtrarItensCalculo } from '../../utils/calculos'
 import allianceLogo from '../../assets/alliance-logo.png'
-import { SecaoStatusEvento } from './SecaoStatusEvento'
 import type { Projeto, SecaoCusto, TAP, Receitas, CustoAdicional, ConciliacaoEverest } from '../../types'
 import type { Orcamento, ItemOrcamento } from '../../modules/pre-eventos/types'
 
@@ -577,10 +576,9 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
 
 // ─── Dashboard Principal ──────────────────────────────────────────────────────
 
-type TabId = 'evento' | 'financeiro' | 'po' | 'pre-eventos'
+type TabId = 'financeiro' | 'po' | 'pre-eventos'
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: 'evento',       label: 'Status do Evento' },
   { id: 'financeiro',   label: 'Financeiro' },
   { id: 'po',           label: 'P.O. Resumido' },
   { id: 'pre-eventos',  label: 'Pré-Eventos' },
@@ -593,7 +591,7 @@ export function DashboardPortal() {
   const [projeto, setProjeto] = useState<Projeto | null>(null)
   const [vencimentos, setVencimentos] = useState<CapVencimento[]>([])
   const [loading, setLoading] = useState(true)
-  const [tabAtiva, setTabAtiva] = useState<TabId>('evento')
+  const [tabAtiva, setTabAtiva] = useState<TabId>('financeiro')
 
   function handleSignOut() {
     signOut()
@@ -698,7 +696,6 @@ export function DashboardPortal() {
 
       {/* Conteúdo */}
       <main className="max-w-4xl mx-auto px-4 sm:px-8 py-8">
-        {tabAtiva === 'evento'      && <SecaoStatusEvento tap={projeto.tap} />}
         {tabAtiva === 'financeiro'  && <SecaoFinanceiro projeto={projeto} vencimentos={vencimentos} />}
         {tabAtiva === 'po'          && <SecaoPO projeto={projeto} />}
         {tabAtiva === 'pre-eventos' && <SecaoPreEventos projeto={projeto} />}

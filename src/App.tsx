@@ -30,6 +30,7 @@ import { ListaOrcamentosPage } from './modules/pre-eventos/pages/Orcamentos/List
 import { NovoOrcamentoPage } from './modules/pre-eventos/pages/Orcamentos/NovoOrcamentoPage'
 import { OrcamentoPage } from './modules/pre-eventos/pages/Orcamentos/OrcamentoPage'
 import { ConfiguracoesPage } from './modules/pre-eventos/pages/Configuracoes/ConfiguracoesPage'
+import { Operacional } from './pages/Operacional'
 
 // ── Spinner simples ──────────────────────────────────────────────────────────
 function Spinner() {
@@ -252,6 +253,7 @@ function AppRoutes() {
             )
           }
         />
+        <Route path="/operacional" element={<Operacional />} />
         <Route path="/verbas" element={<Verbas />} />
         <Route path="/financeiro" element={<Financeiro />} />
         <Route path="/portal-admin" element={<AdminPortal />} />

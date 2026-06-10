@@ -1,0 +1,582 @@
+import { useState, useEffect, useCallback } from 'react'
+import {
+  Calendar, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle,
+  ExternalLink, Loader, Globe, RefreshCw, Ticket,
+} from 'lucide-react'
+import { useGoogleAuth } from '../contexts/GoogleAuthContext'
+import { fetchSheetNames, fetchAba } from '../utils/sheetsSync'
+
+const SHEET_ID = '1VpA4_lRcZlJ75Qc93VZZZvwW748Xnw-UsmQVCB-tRjc'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface EventoInfo {
+  tabName: string
+  nome: string
+  date: Date | null
+  dateStr: string
+  isRealizado: boolean
+}
+
+interface Fornecedor {
+  categoria: string
+  fornecedor: string
+  fechado: boolean
+}
+
+interface LineupItem {
+  horario: string
+  artista: string
+  obs: string
+}
+
+interface EventoDetalhes {
+  tipo: string
+  data: string
+  diaSemana: string
+  local: string
+  horario: string
+  tematica: string
+  totalConvidados: string
+  formandos: string
+  pagantes: string
+  fornecedores: Fornecedor[]
+  lineup: LineupItem[]
+  linkVenda: string | null
+  plantaCerta: string | null
+  impressoes: string | null
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const DIAS = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado']
+
+function nm(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function cel(row: unknown[], i: number): string {
+  return String(row[i] ?? '').trim()
+}
+
+function findVal(rows: unknown[][], ...labels: string[]): string {
+  for (const row of rows) {
+    const a = nm(cel(row, 0))
+    for (const label of labels) {
+      if (a === label || a.startsWith(label + ' ') || a.endsWith(' ' + label)) {
+        return cel(row, 1) || cel(row, 2) || ''
+      }
+    }
+  }
+  return ''
+}
+
+function parseDiaSemana(dateStr: string): string {
+  const m = dateStr.match(/(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})/)
+  if (!m) return ''
+  const y = m[3].length === 2 ? '20' + m[3] : m[3]
+  const d = new Date(`${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`)
+  return isNaN(d.getTime()) ? '' : DIAS[d.getDay()] ?? ''
+}
+
+function isSectionHeader(row: unknown[], keywords: string[]): boolean {
+  const a = nm(cel(row, 0))
+  if (!a) return false
+  const nonEmpty = row.filter(v => String(v ?? '').trim().length > 0)
+  if (nonEmpty.length > 3) return false
+  return keywords.some(k => a.includes(k))
+}
+
+function extrairTipo(tabName: string): string {
+  const n = nm(tabName)
+  if (n.includes('pre internato') || n.includes('pre-internato')) return 'Pré-Internato'
+  if (n.includes('baile')) return 'Baile'
+  if (n.includes('fim') && n.includes('ciclo')) return 'Fim do Ciclo Básico'
+  if (n.includes('meio') && n.includes('curso')) return 'Meio de Curso'
+  if (n.includes('integracao')) return 'Integração'
+  if (n.includes('start')) return 'Start'
+  if (n.includes('x dias') || n.includes('xdias')) return 'Festa X Dias'
+  const semData = tabName.split('|')[0].trim()
+  const match = semData.match(/^(.*?)\s+[A-Z]{2,5}\s*\d/)
+  return (match?.[1] ?? semData).trim()
+}
+
+type CanonicalCat = 'Buffet' | 'Bar' | 'Cerveja' | 'Destilados' | 'Japa'
+
+function canonicalCat(cat: string): CanonicalCat | null {
+  const n = nm(cat)
+  if (n.includes('buffet')) return 'Buffet'
+  if (n === 'bar' || n.startsWith('bar ')) return 'Bar'
+  if (n.includes('cerveja') || n.includes('chopp')) return 'Cerveja'
+  if (n.includes('destilados')) return 'Destilados'
+  if (n.includes('japa') || n.includes('japonesa')) return 'Japa'
+  return null
+}
+
+function parseDateFromTabName(tabName: string): { date: Date | null; dateStr: string } {
+  const m = tabName.match(/\|\s*(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/)
+  if (!m) return { date: null, dateStr: '' }
+  const day = parseInt(m[1])
+  const month = parseInt(m[2]) - 1
+  const now = new Date()
+  let year = now.getFullYear()
+  if (m[3]) {
+    year = parseInt(m[3].length === 2 ? '20' + m[3] : m[3])
+  } else {
+    const candidate = new Date(year, month, day)
+    if (candidate < new Date(now.getTime() - 90 * 86400000)) year += 1
+  }
+  const date = new Date(year, month, day)
+  const dateStr = `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`
+  return { date, dateStr }
+}
+
+function parseEventoDetalhes(rows: unknown[][], tabName: string): EventoDetalhes {
+  const secs: Record<string, number> = {}
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    if (isSectionHeader(row, ['dados do evento', 'dados gerais', 'informacoes gerais'])) secs.dados = i
+    else if (isSectionHeader(row, ['numeros da turma', 'numeros', 'turma'])) secs.numeros = i
+    else if (isSectionHeader(row, ['fornecedores', 'fornecedor'])) secs.fornecedores = i
+    else if (isSectionHeader(row, ['lineup', 'artistico', 'atracoes', 'shows'])) secs.lineup = i
+  }
+
+  function secRows(nome: string): unknown[][] {
+    const start = secs[nome]
+    if (start === undefined) return []
+    const nexts = Object.values(secs).filter(v => v > start).sort((a, b) => a - b)
+    const end = nexts[0] ?? rows.length
+    return rows.slice(start + 1, end)
+  }
+
+  const dadosRows = secRows('dados').length > 0 ? secRows('dados') : rows
+  const dataStr = findVal(dadosRows, 'data do evento', 'data')
+
+  const numRows = secRows('numeros').length > 0 ? secRows('numeros') : rows
+
+  const CATS: CanonicalCat[] = ['Buffet', 'Bar', 'Cerveja', 'Destilados', 'Japa']
+  const fornMap: Partial<Record<CanonicalCat, Fornecedor>> = {}
+  for (const row of secRows('fornecedores')) {
+    const cat = cel(row, 0)
+    if (!cat) continue
+    const canon = canonicalCat(cat)
+    if (!canon || fornMap[canon]) continue
+    const fornecedor = cel(row, 1)
+    fornMap[canon] = {
+      categoria: canon,
+      fornecedor,
+      fechado: !!fornecedor && fornecedor !== '-' && fornecedor !== '—' && fornecedor.length > 1,
+    }
+  }
+  const fornecedores: Fornecedor[] = CATS.map(cat => fornMap[cat] ?? { categoria: cat, fornecedor: '', fechado: false })
+
+  const lineupRows = secRows('lineup')
+  const lineup: LineupItem[] = []
+  let passedHeader = false
+  for (const row of lineupRows) {
+    const a = nm(cel(row, 0))
+    const b = nm(cel(row, 1))
+    if ((a.includes('horario') || a.includes('hora')) && (b.includes('artista') || b.includes('atracao'))) {
+      passedHeader = true
+      continue
+    }
+    const artista = cel(row, 1) || cel(row, 0)
+    if (!artista || (!passedHeader && !cel(row, 0))) continue
+    passedHeader = true
+    lineup.push({ horario: cel(row, 0), artista, obs: cel(row, 2) || cel(row, 3) || '' })
+  }
+
+  let linkVenda: string | null = null
+  let plantaCerta: string | null = null
+  let impressoes: string | null = null
+  const VENDA_WORDS = ['sympla', 'ingresso', 'venda', 'comprar', 'convite']
+
+  for (const row of rows) {
+    let url: string | null = null
+    for (let ci = 0; ci < Math.min(row.length, 8); ci++) {
+      const v = cel(row, ci)
+      if (v.startsWith('http')) { url = v; break }
+    }
+    if (!url) continue
+    const labelText = nm(row.map(cell => String(cell ?? '')).filter(v => !v.startsWith('http')).join(' '))
+    if (!linkVenda && VENDA_WORDS.some(w => labelText.includes(w))) linkVenda = url
+    else if (!plantaCerta && labelText.includes('planta')) plantaCerta = url
+    else if (!impressoes && (labelText.includes('impressoes') || labelText.includes('portaria'))) impressoes = url
+  }
+
+  return {
+    tipo: extrairTipo(tabName),
+    data: dataStr,
+    diaSemana: parseDiaSemana(dataStr),
+    local: findVal(dadosRows, 'local', 'espaco', 'local do evento'),
+    horario: findVal(dadosRows, 'horario', 'hora', 'abertura'),
+    tematica: findVal(dadosRows, 'tematica', 'tema'),
+    totalConvidados: findVal(numRows, 'total de convidados', 'convidados', 'total convidados'),
+    formandos: findVal(numRows, 'formandos', 'n de formandos', 'numero de formandos'),
+    pagantes: findVal(numRows, 'pagantes', 'formandos pagantes', 'pagando'),
+    fornecedores,
+    lineup,
+    linkVenda,
+    plantaCerta,
+    impressoes,
+  }
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function InfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-bg rounded-xl px-3 py-3">
+      <div className="text-text-muted text-xs mb-1">{label}</div>
+      <div className="text-text-main text-sm font-semibold leading-snug">{value}</div>
+    </div>
+  )
+}
+
+function EventoDetalhesView({ d }: { d: EventoDetalhes }) {
+  return (
+    <div className="space-y-5">
+      {/* Dados */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {d.tipo           && <InfoCard label="Tipo"     value={d.tipo} />}
+        {d.data           && <InfoCard label="Data"     value={`${d.data}${d.diaSemana ? ` — ${d.diaSemana}` : ''}`} />}
+        {d.local          && <InfoCard label="Local"    value={d.local} />}
+        {d.horario        && <InfoCard label="Horário"  value={d.horario} />}
+        {d.tematica       && <InfoCard label="Temática" value={d.tematica} />}
+      </div>
+
+      {/* Números */}
+      {(d.totalConvidados || d.formandos || d.pagantes) && (
+        <div className="grid grid-cols-3 gap-3">
+          {d.totalConvidados && <InfoCard label="Total Convidados"  value={d.totalConvidados} />}
+          {d.formandos       && <InfoCard label="Formandos"         value={d.formandos} />}
+          {d.pagantes        && <InfoCard label="Pagantes"          value={d.pagantes} />}
+        </div>
+      )}
+
+      {/* Fornecedores */}
+      <div>
+        <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Fornecedores</h4>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          {d.fornecedores.map(f => (
+            <div
+              key={f.categoria}
+              className={`rounded-xl px-3 py-3 border text-center ${f.fechado ? 'border-success/25 bg-success/5' : 'border-white/8 bg-bg'}`}
+            >
+              <div className="text-xs text-text-muted mb-1.5">{f.categoria}</div>
+              <div className="flex items-center justify-center gap-1">
+                {f.fechado
+                  ? <><CheckCircle2 size={12} className="text-success" /><span className="text-xs text-success font-medium">Fechado</span></>
+                  : <><AlertTriangle size={12} className="text-warning/60" /><span className="text-xs text-text-muted">Pendente</span></>
+                }
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Lineup */}
+      {d.lineup.length > 0 && (
+        <div>
+          <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Lineup Artístico</h4>
+          <div className="rounded-xl border border-white/8 overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-white/4 border-b border-white/8">
+                  <th className="text-left px-3 py-2 text-text-muted font-medium w-20">Horário</th>
+                  <th className="text-left px-3 py-2 text-text-muted font-medium">Artista</th>
+                  <th className="text-left px-3 py-2 text-text-muted font-medium hidden sm:table-cell">Obs.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.lineup.map((l, i) => (
+                  <tr key={i} className="border-b border-white/5 last:border-0">
+                    <td className="px-3 py-2.5 text-text-muted tabular-nums">{l.horario || '—'}</td>
+                    <td className="px-3 py-2.5 text-text-main font-medium">{l.artista}</td>
+                    <td className="px-3 py-2.5 text-text-muted hidden sm:table-cell">{l.obs}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Links */}
+      {(d.linkVenda || d.plantaCerta || d.impressoes) && (
+        <div className="space-y-2">
+          {d.linkVenda && (
+            <a
+              href={d.linkVenda}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold py-3 px-5 rounded-xl transition-colors w-fit"
+            >
+              <Ticket size={15} /> Link de Venda
+            </a>
+          )}
+          <div className="flex flex-wrap gap-4">
+            {d.plantaCerta && (
+              <a
+                href={d.plantaCerta}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+              >
+                <ExternalLink size={12} /> Planta Certa
+              </a>
+            )}
+            {d.impressoes && (
+              <a
+                href={d.impressoes}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+              >
+                <ExternalLink size={12} /> Impressões (Portaria)
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SecaoExpandivel({
+  titulo, count, aberta, onToggle, children,
+}: {
+  titulo: string
+  count: number
+  aberta: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-2 py-2 text-left group"
+      >
+        {aberta
+          ? <ChevronDown size={16} className="text-text-muted" />
+          : <ChevronRight size={16} className="text-text-muted" />
+        }
+        <span className="text-text-main font-semibold text-base flex-1">{titulo}</span>
+        <span className="text-text-muted text-sm">{count} evento{count !== 1 ? 's' : ''}</span>
+      </button>
+      {aberta && children}
+    </div>
+  )
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────────
+
+export function Operacional() {
+  const { accessToken, conectado, logando, conectar, invalidarToken } = useGoogleAuth()
+  const [eventos, setEventos] = useState<EventoInfo[]>([])
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
+  const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
+  const [detalhes, setDetalhes] = useState<Record<string, EventoDetalhes | 'loading' | 'error'>>({})
+  const [secoes, setSecoes] = useState({ em_andamento: true, realizados: false })
+
+  const fetchEventos = useCallback(async (token: string) => {
+    setLoading(true)
+    setErro('')
+    try {
+      const tabNames = await fetchSheetNames(SHEET_ID, token)
+      const now = new Date()
+      now.setHours(0, 0, 0, 0)
+      const parsed: EventoInfo[] = []
+      for (const tabName of tabNames) {
+        if (!tabName.includes('|')) continue
+        const { date, dateStr } = parseDateFromTabName(tabName)
+        parsed.push({
+          tabName,
+          nome: tabName.split('|')[0].trim(),
+          date,
+          dateStr,
+          isRealizado: date ? date < now : false,
+        })
+      }
+      setEventos(parsed)
+    } catch (err) {
+      if ((err as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') invalidarToken()
+      else setErro('error')
+    } finally {
+      setLoading(false)
+    }
+  }, [invalidarToken])
+
+  useEffect(() => {
+    if (accessToken) void fetchEventos(accessToken)
+  }, [accessToken, fetchEventos])
+
+  async function toggleEvento(tabName: string) {
+    const isOpen = expandidos[tabName]
+    setExpandidos(prev => ({ ...prev, [tabName]: !prev[tabName] }))
+    if (!isOpen && !detalhes[tabName] && accessToken) {
+      setDetalhes(prev => ({ ...prev, [tabName]: 'loading' }))
+      try {
+        const rows = await fetchAba(SHEET_ID, tabName, accessToken)
+        if (!rows || rows.length === 0) {
+          setDetalhes(prev => ({ ...prev, [tabName]: 'error' }))
+          return
+        }
+        setDetalhes(prev => ({ ...prev, [tabName]: parseEventoDetalhes(rows, tabName) }))
+      } catch (err) {
+        if ((err as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') invalidarToken()
+        setDetalhes(prev => ({ ...prev, [tabName]: 'error' }))
+      }
+    }
+  }
+
+  const emAndamento = eventos
+    .filter(e => !e.isRealizado)
+    .sort((a, b) => {
+      if (!a.date) return 1
+      if (!b.date) return -1
+      return a.date.getTime() - b.date.getTime()
+    })
+
+  const realizados = eventos
+    .filter(e => e.isRealizado)
+    .sort((a, b) => {
+      if (!a.date) return 1
+      if (!b.date) return -1
+      return b.date.getTime() - a.date.getTime()
+    })
+
+  function renderCard(evento: EventoInfo) {
+    const isOpen = expandidos[evento.tabName]
+    const det = detalhes[evento.tabName]
+    return (
+      <div key={evento.tabName} className={`rounded-xl overflow-hidden ${isOpen ? 'bg-surface ring-1 ring-white/10' : 'bg-bg'}`}>
+        <button
+          onClick={() => void toggleEvento(evento.tabName)}
+          className="w-full flex items-center gap-3 px-4 py-4 hover:bg-white/3 transition-colors text-left"
+        >
+          <span className="text-text-muted shrink-0">
+            {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="text-text-main font-semibold text-sm">{evento.nome}</div>
+            {evento.dateStr && (
+              <div className="text-text-muted text-xs mt-0.5">{evento.dateStr}</div>
+            )}
+          </div>
+          {evento.isRealizado && (
+            <span className="text-xs text-text-muted/60 shrink-0">Realizado</span>
+          )}
+        </button>
+        {isOpen && (
+          <div className="border-t border-white/8 px-4 py-5">
+            {det === 'loading' && (
+              <div className="flex items-center gap-2 text-text-muted text-sm py-4 justify-center">
+                <Loader size={14} className="animate-spin" /> Carregando…
+              </div>
+            )}
+            {det === 'error' && (
+              <p className="text-text-muted text-sm text-center py-4">Erro ao carregar dados.</p>
+            )}
+            {det && det !== 'loading' && det !== 'error' && <EventoDetalhesView d={det} />}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Não conectado ──────────────────────────────────────────────────────────
+  if (!conectado && !loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+        <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+          <Calendar size={24} className="text-primary" />
+        </div>
+        <div>
+          <p className="text-text-main font-semibold text-base mb-1">Eventos</p>
+          <p className="text-text-muted text-sm max-w-xs">
+            Conecte sua conta Google para visualizar os eventos da planilha.
+          </p>
+        </div>
+        <button
+          onClick={conectar}
+          disabled={logando}
+          className="flex items-center gap-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-sm font-semibold py-2.5 px-6 rounded-xl transition-colors"
+        >
+          {logando ? <Loader size={14} className="animate-spin" /> : <Globe size={14} />}
+          {logando ? 'Conectando…' : 'Conectar com Google Drive'}
+        </button>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24 gap-2 text-text-muted">
+        <Loader size={16} className="animate-spin" />
+        <span className="text-sm">Carregando eventos…</span>
+      </div>
+    )
+  }
+
+  if (erro) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+        <AlertTriangle size={24} className="text-warning/60" />
+        <p className="text-text-muted text-sm">Erro ao carregar lista de eventos.</p>
+        <button
+          onClick={() => accessToken && void fetchEventos(accessToken)}
+          className="text-xs text-primary hover:underline flex items-center gap-1"
+        >
+          <RefreshCw size={12} /> Tentar novamente
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-text-main font-bold text-xl">Eventos</h1>
+        <button
+          onClick={() => accessToken && void fetchEventos(accessToken)}
+          className="flex items-center gap-1.5 text-xs text-text-muted hover:text-primary transition-colors"
+        >
+          <RefreshCw size={13} /> Atualizar
+        </button>
+      </div>
+
+      <SecaoExpandivel
+        titulo="Em Andamento"
+        count={emAndamento.length}
+        aberta={secoes.em_andamento}
+        onToggle={() => setSecoes(prev => ({ ...prev, em_andamento: !prev.em_andamento }))}
+      >
+        {emAndamento.length === 0
+          ? <p className="text-text-muted text-sm text-center py-4">Nenhum evento em andamento.</p>
+          : <div className="space-y-2">{emAndamento.map(e => renderCard(e))}</div>
+        }
+      </SecaoExpandivel>
+
+      <SecaoExpandivel
+        titulo="Realizados"
+        count={realizados.length}
+        aberta={secoes.realizados}
+        onToggle={() => setSecoes(prev => ({ ...prev, realizados: !prev.realizados }))}
+      >
+        {realizados.length === 0
+          ? <p className="text-text-muted text-sm text-center py-4">Nenhum evento realizado.</p>
+          : <div className="space-y-2">{realizados.map(e => renderCard(e))}</div>
+        }
+      </SecaoExpandivel>
+    </div>
+  )
+}
