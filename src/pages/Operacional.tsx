@@ -8,6 +8,22 @@ import { fetchSheetNames, fetchAba } from '../utils/sheetsSync'
 
 const SHEET_ID = '1VpA4_lRcZlJ75Qc93VZZZvwW748Xnw-UsmQVCB-tRjc'
 
+// ── Abas genéricas a ignorar (match exato normalizado) ────────────────────────
+const TABS_IGNORAR = new Set([
+  'sheet1', 'índice', 'indice', 'index', 'resumo geral', 'resumo',
+  'tap', 'simulador', 'simulador de eventos', 'config',
+  'configuracoes', 'configurações',
+])
+
+// ── Seções conhecidas (delimitadores de bloco rosa) ───────────────────────────
+const SECOES_CONHECIDAS = new Set([
+  'dados do evento', 'dados gerais', 'informacoes gerais', 'informações gerais',
+  'fornecedores', 'lineup artistico', 'lineup artístico', 'lineup',
+  'numeros da turma', 'números da turma', 'numeros', 'números',
+  'links uteis', 'links úteis', 'links',
+  'cenografia',
+])
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface EventoInfo {
@@ -31,6 +47,7 @@ interface LineupItem {
 }
 
 interface EventoDetalhes {
+  nomeEvento: string
   tipo: string
   data: string
   diaSemana: string
@@ -40,11 +57,12 @@ interface EventoDetalhes {
   totalConvidados: string
   formandos: string
   pagantes: string
+  bolsaFolia: string
+  dataAdimplencia: string
+  vendaDeConvite: string
   fornecedores: Fornecedor[]
   lineup: LineupItem[]
   linkVenda: string | null
-  plantaCerta: string | null
-  impressoes: string | null
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -65,13 +83,11 @@ function cel(row: unknown[], i: number): string {
   return String(row[i] ?? '').trim()
 }
 
-function findVal(rows: unknown[][], ...labels: string[]): string {
+// Match EXATO na coluna A (trimmed, case-sensitive)
+function findExact(rows: unknown[][], field: string): string {
   for (const row of rows) {
-    const a = nm(cel(row, 0))
-    for (const label of labels) {
-      if (a === label || a.startsWith(label + ' ') || a.endsWith(' ' + label)) {
-        return cel(row, 1) || cel(row, 2) || ''
-      }
+    if (cel(row, 0) === field) {
+      return cel(row, 1) || cel(row, 2) || ''
     }
   }
   return ''
@@ -85,26 +101,46 @@ function parseDiaSemana(dateStr: string): string {
   return isNaN(d.getTime()) ? '' : DIAS[d.getDay()] ?? ''
 }
 
-function isSectionHeader(row: unknown[], keywords: string[]): boolean {
-  const a = nm(cel(row, 0))
-  if (!a) return false
-  const nonEmpty = row.filter(v => String(v ?? '').trim().length > 0)
-  if (nonEmpty.length > 3) return false
-  return keywords.some(k => a.includes(k))
+function isSecaoConhecida(row: unknown[]): boolean {
+  return SECOES_CONHECIDAS.has(nm(cel(row, 0)))
 }
 
-function extrairTipo(tabName: string): string {
-  const n = nm(tabName)
-  if (n.includes('pre internato') || n.includes('pre-internato')) return 'Pré-Internato'
-  if (n.includes('baile')) return 'Baile'
-  if (n.includes('fim') && n.includes('ciclo')) return 'Fim do Ciclo Básico'
-  if (n.includes('meio') && n.includes('curso')) return 'Meio de Curso'
-  if (n.includes('integracao')) return 'Integração'
-  if (n.includes('start')) return 'Start'
-  if (n.includes('x dias') || n.includes('xdias')) return 'Festa X Dias'
-  const semData = tabName.split('|')[0].trim()
-  const match = semData.match(/^(.*?)\s+[A-Z]{2,5}\s*\d/)
-  return (match?.[1] ?? semData).trim()
+// Retorna linhas entre o cabeçalho de seção e o próximo cabeçalho
+function secaoRows(rows: unknown[][], headerLabel: string): unknown[][] {
+  let start = -1
+  for (let i = 0; i < rows.length; i++) {
+    if (nm(cel(rows[i], 0)) === nm(headerLabel) && isSecaoConhecida(rows[i])) {
+      start = i + 1
+      break
+    }
+  }
+  if (start === -1) return []
+  const result: unknown[][] = []
+  for (let i = start; i < rows.length; i++) {
+    if (isSecaoConhecida(rows[i])) break
+    if (cel(rows[i], 0) || cel(rows[i], 1)) result.push(rows[i])
+  }
+  return result
+}
+
+// Data do evento: "Data" exato na planilha, fallback ao nome da aba
+function parseDateFromTabName(tabName: string): { date: Date | null; dateStr: string } {
+  const m = tabName.match(/\|\s*(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/)
+  if (!m) return { date: null, dateStr: '' }
+  const day = parseInt(m[1])
+  const month = parseInt(m[2]) - 1
+  const now = new Date()
+  let year = now.getFullYear()
+  if (m[3]) {
+    year = parseInt(m[3].length === 2 ? '20' + m[3] : m[3])
+  } else {
+    const candidate = new Date(year, month, day)
+    if (candidate < new Date(now.getTime() - 90 * 86400000)) year += 1
+  }
+  return {
+    date: new Date(year, month, day),
+    dateStr: `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`,
+  }
 }
 
 type CanonicalCat = 'Buffet' | 'Bar' | 'Cerveja' | 'Destilados' | 'Japa'
@@ -119,50 +155,32 @@ function canonicalCat(cat: string): CanonicalCat | null {
   return null
 }
 
-function parseDateFromTabName(tabName: string): { date: Date | null; dateStr: string } {
-  const m = tabName.match(/\|\s*(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/)
-  if (!m) return { date: null, dateStr: '' }
-  const day = parseInt(m[1])
-  const month = parseInt(m[2]) - 1
-  const now = new Date()
-  let year = now.getFullYear()
-  if (m[3]) {
-    year = parseInt(m[3].length === 2 ? '20' + m[3] : m[3])
-  } else {
-    const candidate = new Date(year, month, day)
-    if (candidate < new Date(now.getTime() - 90 * 86400000)) year += 1
-  }
-  const date = new Date(year, month, day)
-  const dateStr = `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`
-  return { date, dateStr }
-}
+// ── Parser principal ───────────────────────────────────────────────────────────
 
 function parseEventoDetalhes(rows: unknown[][], tabName: string): EventoDetalhes {
-  const secs: Record<string, number> = {}
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]
-    if (isSectionHeader(row, ['dados do evento', 'dados gerais', 'informacoes gerais'])) secs.dados = i
-    else if (isSectionHeader(row, ['numeros da turma', 'numeros', 'turma'])) secs.numeros = i
-    else if (isSectionHeader(row, ['fornecedores', 'fornecedor'])) secs.fornecedores = i
-    else if (isSectionHeader(row, ['lineup', 'artistico', 'atracoes', 'shows'])) secs.lineup = i
-  }
+  // Nome do evento: célula A1 ou B1
+  const nomeEvento = cel(rows[0] ?? [], 0) || cel(rows[0] ?? [], 1) || tabName.split('|')[0].trim()
 
-  function secRows(nome: string): unknown[][] {
-    const start = secs[nome]
-    if (start === undefined) return []
-    const nexts = Object.values(secs).filter(v => v > start).sort((a, b) => a - b)
-    const end = nexts[0] ?? rows.length
-    return rows.slice(start + 1, end)
-  }
+  // Campos com match exato na coluna A
+  const data           = findExact(rows, 'Data')
+  const diaSemana      = findExact(rows, 'Dia da semana')
+  const tipo           = findExact(rows, 'Pré Evento')
+  const tematica       = findExact(rows, 'Temática')
+  const local          = findExact(rows, 'Local')
+  const horario        = findExact(rows, 'Horário')
+  const totalConvidados  = findExact(rows, 'Total de convidados')
+  const formandos        = findExact(rows, 'N° de formandos')
+  const pagantes         = findExact(rows, 'N° de formandos pagantes')
+  const bolsaFolia       = findExact(rows, 'Bolsa Folia individual')
+  const dataAdimplencia  = findExact(rows, 'Data para adimplencia')
+  const vendaDeConvite   = findExact(rows, 'Venda de Convite')
+  const linkVendaRaw     = findExact(rows, 'Link de venda')
+  const linkVenda        = linkVendaRaw.startsWith('http') ? linkVendaRaw : null
 
-  const dadosRows = secRows('dados').length > 0 ? secRows('dados') : rows
-  const dataStr = findVal(dadosRows, 'data do evento', 'data')
-
-  const numRows = secRows('numeros').length > 0 ? secRows('numeros') : rows
-
+  // Seção Fornecedores
   const CATS: CanonicalCat[] = ['Buffet', 'Bar', 'Cerveja', 'Destilados', 'Japa']
   const fornMap: Partial<Record<CanonicalCat, Fornecedor>> = {}
-  for (const row of secRows('fornecedores')) {
+  for (const row of secaoRows(rows, 'Fornecedores')) {
     const cat = cel(row, 0)
     if (!cat) continue
     const canon = canonicalCat(cat)
@@ -176,10 +194,13 @@ function parseEventoDetalhes(rows: unknown[][], tabName: string): EventoDetalhes
   }
   const fornecedores: Fornecedor[] = CATS.map(cat => fornMap[cat] ?? { categoria: cat, fornecedor: '', fechado: false })
 
-  const lineupRows = secRows('lineup')
+  // Seção Lineup Artístico
+  const lineupSection = secaoRows(rows, 'Lineup Artístico').length > 0
+    ? secaoRows(rows, 'Lineup Artístico')
+    : secaoRows(rows, 'Lineup')
   const lineup: LineupItem[] = []
   let passedHeader = false
-  for (const row of lineupRows) {
+  for (const row of lineupSection) {
     const a = nm(cel(row, 0))
     const b = nm(cel(row, 1))
     if ((a.includes('horario') || a.includes('hora')) && (b.includes('artista') || b.includes('atracao'))) {
@@ -192,39 +213,23 @@ function parseEventoDetalhes(rows: unknown[][], tabName: string): EventoDetalhes
     lineup.push({ horario: cel(row, 0), artista, obs: cel(row, 2) || cel(row, 3) || '' })
   }
 
-  let linkVenda: string | null = null
-  let plantaCerta: string | null = null
-  let impressoes: string | null = null
-  const VENDA_WORDS = ['sympla', 'ingresso', 'venda', 'comprar', 'convite']
-
-  for (const row of rows) {
-    let url: string | null = null
-    for (let ci = 0; ci < Math.min(row.length, 8); ci++) {
-      const v = cel(row, ci)
-      if (v.startsWith('http')) { url = v; break }
-    }
-    if (!url) continue
-    const labelText = nm(row.map(cell => String(cell ?? '')).filter(v => !v.startsWith('http')).join(' '))
-    if (!linkVenda && VENDA_WORDS.some(w => labelText.includes(w))) linkVenda = url
-    else if (!plantaCerta && labelText.includes('planta')) plantaCerta = url
-    else if (!impressoes && (labelText.includes('impressoes') || labelText.includes('portaria'))) impressoes = url
-  }
-
   return {
-    tipo: extrairTipo(tabName),
-    data: dataStr,
-    diaSemana: parseDiaSemana(dataStr),
-    local: findVal(dadosRows, 'local', 'espaco', 'local do evento'),
-    horario: findVal(dadosRows, 'horario', 'hora', 'abertura'),
-    tematica: findVal(dadosRows, 'tematica', 'tema'),
-    totalConvidados: findVal(numRows, 'total de convidados', 'convidados', 'total convidados'),
-    formandos: findVal(numRows, 'formandos', 'n de formandos', 'numero de formandos'),
-    pagantes: findVal(numRows, 'pagantes', 'formandos pagantes', 'pagando'),
+    nomeEvento,
+    tipo,
+    data,
+    diaSemana,
+    local,
+    horario,
+    tematica,
+    totalConvidados,
+    formandos,
+    pagantes,
+    bolsaFolia,
+    dataAdimplencia,
+    vendaDeConvite,
     fornecedores,
     lineup,
     linkVenda,
-    plantaCerta,
-    impressoes,
   }
 }
 
@@ -242,21 +247,22 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 function EventoDetalhesView({ d }: { d: EventoDetalhes }) {
   return (
     <div className="space-y-5">
-      {/* Dados */}
+      {/* Dados principais */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {d.tipo           && <InfoCard label="Tipo"     value={d.tipo} />}
-        {d.data           && <InfoCard label="Data"     value={`${d.data}${d.diaSemana ? ` — ${d.diaSemana}` : ''}`} />}
-        {d.local          && <InfoCard label="Local"    value={d.local} />}
-        {d.horario        && <InfoCard label="Horário"  value={d.horario} />}
-        {d.tematica       && <InfoCard label="Temática" value={d.tematica} />}
+        {d.tipo      && <InfoCard label="Tipo"     value={d.tipo} />}
+        {d.data      && <InfoCard label="Data"     value={`${d.data}${d.diaSemana ? ` — ${d.diaSemana}` : ''}`} />}
+        {d.local     && <InfoCard label="Local"    value={d.local} />}
+        {d.horario   && <InfoCard label="Horário"  value={d.horario} />}
+        {d.tematica  && <InfoCard label="Temática" value={d.tematica} />}
       </div>
 
       {/* Números */}
-      {(d.totalConvidados || d.formandos || d.pagantes) && (
-        <div className="grid grid-cols-3 gap-3">
+      {(d.totalConvidados || d.formandos || d.pagantes || d.bolsaFolia) && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {d.totalConvidados && <InfoCard label="Total Convidados"  value={d.totalConvidados} />}
           {d.formandos       && <InfoCard label="Formandos"         value={d.formandos} />}
           {d.pagantes        && <InfoCard label="Pagantes"          value={d.pagantes} />}
+          {d.bolsaFolia      && <InfoCard label="Bolsa Fólia"       value={d.bolsaFolia} />}
         </div>
       )}
 
@@ -308,9 +314,13 @@ function EventoDetalhesView({ d }: { d: EventoDetalhes }) {
         </div>
       )}
 
-      {/* Links */}
-      {(d.linkVenda || d.plantaCerta || d.impressoes) && (
-        <div className="space-y-2">
+      {/* Informações extras e links */}
+      {(d.dataAdimplencia || d.vendaDeConvite || d.linkVenda) && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            {d.dataAdimplencia && <InfoCard label="Data p/ Adimplência" value={d.dataAdimplencia} />}
+            {d.vendaDeConvite  && <InfoCard label="Venda de Convite"    value={d.vendaDeConvite} />}
+          </div>
           {d.linkVenda && (
             <a
               href={d.linkVenda}
@@ -321,28 +331,6 @@ function EventoDetalhesView({ d }: { d: EventoDetalhes }) {
               <Ticket size={15} /> Link de Venda
             </a>
           )}
-          <div className="flex flex-wrap gap-4">
-            {d.plantaCerta && (
-              <a
-                href={d.plantaCerta}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-xs text-primary hover:underline"
-              >
-                <ExternalLink size={12} /> Planta Certa
-              </a>
-            )}
-            {d.impressoes && (
-              <a
-                href={d.impressoes}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-xs text-primary hover:underline"
-              >
-                <ExternalLink size={12} /> Impressões (Portaria)
-              </a>
-            )}
-          </div>
         </div>
       )}
     </div>
@@ -362,7 +350,7 @@ function SecaoExpandivel({
     <div className="space-y-2">
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-2 py-2 text-left group"
+        className="w-full flex items-center gap-2 py-2 text-left"
       >
         {aberta
           ? <ChevronDown size={16} className="text-text-muted" />
@@ -396,7 +384,8 @@ export function Operacional() {
       now.setHours(0, 0, 0, 0)
       const parsed: EventoInfo[] = []
       for (const tabName of tabNames) {
-        if (!tabName.includes('|')) continue
+        // Ignorar abas genéricas
+        if (TABS_IGNORAR.has(nm(tabName))) continue
         const { date, dateStr } = parseDateFromTabName(tabName)
         parsed.push({
           tabName,
@@ -493,7 +482,7 @@ export function Operacional() {
     )
   }
 
-  // ── Não conectado ──────────────────────────────────────────────────────────
+  // ── Não conectado ─────────────────────────────────────────────────────────
   if (!conectado && !loading) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
