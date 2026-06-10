@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Calendar, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle,
-  ExternalLink, Loader, Globe, RefreshCw, Ticket,
+  Loader, Globe, RefreshCw, Ticket,
 } from 'lucide-react'
 import { useGoogleAuth } from '../contexts/GoogleAuthContext'
 import { fetchSheetNames, fetchAba } from '../utils/sheetsSync'
@@ -67,7 +67,6 @@ interface EventoDetalhes {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const DIAS = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado']
 
 function nm(s: string): string {
   return s
@@ -93,13 +92,6 @@ function findExact(rows: unknown[][], field: string): string {
   return ''
 }
 
-function parseDiaSemana(dateStr: string): string {
-  const m = dateStr.match(/(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})/)
-  if (!m) return ''
-  const y = m[3].length === 2 ? '20' + m[3] : m[3]
-  const d = new Date(`${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`)
-  return isNaN(d.getTime()) ? '' : DIAS[d.getDay()] ?? ''
-}
 
 function isSecaoConhecida(row: unknown[]): boolean {
   return SECOES_CONHECIDAS.has(nm(cel(row, 0)))
