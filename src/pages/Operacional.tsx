@@ -18,7 +18,7 @@ const TABS_IGNORAR = new Set([
 // ── Seções conhecidas (delimitadores de bloco rosa) ───────────────────────────
 const SECOES_CONHECIDAS = new Set([
   'dados do evento', 'dados gerais', 'informacoes gerais', 'informações gerais',
-  'fornecedores', 'lineup artistico', 'lineup artístico', 'lineup',
+  'fornecedores', 'lineup artistico', 'lineup artístico', 'lineup', 'artistico',
   'numeros da turma', 'números da turma', 'numeros', 'números',
   'links uteis', 'links úteis', 'links',
   'cenografia',
@@ -82,10 +82,11 @@ function cel(row: unknown[], i: number): string {
   return String(row[i] ?? '').trim()
 }
 
-// Match EXATO na coluna A (trimmed, case-sensitive)
+// Match normalizado na coluna A (sem acento, case-insensitive)
 function findExact(rows: unknown[][], field: string): string {
+  const fieldNorm = nm(field)
   for (const row of rows) {
-    if (cel(row, 0) === field) {
+    if (nm(cel(row, 0)) === fieldNorm) {
       return cel(row, 1) || cel(row, 2) || ''
     }
   }
@@ -135,7 +136,7 @@ function parseDateFromTabName(tabName: string): { date: Date | null; dateStr: st
   }
 }
 
-type CanonicalCat = 'Buffet' | 'Bar' | 'Cerveja' | 'Destilados' | 'Japa'
+type CanonicalCat = 'Buffet' | 'Bar' | 'Cerveja' | 'Destilados' | 'Japa' | 'Hamburgueria'
 
 function canonicalCat(cat: string): CanonicalCat | null {
   const n = nm(cat)
@@ -144,16 +145,26 @@ function canonicalCat(cat: string): CanonicalCat | null {
   if (n.includes('cerveja') || n.includes('chopp')) return 'Cerveja'
   if (n.includes('destilados')) return 'Destilados'
   if (n.includes('japa') || n.includes('japonesa')) return 'Japa'
+  if (n.includes('hamburguer') || n.includes('burger') || n.includes('hamburgueria')) return 'Hamburgueria'
   return null
 }
 
 // ── Parser principal ───────────────────────────────────────────────────────────
 
 function parseEventoDetalhes(rows: unknown[][], tabName: string): EventoDetalhes {
+  // ── DIAGNÓSTICO — abra o console (F12) para inspecionar a leitura ──────────
+  console.group(`📋 Aba: "${tabName}" (${rows.length} linhas)`)
+  console.log('Linhas brutas [i] [colA, colB, colC]:')
+  rows.forEach((r, i) => {
+    const row = r as unknown[]
+    const a = String(row[0] ?? ''), b = String(row[1] ?? ''), c = String(row[2] ?? '')
+    if (a || b) console.log(`  [${i}]`, JSON.stringify([a, b, c]))
+  })
+
   // Nome do evento: célula A1 ou B1
   const nomeEvento = cel(rows[0] ?? [], 0) || cel(rows[0] ?? [], 1) || tabName.split('|')[0].trim()
 
-  // Campos com match exato na coluna A
+  // Campos com match normalizado na coluna A
   const data           = findExact(rows, 'Data')
   const diaSemana      = findExact(rows, 'Dia da semana')
   const tipo           = findExact(rows, 'Pré Evento')
@@ -169,27 +180,41 @@ function parseEventoDetalhes(rows: unknown[][], tabName: string): EventoDetalhes
   const linkVendaRaw     = findExact(rows, 'Link de venda')
   const linkVenda        = linkVendaRaw.startsWith('http') ? linkVendaRaw : null
 
+  console.log('Campos encontrados:', { data, diaSemana, tipo, tematica, local, horario, totalConvidados, formandos, linkVenda })
+
   // Seção Fornecedores
-  const CATS: CanonicalCat[] = ['Buffet', 'Bar', 'Cerveja', 'Destilados', 'Japa']
+  const isBaile = nm(tipo).includes('baile') || nm(tabName).includes('baile')
+  const BASE_CATS: CanonicalCat[] = ['Buffet', 'Bar', 'Cerveja', 'Destilados', 'Japa']
+  const CATS: CanonicalCat[] = isBaile ? [...BASE_CATS, 'Hamburgueria'] : BASE_CATS
+
+  const fornRows = secaoRows(rows, 'Fornecedores')
+  console.log('Seção Fornecedores:', fornRows.map(r => ({ A: (r as unknown[])[0], B: (r as unknown[])[1] })))
+
   const fornMap: Partial<Record<CanonicalCat, Fornecedor>> = {}
-  for (const row of secaoRows(rows, 'Fornecedores')) {
+  for (const row of fornRows) {
     const cat = cel(row, 0)
     if (!cat) continue
     const canon = canonicalCat(cat)
     if (!canon || fornMap[canon]) continue
     const fornecedor = cel(row, 1)
+    const nForn = nm(fornecedor)
     fornMap[canon] = {
       categoria: canon,
       fornecedor,
-      fechado: !!fornecedor && fornecedor !== '-' && fornecedor !== '—' && fornecedor.length > 1,
+      fechado: !!fornecedor &&
+        fornecedor !== '-' && fornecedor !== '—' &&
+        nForn !== 'nao tem' && nForn !== 'nao' && nForn !== 'nao ha' &&
+        fornecedor.length > 1,
     }
   }
   const fornecedores: Fornecedor[] = CATS.map(cat => fornMap[cat] ?? { categoria: cat, fornecedor: '', fechado: false })
 
-  // Seção Lineup Artístico
-  const lineupSection = secaoRows(rows, 'Lineup Artístico').length > 0
-    ? secaoRows(rows, 'Lineup Artístico')
-    : secaoRows(rows, 'Lineup')
+  // Seção Lineup Artístico — tenta variações do cabeçalho rosa
+  let lineupSection = secaoRows(rows, 'Lineup Artístico')
+  if (lineupSection.length === 0) lineupSection = secaoRows(rows, 'Artístico')
+  if (lineupSection.length === 0) lineupSection = secaoRows(rows, 'Lineup')
+  console.log('Seção Lineup:', lineupSection.map(r => ({ A: (r as unknown[])[0], B: (r as unknown[])[1], C: (r as unknown[])[2] })))
+
   const lineup: LineupItem[] = []
   let passedHeader = false
   for (const row of lineupSection) {
@@ -204,6 +229,9 @@ function parseEventoDetalhes(rows: unknown[][], tabName: string): EventoDetalhes
     passedHeader = true
     lineup.push({ horario: cel(row, 0), artista, obs: cel(row, 2) || cel(row, 3) || '' })
   }
+
+  console.log('Lineup final:', lineup)
+  console.groupEnd()
 
   return {
     nomeEvento,
@@ -261,19 +289,22 @@ function EventoDetalhesView({ d }: { d: EventoDetalhes }) {
       {/* Fornecedores */}
       <div>
         <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Fornecedores</h4>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <div className={`grid grid-cols-2 gap-2 ${d.fornecedores.length >= 6 ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
           {d.fornecedores.map(f => (
             <div
               key={f.categoria}
-              className={`rounded-xl px-3 py-3 border text-center ${f.fechado ? 'border-success/25 bg-success/5' : 'border-white/8 bg-bg'}`}
+              className={`rounded-xl px-3 py-3 border text-center ${f.fechado ? 'border-success/25 bg-success/5' : 'border-warning/20 bg-bg'}`}
             >
               <div className="text-xs text-text-muted mb-1.5">{f.categoria}</div>
               <div className="flex items-center justify-center gap-1">
                 {f.fechado
                   ? <><CheckCircle2 size={12} className="text-success" /><span className="text-xs text-success font-medium">Fechado</span></>
-                  : <><AlertTriangle size={12} className="text-warning/60" /><span className="text-xs text-text-muted">Pendente</span></>
+                  : <><AlertTriangle size={12} className="text-warning/70" /><span className="text-xs text-warning/80 font-medium">Pendente</span></>
                 }
               </div>
+              {f.fechado && f.fornecedor && (
+                <div className="text-[10px] text-text-muted mt-1.5 leading-tight truncate">{f.fornecedor}</div>
+              )}
             </div>
           ))}
         </div>
