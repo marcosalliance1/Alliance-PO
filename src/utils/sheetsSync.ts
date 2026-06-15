@@ -31,6 +31,13 @@ function encontrarSecao(nomeAba: string): string | null {
   for (const [pattern, id] of Object.entries(MAPA_SECOES)) {
     if (n.includes(norm(pattern))) return id
   }
+  // Fallback: match por prefixo numérico (ex: "2.5 CUSTO PRÉ-EVENTOS" → '2.5')
+  // Cobre casos de encoding sutis do É que possam escapar da normalização NFD
+  const prefixMatch = nomeAba.trim().match(/^(\d+\.\d+)\b/)
+  if (prefixMatch) {
+    const num = prefixMatch[1]
+    if (['2.1', '2.2', '2.3', '2.4', '2.5', '2.6', '2.7', '2.8'].includes(num)) return num
+  }
   return null
 }
 
@@ -316,13 +323,13 @@ function parseReceitasFromResumo(values: unknown[][]): Receitas {
     }
   }
 
-  // Find "RECEITAS" section label in col A or B — data starts from the very next row.
-  // This ensures the aggregate "RECEITAS" subtotal row itself is never read as an individual receipt line.
+  // Find section header in col A: "RECEITAS", "ITEM", or similar — data starts from the very next row.
+  // This ensures the aggregate subtotal row itself is never read as an individual receipt line.
   let dataStart = headerRow0 >= 0 ? headerRow0 + 2 : 0
   for (let r = 0; r < values.length; r++) {
     const colA = norm(parseStr(getCell(values, r, 0)))
     const colB = norm(parseStr(getCell(values, r, 1)))
-    if (colA === 'receitas' || colB === 'receitas') {
+    if (colA === 'receitas' || colB === 'receitas' || colA === 'item') {
       dataStart = r + 1
       break
     }
@@ -338,10 +345,14 @@ function parseReceitasFromResumo(values: unknown[][]): Receitas {
   const result: Receitas = {}
 
   for (let r = dataStart; r < values.length; r++) {
-    const rawLabel = parseStr(getCell(values, r, 1))  // somente coluna B — nunca coluna A (evita duplicar rótulos de grupo)
+    const rawLabel = parseStr(getCell(values, r, 0))  // coluna A — labels da seção de receitas
     if (!rawLabel) continue
 
-    if (norm(rawLabel).includes('receita baile')) break  // total row — stop
+    const ln = norm(rawLabel)
+    if (ln.includes('receita baile')) break  // linha de total — parar
+
+    // Pular linhas de cabeçalho de seção que não são itens individuais
+    if (ln === 'receitas' || ln === 'item' || ln === 'total' || ln === 'descricao') continue
 
     const vendido    = parseCell(r, colVendido)
     const orcado     = parseCell(r, colOrcado)
@@ -349,7 +360,7 @@ function parseReceitasFromResumo(values: unknown[][]): Receitas {
     const pago       = parseCell(r, colPago)
     const faltaPagar = parseCell(r, colFaltaPagar)
 
-    if (!vendido && !orcado && !contratado && !pago && !faltaPagar) continue
+    // Incluir linha mesmo com todos os valores zero (exibir R$ 0,00 em vez de omitir)
 
     const existing = result[rawLabel]
     if (existing) {
@@ -495,7 +506,7 @@ export async function sincronizarComSheets(
       resumoEncontrado = true
       onProgress(`Lendo Resumo Geral (${nomeAba})...`)
       try {
-        const values = await fetchAba(spreadsheetId, nomeAba, accessToken, `'${nomeAba}'!A1:Q50`)
+        const values = await fetchAba(spreadsheetId, nomeAba, accessToken, `'${nomeAba}'!A1:Z100`)
         if (values) receitasParsed = parseReceitasFromResumo(values)
       } catch (e) {
         if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
@@ -557,11 +568,9 @@ export async function sincronizarComSheets(
   // Quando o Resumo Geral foi lido com sucesso, substitui as receitas inteiras pelo dado
   // parseado — garante que entradas obsoletas (ex: linhas de somatório de syncs antigos) sejam removidas.
   // Fallback: mantém as receitas do projeto quando a aba não foi encontrada.
-  const parsedEntries = Object.entries(receitasParsed).filter(([, v]) =>
-    v && (v.vendido || v.orcado || v.contratado || v.pago || v.faltaPagar)
-  )
-  const receitasMerged: Receitas = resumoEncontrado && parsedEntries.length > 0
-    ? Object.fromEntries(parsedEntries) as Receitas
+  // Linhas com valor zero são preservadas (exibir R$ 0,00 em vez de omitir).
+  const receitasMerged: Receitas = resumoEncontrado && Object.keys(receitasParsed).length > 0
+    ? receitasParsed as Receitas
     : { ...projeto.receitas }
 
   const avisos: string[] = []
