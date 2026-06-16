@@ -35,6 +35,19 @@ interface PivotRow {
   total: number
 }
 
+interface ProjetoComparativo {
+  id: string
+  tap: { tipoEscola?: string; turma?: string; instituicao?: string; curso?: string }
+  secoes: Array<{
+    itens: Array<{
+      item: string; subcategoria: string
+      qtdeContratada: number; valorUnitarioContratado: number; valorContratado: number
+      qtdeOrcada: number; valorUnitarioOrcado: number; valorOrcado: number
+    }>
+  }>
+  total_convidados_atual?: number | null
+}
+
 // ── Constantes visuais ────────────────────────────────────────────────────────
 
 const SEGMENTOS = ['9º Ano', 'Ensino Médio', 'Ensino Superior'] as const
@@ -59,6 +72,7 @@ export function Verbas() {
   const [filtroCategoria, setFiltroCategoria] = useState('')
   const [filtroSubcategoria, setFiltroSubcategoria] = useState('')
   const [filtroItem, setFiltroItem] = useState('')
+  const [projetosData, setProjetosData] = useState<ProjetoComparativo[]>([])
 
   // ── Carregar dados ──────────────────────────────────────────────────────────
 
@@ -75,6 +89,13 @@ export function Verbas() {
   }
 
   useEffect(() => { carregarDados() }, [])
+
+  useEffect(() => {
+    supabase
+      .from('projetos')
+      .select('id, tap, secoes, total_convidados_atual')
+      .then(({ data }) => { if (data) setProjetosData(data as ProjetoComparativo[]) })
+  }, [])
 
   // ── Derivações ──────────────────────────────────────────────────────────────
 
@@ -148,6 +169,54 @@ export function Verbas() {
     }
     return Array.from(map.values())
   }, [itensFiltrados])
+
+  const comparativoPorProjeto = useMemo(() => {
+    const q = filtroItem.trim().toLowerCase()
+    if (!q) return []
+
+    const linhas: {
+      projetoId: string; projeto: string; ensino: string
+      qtde: number; valorUnitario: number; total: number
+      convidados: number; fonte: 'cont' | 'orc'
+    }[] = []
+
+    for (const proj of projetosData) {
+      const titulo = proj.tap.turma
+        || `${proj.tap.instituicao ?? ''} ${proj.tap.curso ?? ''}`.trim()
+        || proj.id.slice(0, 6)
+      const tipo = proj.tap.tipoEscola
+      const ensino = tipo === 'SUPERIOR' ? 'Superior' : tipo === 'FUNDAMENTAL' ? 'Fundamental' : 'Médio'
+      const convidados = proj.total_convidados_atual ?? 0
+
+      for (const secao of proj.secoes ?? []) {
+        for (const item of secao.itens ?? []) {
+          const nome = (item.item || item.subcategoria || '').toLowerCase()
+          if (!nome.includes(q)) continue
+
+          const useContratado = (item.valorContratado ?? 0) > 0
+          const qtde = useContratado ? (item.qtdeContratada ?? 0) : (item.qtdeOrcada ?? 0)
+          const valorUnitario = useContratado ? (item.valorUnitarioContratado ?? 0) : (item.valorUnitarioOrcado ?? 0)
+          const total = useContratado ? (item.valorContratado ?? 0) : (item.valorOrcado ?? 0)
+          if (total <= 0) continue
+
+          linhas.push({ projetoId: proj.id, projeto: titulo, ensino, qtde, valorUnitario, total, convidados, fonte: useContratado ? 'cont' : 'orc' })
+        }
+      }
+    }
+
+    return linhas.sort((a, b) => b.valorUnitario - a.valorUnitario)
+  }, [filtroItem, projetosData])
+
+  const statsComparativo = useMemo(() => {
+    if (comparativoPorProjeto.length === 0) return null
+    const vus = comparativoPorProjeto.map(r => r.valorUnitario)
+    return {
+      media: vus.reduce((a, b) => a + b, 0) / vus.length,
+      menor: Math.min(...vus),
+      maior: Math.max(...vus),
+      totalGeral: comparativoPorProjeto.reduce((s, r) => s + r.total, 0),
+    }
+  }, [comparativoPorProjeto])
 
   // ── Sincronizar ─────────────────────────────────────────────────────────────
 
@@ -469,6 +538,95 @@ export function Verbas() {
           </div>
         )}
       </div>
+      {/* Tabela Comparativo por Projeto */}
+      {filtroItem.trim() && (
+        <div className="card">
+          <h2 className="text-sm font-semibold text-text-main mb-4">
+            Comparativo por Projeto{' '}
+            <span className="font-normal text-text-muted">— "{filtroItem}"</span>
+          </h2>
+
+          {comparativoPorProjeto.length === 0 ? (
+            <p className="text-text-muted text-sm text-center py-8">
+              Nenhum projeto com este item cadastrado com valor {'>'} 0.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left px-3 py-2.5 text-xs font-medium text-text-muted min-w-[180px]">Projeto</th>
+                    <th className="text-left px-3 py-2.5 text-xs font-medium text-text-muted">Ensino</th>
+                    <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted">Qtde</th>
+                    <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[120px]">Valor Unitário</th>
+                    <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[120px]">Total</th>
+                    <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted">Convidados</th>
+                    <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[110px]">Custo/Conv.</th>
+                    <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted">Fonte</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparativoPorProjeto.map((row, i) => (
+                    <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <td className="px-3 py-2 text-text-main">{row.projeto}</td>
+                      <td className="px-3 py-2 text-text-muted whitespace-nowrap">{row.ensino}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-text-main">
+                        {row.qtde > 0 ? row.qtde : <span className="text-white/30">—</span>}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums font-medium text-text-main">
+                        {formatBRL(row.valorUnitario)}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">
+                        {formatBRL(row.total)}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-text-muted">
+                        {row.convidados > 0 ? row.convidados.toLocaleString('pt-BR') : <span className="text-white/30">—</span>}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-text-main">
+                        {row.convidados > 0
+                          ? formatBRL(row.total / row.convidados)
+                          : <span className="text-white/30">—</span>}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <span
+                          className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                          style={row.fonte === 'cont'
+                            ? { background: 'rgba(22,163,74,0.15)', color: '#16A34A' }
+                            : { background: 'rgba(234,179,8,0.15)', color: '#CA8A04' }}
+                        >
+                          {row.fonte === 'cont' ? 'Cont.' : 'Orç.'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                {statsComparativo && (
+                  <tfoot>
+                    <tr className="border-t-2 border-white/20" style={{ background: 'rgba(255,255,255,0.02)' }}>
+                      <td colSpan={2} className="px-3 py-2.5 text-xs text-text-muted">
+                        {comparativoPorProjeto.length} resultado(s)
+                      </td>
+                      <td className="px-3 py-2.5" />
+                      <td className="px-3 py-2.5 text-right">
+                        <div className="text-[10px] text-text-muted">Média</div>
+                        <div className="text-xs font-semibold text-text-main tabular-nums">{formatBRL(statsComparativo.media)}</div>
+                        <div className="text-[10px] text-text-muted tabular-nums mt-0.5">
+                          {formatBRL(statsComparativo.menor)} – {formatBRL(statsComparativo.maior)}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <div className="text-[10px] text-text-muted">Total Geral</div>
+                        <div className="text-xs font-bold text-primary tabular-nums">{formatBRL(statsComparativo.totalGeral)}</div>
+                      </td>
+                      <td colSpan={3} />
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
