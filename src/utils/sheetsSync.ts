@@ -14,7 +14,7 @@ const MAPA_SECOES: Record<string, string> = {
   'custo artistico': '2.2', 'custo artístico': '2.2',
   'custo equipe': '2.3',
   'custo bar': '2.4', 'custo bar&food': '2.4', 'custo bar food': '2.4', 'custo bar & food': '2.4',
-  'custo pré-eventos': '2.5', 'custo pre-eventos': '2.5', 'custo pre eventos': '2.5',
+  'custo pré-eventos': 'preevento', 'custo pre-eventos': 'preevento', 'custo pre eventos': 'preevento',
   'cerimonia religiosa': 'cerimonia', 'cerimônia religiosa': 'cerimonia',
   'custo cerimonia': 'cerimonia', 'custo cerimônia': 'cerimonia',
   'colacao de grau': 'colacao', 'colação de grau': 'colacao',
@@ -30,13 +30,6 @@ function encontrarSecao(nomeAba: string): string | null {
   const n = norm(nomeAba)
   for (const [pattern, id] of Object.entries(MAPA_SECOES)) {
     if (n.includes(norm(pattern))) return id
-  }
-  // Fallback: match por prefixo numérico (ex: "2.5 CUSTO PRÉ-EVENTOS" → '2.5')
-  // Cobre casos de encoding sutis do É que possam escapar da normalização NFD
-  const prefixMatch = nomeAba.trim().match(/^(\d+\.\d+)\b/)
-  if (prefixMatch) {
-    const num = prefixMatch[1]
-    if (['2.1', '2.2', '2.3', '2.4', '2.5', '2.6', '2.7', '2.8'].includes(num)) return num
   }
   return null
 }
@@ -287,21 +280,31 @@ export function parseTAPFromSheet(values: unknown[][]): Partial<TAP> {
 }
 
 function parseReceitasFromResumo(values: unknown[][]): Receitas {
-  // Detect column layout header (rows with "vendido", "orcado", etc.)
+  // Localiza a linha de cabeçalho da tabela de receitas:
+  // col A = "ITEM" E a linha contém "vendido"/"orcado" (evita falso positivo em outras linhas com "ITEM")
   let headerRow0 = -1
-  for (let r = 0; r < Math.min(values.length, 15); r++) {
-    const joined = ((values[r] as unknown[]) ?? []).map(c => norm(parseStr(c))).join(' ')
-    if (joined.includes('vendido') || joined.includes('orcado')) {
+  for (let r = 0; r < Math.min(values.length, 50); r++) {
+    const colA = norm(parseStr(getCell(values, r, 0)))
+    const rowJoined = ((values[r] as unknown[]) ?? []).map(c => norm(parseStr(c))).join(' ')
+    if ((colA === 'item' || colA === 'receitas') && (rowJoined.includes('vendido') || rowJoined.includes('orcado'))) {
       headerRow0 = r
       break
     }
   }
+  // Fallback: qualquer linha com "vendido"/"orcado" nas primeiras 50 linhas
+  if (headerRow0 < 0) {
+    for (let r = 0; r < Math.min(values.length, 50); r++) {
+      const joined = ((values[r] as unknown[]) ?? []).map(c => norm(parseStr(c))).join(' ')
+      if (joined.includes('vendido') || joined.includes('orcado')) { headerRow0 = r; break }
+    }
+  }
 
-  let colVendido = 2
-  let colOrcado = 4
-  let colContratado = 6
-  let colPago = 8
-  let colFaltaPagar = 9
+  // Defaults para layout padrão: col A=item, col B=vendido valor, col C=% rec, col D=orcado valor...
+  let colVendido = 1
+  let colOrcado = 3
+  let colContratado = 5
+  let colPago = 7
+  let colFaltaPagar = 8
 
   if (headerRow0 >= 0 && headerRow0 + 1 < values.length) {
     const row0 = (values[headerRow0] as unknown[]) ?? []
@@ -323,17 +326,8 @@ function parseReceitasFromResumo(values: unknown[][]): Receitas {
     }
   }
 
-  // Find section header in col A: "RECEITAS", "ITEM", or similar — data starts from the very next row.
-  // This ensures the aggregate subtotal row itself is never read as an individual receipt line.
-  let dataStart = headerRow0 >= 0 ? headerRow0 + 2 : 0
-  for (let r = 0; r < values.length; r++) {
-    const colA = norm(parseStr(getCell(values, r, 0)))
-    const colB = norm(parseStr(getCell(values, r, 1)))
-    if (colA === 'receitas' || colB === 'receitas' || colA === 'item') {
-      dataStart = r + 1
-      break
-    }
-  }
+  // dataStart: logo após as duas linhas de cabeçalho (grupo + subgrupo)
+  const dataStart = headerRow0 >= 0 ? headerRow0 + 2 : 0
 
   const parseCell = (r: number, col: number): number => {
     const v = getCell(values, r, col)
@@ -522,7 +516,8 @@ export async function sincronizarComSheets(
       s.numero === secaoId ||
       (secaoId === 'cerimonia' && (s.nome.toLowerCase().includes('cerimônia') || s.nome.toLowerCase().includes('cerimonia'))) ||
       (secaoId === 'colacao' && (s.nome.toLowerCase().includes('colação') || s.nome.toLowerCase().includes('colacao'))) ||
-      (secaoId === 'admin' && s.nome.toLowerCase().includes('admin'))
+      (secaoId === 'admin' && s.nome.toLowerCase().includes('admin')) ||
+      (secaoId === 'preevento' && (s.nome.toLowerCase().includes('pré-event') || s.nome.toLowerCase().includes('pre-event') || s.nome.toLowerCase().includes('pre event') || s.nome.toLowerCase().includes('pré event')))
     )
     if (!secaoProjeto) continue
 
