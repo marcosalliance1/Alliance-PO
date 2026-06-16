@@ -51,8 +51,26 @@ function MargemItem({ label, value, gold = false }: { label: string; value: numb
 
 export function ProjectDashboard({ projeto }: Props) {
   const [drillSecaoId, setDrillSecaoId] = useState<string | null>(null)
+  const [buscaConvidado, setBuscaConvidado] = useState('')
 
   const resumo = useMemo(() => calcResumoProjeto(projeto), [projeto])
+
+  const itensBusca = useMemo(() => {
+    const q = buscaConvidado.trim().toLowerCase()
+    if (!q) return []
+    const resultado: { id: string; nome: string; secaoNumero: string; secaoNome: string; valorContratado: number }[] = []
+    for (const secao of projeto.secoes) {
+      for (const item of secao.itens) {
+        const nome = item.item || item.subcategoria
+        if (!nome || !nome.toLowerCase().includes(q)) continue
+        resultado.push({ id: item.id, nome, secaoNumero: secao.numero, secaoNome: secao.nome, valorContratado: item.valorContratado })
+      }
+    }
+    const totalConv = projeto.totalConvidadosAtual ?? 0
+    return resultado.sort((a, b) =>
+      totalConv > 0 ? b.valorContratado / totalConv - a.valorContratado / totalConv : b.valorContratado - a.valorContratado
+    )
+  }, [buscaConvidado, projeto.secoes, projeto.totalConvidadosAtual])
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const receitaVendida = resumo.receitaBaile.vendido
@@ -382,6 +400,48 @@ export function ProjectDashboard({ projeto }: Props) {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* ── Custo por Convidado ───────────────────────────────────────────── */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-text-main">Custo por Convidado</h3>
+          {projeto.totalConvidadosAtual ? (
+            <span className="text-xs text-text-muted">👥 {projeto.totalConvidadosAtual.toLocaleString('pt-BR')} convidados</span>
+          ) : (
+            <span className="text-xs text-text-muted italic">Sincronize a PO para carregar o total de convidados</span>
+          )}
+        </div>
+        <input
+          type="text"
+          value={buscaConvidado}
+          onChange={(e) => setBuscaConvidado(e.target.value)}
+          placeholder="Buscar item da PO..."
+          className="w-full px-3 py-2 rounded-inner border border-white/10 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:border-primary mb-4"
+          style={{ background: 'rgba(255,255,255,0.04)' }}
+        />
+        {buscaConvidado.trim() && itensBusca.length === 0 && (
+          <p className="text-text-muted text-sm text-center py-4">Nenhum item encontrado</p>
+        )}
+        {itensBusca.length > 0 && (
+          <div className="flex flex-wrap gap-3">
+            {itensBusca.map((item) => {
+              const custoPorConvidado = projeto.totalConvidadosAtual && projeto.totalConvidadosAtual > 0
+                ? item.valorContratado / projeto.totalConvidadosAtual
+                : null
+              return (
+                <div key={item.id} className="flex-1 min-w-[180px] p-3 rounded-inner border border-white/10" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                  <p className="text-[10px] text-text-muted mb-1">{item.secaoNumero} — {item.secaoNome}</p>
+                  <p className="text-sm font-medium text-text-main mb-2" title={item.nome}>{item.nome}</p>
+                  <p className="text-base font-bold text-text-main">{formatBRL(item.valorContratado)}</p>
+                  {custoPorConvidado !== null && (
+                    <p className="text-xs mt-1" style={{ color: '#74b9ff' }}>{formatBRL(custoPorConvidado)} / convidado</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── Receitas do Resumo Geral (Correção 3) ─────────────────────────── */}

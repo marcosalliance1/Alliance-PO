@@ -6,6 +6,7 @@ export interface SyncResult {
   secoes: SecaoCusto[]
   tap: Partial<TAP>
   receitas: Receitas
+  totalConvidadosAtual: number | null
   avisos: string[]
 }
 
@@ -279,6 +280,17 @@ export function parseTAPFromSheet(values: unknown[][]): Partial<TAP> {
   return found
 }
 
+function parseTotalConvidados(values: unknown[][]): number | null {
+  for (let r = 0; r < values.length; r++) {
+    const colB = parseStr(getCell(values, r, 1))
+    if (colB.toLowerCase().includes('total atual')) {
+      const val = parseNum(getCell(values, r, 2))
+      return val > 0 ? val : null
+    }
+  }
+  return null
+}
+
 function parseReceitasFromResumo(values: unknown[][]): Receitas {
   // Localiza a linha de cabeçalho da tabela de receitas:
   // col A = "ITEM" E a linha contém "vendido"/"orcado" (evita falso positivo em outras linhas com "ITEM")
@@ -479,9 +491,23 @@ export async function sincronizarComSheets(
   let tapParsed: Partial<TAP> = {}
   let receitasParsed: Partial<Receitas> = {}
   let resumoEncontrado = false
+  let totalConvidadosAtual: number | null = null
   const avisosItens: string[] = []
 
   for (const nomeAba of sheetNames) {
+    const nomeN = norm(nomeAba)
+    if (nomeN.includes('acomp') && (nomeN.includes('atendimento') || nomeN.includes('atend'))) {
+      onProgress(`Lendo ACOMP. Atendimento (${nomeAba})...`)
+      try {
+        const values = await fetchAba(spreadsheetId, nomeAba, accessToken)
+        if (values) totalConvidadosAtual = parseTotalConvidados(values)
+      } catch (e) {
+        if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
+        console.warn(`Erro ao ler aba "${nomeAba}":`, e)
+      }
+      continue
+    }
+
     const especial = encontrarAbaEspecial(nomeAba)
 
     if (especial === 'tap') {
@@ -578,6 +604,7 @@ export async function sincronizarComSheets(
     secoes: secoesAtualizadas,
     tap: tapParsed,
     receitas: receitasMerged,
+    totalConvidadosAtual,
     avisos,
   }
 }

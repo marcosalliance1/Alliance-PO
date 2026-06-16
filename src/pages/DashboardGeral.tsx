@@ -7,7 +7,7 @@ import { GraficoLinha } from '../components/dashboard/GraficoLinha'
 import { Header } from '../components/layout/Header'
 import { calcResumoProjeto, calcPercentFechados, filtrarItensCalculo } from '../utils/calculos'
 import { formatBRL, formatPercent } from '../utils/formatters'
-import { FolderOpen, TrendingUp, DollarSign, CheckCircle, SlidersHorizontal, Package, Award, ChevronDown, ChevronRight } from 'lucide-react'
+import { FolderOpen, TrendingUp, DollarSign, CheckCircle, SlidersHorizontal, Package, Award, ChevronDown, ChevronRight, Users } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface DashboardGeralProps {
@@ -35,6 +35,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
   const [filtroTipoEscola, setFiltroTipoEscola] = useState<'TODOS' | TipoEscola>('TODOS')
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('em_andamento')
   const [showVendidoVsOrcado, setShowVendidoVsOrcado] = useState(false)
+  const [showConvidados, setShowConvidados] = useState(false)
 
   const fornecedoresUsados = useMemo(() => {
     const names = new Set<string>()
@@ -98,6 +99,34 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
     }
     return { totalContratado, totalPago, margemReal }
   }, [projetosRealizados])
+
+  const totalConvidadosEmAndamento = useMemo(() =>
+    projetosEmAndamento.reduce((s, p) => s + (p.totalConvidadosAtual ?? 0), 0),
+  [projetosEmAndamento])
+
+  const totalConvidadosRealizados = useMemo(() =>
+    projetosRealizados.reduce((s, p) => s + (p.totalConvidadosAtual ?? 0), 0),
+  [projetosRealizados])
+
+  const totalConvidadosGeral = useMemo(() =>
+    projetosFiltrados.reduce((s, p) => s + (p.totalConvidadosAtual ?? 0), 0),
+  [projetosFiltrados])
+
+  const convidadosPorEnsino = useMemo(() => {
+    const grupos: Record<'SUPERIOR' | 'MEDIO' | 'FUNDAMENTAL', { id: string; titulo: string; total: number }[]> = {
+      SUPERIOR: [], MEDIO: [], FUNDAMENTAL: [],
+    }
+    for (const p of projetosFiltrados) {
+      if (!p.totalConvidadosAtual) continue
+      const tipo = (p.tap.tipoEscola ?? 'MEDIO') as 'SUPERIOR' | 'MEDIO' | 'FUNDAMENTAL'
+      const titulo = p.tap.turma || `${p.tap.instituicao} ${p.tap.curso}`.trim() || `Projeto #${p.id.slice(0, 6)}`
+      grupos[tipo].push({ id: p.id, titulo, total: p.totalConvidadosAtual })
+    }
+    for (const tipo of ['SUPERIOR', 'MEDIO', 'FUNDAMENTAL'] as const) {
+      grupos[tipo].sort((a, b) => b.total - a.total)
+    }
+    return grupos
+  }, [projetosFiltrados])
 
   const TIPO_LABELS: Record<string, string> = {
     SUPERIOR: 'Ensino Superior',
@@ -287,6 +316,9 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
               <KPICard title="Margem Orçada" value={formatBRL(kpisEmAndamento.margem)} icon={TrendingUp} color={kpisEmAndamento.margem >= 0 ? '#00b894' : '#e17055'} />
               <KPICard title="Projetos" value={String(projetosEmAndamento.length)} icon={FolderOpen} color="#74b9ff" />
               <KPICard title="Itens Fechados" value={formatPercent(kpisEmAndamento.pctFechados)} icon={CheckCircle} color="#fdcb6e" />
+              {totalConvidadosEmAndamento > 0 && (
+                <KPICard title="Total de Convidados" value={totalConvidadosEmAndamento.toLocaleString('pt-BR')} icon={Users} color="#74b9ff" />
+              )}
             </div>
           </div>
           {/* Bloco Realizados */}
@@ -297,6 +329,9 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
               <KPICard title="Total Pago (Everest)" value={formatBRL(kpisRealizados.totalPago)} icon={CheckCircle} color="#00b894" />
               <KPICard title="Margem Real" value={formatBRL(kpisRealizados.margemReal)} icon={TrendingUp} color={kpisRealizados.margemReal >= 0 ? '#00b894' : '#e17055'} />
               <KPICard title="Projetos" value={String(projetosRealizados.length)} icon={FolderOpen} color="#74b9ff" />
+              {totalConvidadosRealizados > 0 && (
+                <KPICard title="Total de Convidados" value={totalConvidadosRealizados.toLocaleString('pt-BR')} icon={Users} color="#74b9ff" />
+              )}
             </div>
           </div>
         </div>
@@ -304,21 +339,71 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
 
       {/* ── KPIs "Em Andamento" ───────────────────────────────────────── */}
       {filtroStatus === 'em_andamento' && (
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className={`grid gap-4 mb-6 ${totalConvidadosEmAndamento > 0 ? 'grid-cols-5' : 'grid-cols-4'}`}>
           <KPICard title="Projetos" value={String(projetosEmAndamento.length)} icon={FolderOpen} color="#74b9ff" />
           <KPICard title="Receita Orçada" value={formatBRL(kpisEmAndamento.totalReceita)} icon={DollarSign} color="#00b894" />
           <KPICard title="Margem Orçada" value={formatBRL(kpisEmAndamento.margem)} icon={TrendingUp} color={kpisEmAndamento.margem >= 0 ? '#00b894' : '#e17055'} />
           <KPICard title="Itens Fechados" value={formatPercent(kpisEmAndamento.pctFechados)} icon={CheckCircle} color="#fdcb6e" />
+          {totalConvidadosEmAndamento > 0 && (
+            <KPICard title="Total de Convidados" value={totalConvidadosEmAndamento.toLocaleString('pt-BR')} icon={Users} color="#74b9ff" />
+          )}
         </div>
       )}
 
       {/* ── KPIs "Realizados" ─────────────────────────────────────────── */}
       {filtroStatus === 'realizados' && (
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className={`grid gap-4 mb-6 ${totalConvidadosRealizados > 0 ? 'grid-cols-5' : 'grid-cols-4'}`}>
           <KPICard title="Projetos Realizados" value={String(projetosRealizados.length)} icon={FolderOpen} color="#6366F1" />
           <KPICard title="Total Contratado" value={formatBRL(kpisRealizados.totalContratado)} icon={DollarSign} color="#6366F1" />
           <KPICard title="Total Pago (Everest)" value={formatBRL(kpisRealizados.totalPago)} icon={CheckCircle} color="#00b894" />
           <KPICard title="Margem Real" value={formatBRL(kpisRealizados.margemReal)} icon={TrendingUp} color={kpisRealizados.margemReal >= 0 ? '#00b894' : '#e17055'} />
+          {totalConvidadosRealizados > 0 && (
+            <KPICard title="Total de Convidados" value={totalConvidadosRealizados.toLocaleString('pt-BR')} icon={Users} color="#74b9ff" />
+          )}
+        </div>
+      )}
+
+      {/* ── Convidados por Ensino ─────────────────────────────────────── */}
+      {totalConvidadosGeral > 0 && (
+        <div className="card mb-6">
+          <button className="flex items-center gap-2 w-full text-left" onClick={() => setShowConvidados((v) => !v)}>
+            {showConvidados ? <ChevronDown className="w-4 h-4 text-text-muted" /> : <ChevronRight className="w-4 h-4 text-text-muted" />}
+            <Users className="w-4 h-4" style={{ color: '#74b9ff' }} />
+            <h3 className="text-sm font-semibold text-text-main">Convidados por Ensino</h3>
+            <span className="ml-auto text-sm font-bold text-text-main">{totalConvidadosGeral.toLocaleString('pt-BR')}</span>
+          </button>
+          {showConvidados && (
+            <div className="mt-4 grid grid-cols-3 gap-4">
+              {(['SUPERIOR', 'MEDIO', 'FUNDAMENTAL'] as const).map((tipo) => {
+                const cor = tipo === 'SUPERIOR' ? '#74b9ff' : tipo === 'MEDIO' ? '#00b894' : '#fdcb6e'
+                const label = tipo === 'SUPERIOR' ? 'Superior' : tipo === 'MEDIO' ? 'Médio' : 'Fundamental'
+                const lista = convidadosPorEnsino[tipo]
+                if (lista.length === 0) return null
+                const totalTipo = lista.reduce((s, p) => s + p.total, 0)
+                return (
+                  <div key={tipo}>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: cor }} />
+                      <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: cor }}>{label}</span>
+                      <span className="text-xs text-text-muted ml-auto">{totalTipo.toLocaleString('pt-BR')}</span>
+                    </div>
+                    <div className="space-y-0.5">
+                      {lista.map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex items-center gap-2 py-1 px-1 border-b border-white/5 cursor-pointer hover:bg-white/5 rounded transition-colors"
+                          onClick={() => navigate(`/projetos/${p.id}`)}
+                        >
+                          <span className="text-xs text-text-main flex-1 truncate">{p.titulo}</span>
+                          <span className="text-xs font-medium shrink-0" style={{ color: cor }}>{p.total.toLocaleString('pt-BR')}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 

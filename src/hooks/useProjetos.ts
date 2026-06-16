@@ -20,6 +20,7 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
     sheetsUrl: (row.sheets_url as string) ?? undefined,
     sheetLayout: ((row.sheet_layout as string) === 'B' ? 'B' : undefined),
     status: (row.status as string) === 'realizado' ? 'realizado' : 'em_andamento',
+    totalConvidadosAtual: (row.total_convidados_atual as number) ?? undefined,
   }
 }
 
@@ -273,12 +274,12 @@ export function useProjetos() {
     const now = new Date().toISOString()
     const { error: err } = await supabase
       .from('projetos')
-      .update({ secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacao_everest: novaConciliacao, atualizado_em: now })
+      .update({ secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacao_everest: novaConciliacao, total_convidados_atual: result.totalConvidadosAtual ?? null, atualizado_em: now })
       .eq('id', id)
     if (err) throw new Error(err.message)
     setProjetos((prev) => prev.map((p) =>
       p.id === id
-        ? { ...p, secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacaoEverest: novaConciliacao, atualizadoEm: now }
+        ? { ...p, secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacaoEverest: novaConciliacao, totalConvidadosAtual: result.totalConvidadosAtual ?? undefined, atualizadoEm: now }
         : p
     ))
   }, [projetos])

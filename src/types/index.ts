@@ -126,6 +126,7 @@ export interface Projeto {
   sheetsUrl?: string
   sheetLayout?: 'A' | 'B'
   status: 'em_andamento' | 'realizado'
+  totalConvidadosAtual?: number
 }
 
 export interface ItemCatalogo {
