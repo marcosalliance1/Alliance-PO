@@ -174,8 +174,10 @@ export function Verbas() {
     const q = filtroItem.trim().toLowerCase()
     if (!q) return []
 
+    // Chave: proj.id + nome do item — para mostrar uma linha por item distinto por projeto
     const map = new Map<string, {
       projetoId: string; projeto: string; ensino: string; ensinoOrder: number
+      itemNome: string
       qtde: number; total: number; convidados: number; temCont: boolean; temOrc: boolean
     }>()
 
@@ -198,10 +200,13 @@ export function Verbas() {
           const total = useContratado ? (item.valorContratado ?? 0) : (item.valorOrcado ?? 0)
           if (total <= 0) continue
 
-          if (!map.has(proj.id)) {
-            map.set(proj.id, { projetoId: proj.id, projeto: titulo, ensino, ensinoOrder, qtde: 0, total: 0, convidados, temCont: false, temOrc: false })
+          const itemNome = item.item || item.subcategoria || ''
+          const key = `${proj.id}|||${itemNome}`
+
+          if (!map.has(key)) {
+            map.set(key, { projetoId: proj.id, projeto: titulo, ensino, ensinoOrder, itemNome, qtde: 0, total: 0, convidados, temCont: false, temOrc: false })
           }
-          const entry = map.get(proj.id)!
+          const entry = map.get(key)!
           entry.qtde += qtde
           entry.total += total
           if (useContratado) entry.temCont = true; else entry.temOrc = true
@@ -210,7 +215,11 @@ export function Verbas() {
     }
 
     return Array.from(map.values())
-      .sort((a, b) => a.ensinoOrder !== b.ensinoOrder ? a.ensinoOrder - b.ensinoOrder : b.total - a.total)
+      .sort((a, b) => {
+        if (a.ensinoOrder !== b.ensinoOrder) return a.ensinoOrder - b.ensinoOrder
+        if (a.projeto !== b.projeto) return a.projeto.localeCompare(b.projeto)
+        return b.total - a.total
+      })
   }, [filtroItem, projetosData])
 
   const statsComparativo = useMemo(() => {
@@ -566,7 +575,8 @@ export function Verbas() {
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-white/10">
-                    <th className="text-left px-3 py-2.5 text-xs font-medium text-text-muted min-w-[180px]">Projeto</th>
+                    <th className="text-left px-3 py-2.5 text-xs font-medium text-text-muted min-w-[160px]">Projeto</th>
+                    <th className="text-left px-3 py-2.5 text-xs font-medium text-text-muted min-w-[180px]">Item</th>
                     <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted">Qtde</th>
                     <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[120px]">Valor Unitário</th>
                     <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[120px]">Total</th>
@@ -581,13 +591,14 @@ export function Verbas() {
                     if (linhas.length === 0) return []
                     const cor = ensino === 'Superior' ? '#00b894' : ensino === 'Médio' ? '#0078d4' : '#e94560'
                     const label = ensino === 'Superior' ? 'Ensino Superior' : ensino === 'Médio' ? 'Ensino Médio' : 'Fundamental / 9º Ano'
+                    const projCount = new Set(linhas.map(r => r.projetoId)).size
                     return [
                       <tr key={`h-${ensino}`}>
-                        <td colSpan={7} className="px-3 pt-4 pb-1.5">
+                        <td colSpan={8} className="px-3 pt-4 pb-1.5">
                           <div className="flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full shrink-0" style={{ background: cor }} />
                             <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: cor }}>{label}</span>
-                            <span className="text-xs text-text-muted">· {linhas.length} projeto(s)</span>
+                            <span className="text-xs text-text-muted">· {projCount} projeto(s) · {linhas.length} item(s)</span>
                           </div>
                         </td>
                       </tr>,
@@ -597,6 +608,7 @@ export function Verbas() {
                         return (
                           <tr key={`${ensino}-${i}`} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                             <td className="px-3 py-2 text-text-main">{row.projeto}</td>
+                            <td className="px-3 py-2 text-text-muted">{row.itemNome || <span className="text-white/30">—</span>}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-text-main">
                               {row.qtde > 0 ? row.qtde.toLocaleString('pt-BR') : <span className="text-white/30">—</span>}
                             </td>
@@ -634,8 +646,9 @@ export function Verbas() {
                   <tfoot>
                     <tr className="border-t-2 border-white/20" style={{ background: 'rgba(255,255,255,0.02)' }}>
                       <td className="px-3 py-2.5 text-xs text-text-muted">
-                        {comparativoPorProjeto.length} projeto(s)
+                        {comparativoPorProjeto.length} item(s)
                       </td>
+                      <td className="px-3 py-2.5" />
                       <td className="px-3 py-2.5" />
                       <td className="px-3 py-2.5 text-right">
                         <div className="text-[10px] text-text-muted">Média VU</div>
