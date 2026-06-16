@@ -238,7 +238,7 @@ export function Verbas() {
     try {
       const { data: rows, error } = await supabase
         .from('projetos')
-        .select('id, tap, sheets_url')
+        .select('id, tap, sheets_url, sheet_layout')
 
       if (error) throw new Error(error.message)
 
@@ -246,6 +246,7 @@ export function Verbas() {
         id: string
         tap: Record<string, unknown>
         sheets_url: string
+        sheet_layout: string | null
       }>
 
       if (comUrl.length === 0) {
@@ -273,6 +274,7 @@ export function Verbas() {
           (row.tap.instituicao as string | undefined) ??
           row.id
         const curso = row.tap.curso as string | undefined
+        const layout: 'A' | 'B' = row.sheet_layout === 'B' ? 'B' : 'A'
 
         // Delay entre projetos para evitar quota do Google Sheets API
         if (idx > 0) await sleep(2000)
@@ -285,6 +287,7 @@ export function Verbas() {
             curso,
             accessToken,
             msg => setProgresso(msg),
+            layout,
           )
           todosItens.push(...itensProj)
           idsProcessados.push(row.id)

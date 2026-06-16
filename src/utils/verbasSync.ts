@@ -90,6 +90,7 @@ export async function sincronizarVerbas(
   tapCurso: string | undefined,
   accessToken: string,
   onProgress: (msg: string) => void,
+  layout: 'A' | 'B' = 'A',
 ): Promise<VerbasItem[]> {
   const spreadsheetId = extrairSpreadsheetId(sheetsUrl)
   if (!spreadsheetId) throw new Error(`URL do Google Sheets inválida: ${sheetsUrl}`)
@@ -120,7 +121,8 @@ export async function sincronizarVerbas(
       const row = (values[r] as unknown[]) ?? []
       const sub_categoria = parseStr(row[4])  // Col E
       const item = parseStr(row[5])           // Col F
-      const valor_orcado = parseNum(row[15])  // Col P
+      // Layout B: Total Orçado em O(14); Layout A: em P(15)
+      const valor_orcado = parseNum(row[layout === 'B' ? 14 : 15])
 
       if (valor_orcado <= 0) continue
       if (!sub_categoria && !item) continue
