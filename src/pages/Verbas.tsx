@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
-import { RefreshCw, AlertCircle, CheckCircle } from 'lucide-react'
+import { RefreshCw, AlertCircle, CheckCircle, ChevronDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useGoogleAuth } from '../contexts/GoogleAuthContext'
 import { sincronizarVerbas, sleep } from '../utils/verbasSync'
@@ -72,7 +72,20 @@ export function Verbas() {
   const [filtroCategoria, setFiltroCategoria] = useState('')
   const [filtroSubcategoria, setFiltroSubcategoria] = useState('')
   const [filtroItem, setFiltroItem] = useState('')
+  const [filtroProjetos, setFiltroProjetos] = useState<Set<string>>(new Set())
+  const [showProjetoDropdown, setShowProjetoDropdown] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const [projetosData, setProjetosData] = useState<ProjetoComparativo[]>([])
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowProjetoDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   // ── Carregar dados ──────────────────────────────────────────────────────────
 
@@ -147,8 +160,13 @@ export function Verbas() {
     if (filtroCategoria && it.categoria !== filtroCategoria) return false
     if (filtroSubcategoria && it.sub_categoria !== filtroSubcategoria) return false
     if (filtroItem && !it.item.toLowerCase().includes(filtroItem.toLowerCase())) return false
+    if (filtroProjetos.size > 0 && !filtroProjetos.has(it.projeto_id)) return false
     return true
-  }), [itens, filtroCategoria, filtroSubcategoria, filtroItem])
+  }), [itens, filtroCategoria, filtroSubcategoria, filtroItem, filtroProjetos])
+
+  const projetosFiltradosPivot = useMemo(() =>
+    filtroProjetos.size > 0 ? projetos.filter(p => filtroProjetos.has(p.id)) : projetos
+  , [projetos, filtroProjetos])
 
   const linhasPivot = useMemo((): PivotRow[] => {
     const map = new Map<string, PivotRow>()
@@ -182,6 +200,8 @@ export function Verbas() {
     }>()
 
     for (const proj of projetosData) {
+      if (filtroProjetos.size > 0 && !filtroProjetos.has(proj.id)) continue
+
       const titulo = proj.tap.turma
         || `${proj.tap.instituicao ?? ''} ${proj.tap.curso ?? ''}`.trim()
         || proj.id.slice(0, 6)
@@ -220,7 +240,7 @@ export function Verbas() {
         if (a.projeto !== b.projeto) return a.projeto.localeCompare(b.projeto)
         return b.total - a.total
       })
-  }, [filtroItem, projetosData])
+  }, [filtroItem, projetosData, filtroProjetos])
 
   const statsComparativo = useMemo(() => {
     if (comparativoPorProjeto.length === 0) return null
@@ -456,6 +476,53 @@ export function Verbas() {
       <div className="card">
         {/* Filtros */}
         <div className="flex flex-wrap gap-3 mb-4">
+
+          {/* Multi-select projetos */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setShowProjetoDropdown(v => !v)}
+              className="bg-surface-2 border border-white/10 rounded-lg px-3 py-1.5 text-sm flex items-center gap-2 min-w-[200px]"
+            >
+              {filtroProjetos.size === 0
+                ? <span className="text-text-muted">Todos os Projetos</span>
+                : <span className="text-text-main">{filtroProjetos.size} projeto(s)</span>
+              }
+              <ChevronDown size={13} className="ml-auto text-text-muted shrink-0" />
+            </button>
+            {showProjetoDropdown && (
+              <div className="absolute top-full left-0 mt-1 z-50 min-w-[240px] max-h-72 overflow-y-auto rounded-lg border border-white/10 shadow-xl"
+                style={{ background: 'var(--color-surface, #0f0f1a)' }}>
+                <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between">
+                  <span className="text-xs text-text-muted font-medium">Filtrar por Projeto</span>
+                  {filtroProjetos.size > 0 && (
+                    <button
+                      onClick={() => setFiltroProjetos(new Set())}
+                      className="text-[11px] text-text-muted hover:text-text-main"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+                {projetos.map(p => (
+                  <label key={p.id} className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-white/5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={filtroProjetos.has(p.id)}
+                      onChange={() => setFiltroProjetos(prev => {
+                        const next = new Set(prev)
+                        if (next.has(p.id)) next.delete(p.id); else next.add(p.id)
+                        return next
+                      })}
+                      className="accent-primary shrink-0"
+                    />
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CORES_SEGMENTO[p.segmento] ?? '#8892b0' }} />
+                    <span className="text-sm text-text-main truncate">{p.nome}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
           <select
             value={filtroCategoria}
             onChange={e => { setFiltroCategoria(e.target.value); setFiltroSubcategoria('') }}
@@ -509,7 +576,7 @@ export function Verbas() {
                   <th className="text-left px-3 py-2.5 text-xs font-medium text-text-muted min-w-[200px]">
                     Item
                   </th>
-                  {projetos.map(p => (
+                  {projetosFiltradosPivot.map(p => (
                     <th
                       key={p.id}
                       className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[150px] whitespace-nowrap"
@@ -541,7 +608,7 @@ export function Verbas() {
                       {row.sub_categoria || <span className="text-white/20">—</span>}
                     </td>
                     <td className="px-3 py-2 text-text-main">{row.item}</td>
-                    {projetos.map(p => (
+                    {projetosFiltradosPivot.map(p => (
                       <td key={p.id} className="px-3 py-2 text-right tabular-nums">
                         {row.valores[p.id]
                           ? <span className="text-text-main">{formatBRL(row.valores[p.id])}</span>
