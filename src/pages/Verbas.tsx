@@ -174,11 +174,10 @@ export function Verbas() {
     const q = filtroItem.trim().toLowerCase()
     if (!q) return []
 
-    const linhas: {
-      projetoId: string; projeto: string; ensino: string
-      qtde: number; valorUnitario: number; total: number
-      convidados: number; fonte: 'cont' | 'orc'
-    }[] = []
+    const map = new Map<string, {
+      projetoId: string; projeto: string; ensino: string; ensinoOrder: number
+      qtde: number; total: number; convidados: number; temCont: boolean; temOrc: boolean
+    }>()
 
     for (const proj of projetosData) {
       const titulo = proj.tap.turma
@@ -186,6 +185,7 @@ export function Verbas() {
         || proj.id.slice(0, 6)
       const tipo = proj.tap.tipoEscola
       const ensino = tipo === 'SUPERIOR' ? 'Superior' : tipo === 'FUNDAMENTAL' ? 'Fundamental' : 'Médio'
+      const ensinoOrder = tipo === 'SUPERIOR' ? 0 : tipo === 'FUNDAMENTAL' ? 2 : 1
       const convidados = proj.total_convidados_atual ?? 0
 
       for (const secao of proj.secoes ?? []) {
@@ -195,26 +195,34 @@ export function Verbas() {
 
           const useContratado = (item.valorContratado ?? 0) > 0
           const qtde = useContratado ? (item.qtdeContratada ?? 0) : (item.qtdeOrcada ?? 0)
-          const valorUnitario = useContratado ? (item.valorUnitarioContratado ?? 0) : (item.valorUnitarioOrcado ?? 0)
           const total = useContratado ? (item.valorContratado ?? 0) : (item.valorOrcado ?? 0)
           if (total <= 0) continue
 
-          linhas.push({ projetoId: proj.id, projeto: titulo, ensino, qtde, valorUnitario, total, convidados, fonte: useContratado ? 'cont' : 'orc' })
+          if (!map.has(proj.id)) {
+            map.set(proj.id, { projetoId: proj.id, projeto: titulo, ensino, ensinoOrder, qtde: 0, total: 0, convidados, temCont: false, temOrc: false })
+          }
+          const entry = map.get(proj.id)!
+          entry.qtde += qtde
+          entry.total += total
+          if (useContratado) entry.temCont = true; else entry.temOrc = true
         }
       }
     }
 
-    return linhas.sort((a, b) => b.valorUnitario - a.valorUnitario)
+    return Array.from(map.values())
+      .sort((a, b) => a.ensinoOrder !== b.ensinoOrder ? a.ensinoOrder - b.ensinoOrder : b.total - a.total)
   }, [filtroItem, projetosData])
 
   const statsComparativo = useMemo(() => {
     if (comparativoPorProjeto.length === 0) return null
-    const vus = comparativoPorProjeto.map(r => r.valorUnitario)
+    const totalGeral = comparativoPorProjeto.reduce((s, r) => s + r.total, 0)
+    const qtdeTotal = comparativoPorProjeto.reduce((s, r) => s + r.qtde, 0)
+    const vus = comparativoPorProjeto.filter(r => r.qtde > 0).map(r => r.total / r.qtde)
     return {
-      media: vus.reduce((a, b) => a + b, 0) / vus.length,
-      menor: Math.min(...vus),
-      maior: Math.max(...vus),
-      totalGeral: comparativoPorProjeto.reduce((s, r) => s + r.total, 0),
+      media: qtdeTotal > 0 ? totalGeral / qtdeTotal : 0,
+      menor: vus.length > 0 ? Math.min(...vus) : 0,
+      maior: vus.length > 0 ? Math.max(...vus) : 0,
+      totalGeral,
     }
   }, [comparativoPorProjeto])
 
@@ -556,7 +564,6 @@ export function Verbas() {
                 <thead>
                   <tr className="border-b border-white/10">
                     <th className="text-left px-3 py-2.5 text-xs font-medium text-text-muted min-w-[180px]">Projeto</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-medium text-text-muted">Ensino</th>
                     <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted">Qtde</th>
                     <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[120px]">Valor Unitário</th>
                     <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[120px]">Total</th>
@@ -566,49 +573,69 @@ export function Verbas() {
                   </tr>
                 </thead>
                 <tbody>
-                  {comparativoPorProjeto.map((row, i) => (
-                    <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                      <td className="px-3 py-2 text-text-main">{row.projeto}</td>
-                      <td className="px-3 py-2 text-text-muted whitespace-nowrap">{row.ensino}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-text-main">
-                        {row.qtde > 0 ? row.qtde : <span className="text-white/30">—</span>}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums font-medium text-text-main">
-                        {formatBRL(row.valorUnitario)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">
-                        {formatBRL(row.total)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-text-muted">
-                        {row.convidados > 0 ? row.convidados.toLocaleString('pt-BR') : <span className="text-white/30">—</span>}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-text-main">
-                        {row.convidados > 0
-                          ? formatBRL(row.total / row.convidados)
-                          : <span className="text-white/30">—</span>}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <span
-                          className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                          style={row.fonte === 'cont'
-                            ? { background: 'rgba(22,163,74,0.15)', color: '#16A34A' }
-                            : { background: 'rgba(234,179,8,0.15)', color: '#CA8A04' }}
-                        >
-                          {row.fonte === 'cont' ? 'Cont.' : 'Orç.'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {(['Superior', 'Médio', 'Fundamental'] as const).flatMap(ensino => {
+                    const linhas = comparativoPorProjeto.filter(r => r.ensino === ensino)
+                    if (linhas.length === 0) return []
+                    const cor = ensino === 'Superior' ? '#00b894' : ensino === 'Médio' ? '#0078d4' : '#e94560'
+                    const label = ensino === 'Superior' ? 'Ensino Superior' : ensino === 'Médio' ? 'Ensino Médio' : 'Fundamental / 9º Ano'
+                    return [
+                      <tr key={`h-${ensino}`}>
+                        <td colSpan={7} className="px-3 pt-4 pb-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: cor }} />
+                            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: cor }}>{label}</span>
+                            <span className="text-xs text-text-muted">· {linhas.length} projeto(s)</span>
+                          </div>
+                        </td>
+                      </tr>,
+                      ...linhas.map((row, i) => {
+                        const vu = row.qtde > 0 ? row.total / row.qtde : null
+                        const fonte = row.temCont && row.temOrc ? 'misto' : row.temCont ? 'cont' : 'orc'
+                        return (
+                          <tr key={`${ensino}-${i}`} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <td className="px-3 py-2 text-text-main">{row.projeto}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-text-main">
+                              {row.qtde > 0 ? row.qtde.toLocaleString('pt-BR') : <span className="text-white/30">—</span>}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums font-medium text-text-main">
+                              {vu !== null ? formatBRL(vu) : <span className="text-white/30">—</span>}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">
+                              {formatBRL(row.total)}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-text-muted">
+                              {row.convidados > 0 ? row.convidados.toLocaleString('pt-BR') : <span className="text-white/30">—</span>}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-text-main">
+                              {row.convidados > 0 ? formatBRL(row.total / row.convidados) : <span className="text-white/30">—</span>}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <span
+                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                                style={fonte === 'cont'
+                                  ? { background: 'rgba(22,163,74,0.15)', color: '#16A34A' }
+                                  : fonte === 'orc'
+                                  ? { background: 'rgba(234,179,8,0.15)', color: '#CA8A04' }
+                                  : { background: 'rgba(148,163,184,0.15)', color: '#94A3B8' }}
+                              >
+                                {fonte === 'cont' ? 'Cont.' : fonte === 'orc' ? 'Orç.' : 'Misto'}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      }),
+                    ]
+                  })}
                 </tbody>
                 {statsComparativo && (
                   <tfoot>
                     <tr className="border-t-2 border-white/20" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                      <td colSpan={2} className="px-3 py-2.5 text-xs text-text-muted">
-                        {comparativoPorProjeto.length} resultado(s)
+                      <td className="px-3 py-2.5 text-xs text-text-muted">
+                        {comparativoPorProjeto.length} projeto(s)
                       </td>
                       <td className="px-3 py-2.5" />
                       <td className="px-3 py-2.5 text-right">
-                        <div className="text-[10px] text-text-muted">Média</div>
+                        <div className="text-[10px] text-text-muted">Média VU</div>
                         <div className="text-xs font-semibold text-text-main tabular-nums">{formatBRL(statsComparativo.media)}</div>
                         <div className="text-[10px] text-text-muted tabular-nums mt-0.5">
                           {formatBRL(statsComparativo.menor)} – {formatBRL(statsComparativo.maior)}

@@ -153,9 +153,10 @@ function parseItens(
     const totalProjetado = parseNum(get(11))       // L — lê direto
 
     // ORÇADO — espelho direto da planilha
-    const qtdeOrcada = parseNum(get(13))
-    const valorUnitarioOrcado = parseNum(get(14))
-    const valorOrcado = parseNum(get(layout === 'B' ? 14 : 15))  // Layout A=P(15) Layout B=O(14)
+    // Layout B deslocado -1: Qtde=M(12), VU=N(13), Total=O(14); Layout A: Qtde=N(13), VU=O(14), Total=P(15)
+    const qtdeOrcada = parseNum(get(layout === 'B' ? 12 : 13))
+    const valorUnitarioOrcado = parseNum(get(layout === 'B' ? 13 : 14))
+    const valorOrcado = parseNum(get(layout === 'B' ? 14 : 15))
 
     // Aviso de inconsistência: Qtde × VU ≠ Valor Orçado na planilha
     if (valorOrcado > 0 && qtdeOrcada > 0 && valorUnitarioOrcado > 0) {
@@ -167,9 +168,10 @@ function parseItens(
     }
 
     // CONTRATADO — espelho direto da planilha
-    const qtdeContratada = parseNum(get(17))
-    const valorUnitarioContratado = parseNum(get(18))
-    const valorContratado = parseNum(get(layout === 'B' ? 18 : 19))  // Layout A=T(19) Layout B=S(18)
+    // Layout B deslocado -1: Qtde=Q(16), VU=R(17), Total=S(18); Layout A: Qtde=R(17), VU=S(18), Total=T(19)
+    const qtdeContratada = parseNum(get(layout === 'B' ? 16 : 17))
+    const valorUnitarioContratado = parseNum(get(layout === 'B' ? 17 : 18))
+    const valorContratado = parseNum(get(layout === 'B' ? 18 : 19))
 
     // Aviso de inconsistência: Qtde × VU ≠ Valor Contratado na planilha
     if (valorContratado > 0 && qtdeContratada > 0 && valorUnitarioContratado > 0) {
