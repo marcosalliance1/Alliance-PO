@@ -114,7 +114,16 @@ function varBadge(atual: number, anterior: number, invertido = false): string {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-Deno.serve(async (_req: Request) => {
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
   try {
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
     console.log('RESEND_API_KEY exists:', !!resendApiKey)
@@ -122,7 +131,7 @@ Deno.serve(async (_req: Request) => {
     if (!resendApiKey) {
       return new Response(JSON.stringify({ error: 'RESEND_API_KEY não configurado como secret na Edge Function' }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
@@ -294,35 +303,53 @@ Deno.serve(async (_req: Request) => {
       fluxoSemanas, fluxoTotal,
     })
 
-    const emailRes = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
-      body: JSON.stringify({
-        // TODO: trocar para relatorios@alliancebh.com.br após verificação do DNS
-        from: "onboarding@resend.dev",
-        to: ["marcos@alliancebh.com.br"],
-        subject: `Relatório Semanal Alliance — ${dataCurta}`,
-        html,
-      }),
-    })
+    const { data: destinatarios, error: destErr } = await supabase
+      .from("relatorio_destinatarios")
+      .select("email, nome")
+      .eq("ativo", true)
 
-    if (!emailRes.ok) {
-      const err = await emailRes.text()
-      console.log('Resend error status:', emailRes.status, 'body:', err)
-      return new Response(JSON.stringify({ error: `Resend ${emailRes.status}: ${err}` }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
+    if (destErr) throw new Error(destErr.message)
+
+    if (!destinatarios || destinatarios.length === 0) {
+      return new Response(JSON.stringify({ error: "Nenhum destinatário ativo encontrado em relatorio_destinatarios" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       })
     }
 
-    const result = await emailRes.json()
-    return new Response(JSON.stringify({ ok: true, id: result.id }), {
-      headers: { "Content-Type": "application/json" },
+    const ids: string[] = []
+    for (const dest of destinatarios) {
+      const emailRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
+        body: JSON.stringify({
+          from: "relatorios@padraoalliance.app.br",
+          to: [dest.email],
+          subject: `Relatório Semanal Alliance — ${dataCurta}`,
+          html,
+        }),
+      })
+
+      if (!emailRes.ok) {
+        const err = await emailRes.text()
+        console.log('Resend error status:', emailRes.status, 'body:', err, 'to:', dest.email)
+        return new Response(JSON.stringify({ error: `Resend ${emailRes.status}: ${err}` }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        })
+      }
+
+      const result = await emailRes.json()
+      ids.push(result.id)
+    }
+
+    return new Response(JSON.stringify({ ok: true, sent: ids.length, ids }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
   } catch (err) {
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
   }
 })

@@ -166,8 +166,17 @@ function AppRoutes() {
 
   // ── Relatório semanal ────────────────────────────────────────────────────────
   async function enviarRelatorio() {
-    const { error } = await supabase.functions.invoke('relatorio-semanal')
-    if (error) throw error
+    const { data, error } = await supabase.functions.invoke('relatorio-semanal')
+    if (error) {
+      let msg = error.message
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const body = await (error as any).context?.json?.()
+        if (body?.error) msg = body.error
+      } catch { /* ignore */ }
+      throw new Error(msg)
+    }
+    return data
   }
 
   // ── Limpar ──────────────────────────────────────────────────────────────────

@@ -24,6 +24,7 @@ export function Configuracoes({ config, onSalvar, onExportar, onImportar, onLimp
   const [confirmLimpar2, setConfirmLimpar2] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [envioStatus, setEnvioStatus] = useState<'idle' | 'ok' | 'erro'>('idle')
+  const [erroMsg, setErroMsg] = useState('')
 
   function addForn() {
     const v = novoForn.trim()
@@ -43,8 +44,10 @@ export function Configuracoes({ config, onSalvar, onExportar, onImportar, onLimp
     try {
       await onEnviarRelatorio()
       setEnvioStatus('ok')
-    } catch {
+      setErroMsg('')
+    } catch (err) {
       setEnvioStatus('erro')
+      setErroMsg((err as Error).message ?? '')
     } finally {
       setEnviando(false)
     }
@@ -148,7 +151,7 @@ export function Configuracoes({ config, onSalvar, onExportar, onImportar, onLimp
                 <span className="text-xs text-green-400">E-mail enviado com sucesso.</span>
               )}
               {envioStatus === 'erro' && (
-                <span className="text-xs text-danger">Falha ao enviar. Verifique o RESEND_API_KEY.</span>
+                <span className="text-xs text-danger">{erroMsg || 'Falha ao enviar.'}</span>
               )}
             </div>
           </div>
