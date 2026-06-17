@@ -2,7 +2,6 @@ import * as XLSX from 'xlsx'
 import type { Projeto, SecaoCusto, ItemCusto, TAP, TipoEscola, StatusItem, StatusPagamento, TipoCusto, DivergenciaDetalhe, Receitas } from '../types'
 import { v4 as uuid } from './uuid'
 import { getSecoesPorTipo } from '../data/secoesPorTipo'
-import { emptyReceitas } from './calculos'
 
 const MAPA_SECOES: Record<string, string> = {
   'custo producao': '2.1',
@@ -235,23 +234,11 @@ function normLabel(val: unknown): string {
     .trim()
 }
 
-// Mapeia label de RECEITA (nunca "verba extra" — esses são custos)
-function mapLabelReceita(label: string): string | null {
-  if (/faturamento/.test(label)) return 'Faturamento Adesões'
-  if (/arrecadac/.test(label)) return 'Arrecadação Extra'
-  if (/convite.*extra/.test(label) || /venda.*convite/.test(label)) return 'Vendas Convites Extras'
-  if (/mesa.*extra/.test(label) || /venda.*mesa/.test(label)) return 'Vendas Mesas Extras'
-  if (/receita.*venda/.test(label) || /venda.*baile/.test(label)) return 'Receita Vendas Baile'
-  if (/rescis/.test(label)) return 'Receita Rescisões'
-  if (/\boutro/.test(label)) return 'Outros'
-  return null
-}
-
-const SKIP_RESUMO = /^(receita baile|custo total|margem|total geral|resumo)/
+const SKIP_RESUMO = /^(custo total|margem|total geral|resumo)/
 
 // Lê a aba Resumo Geral e retorna receitas + itens de "Verba extra" (custos sem aba própria)
 function lerResumoGeral(wb: XLSX.WorkBook): { receitas: Receitas; verbaExtras: ItemCusto[] } {
-  const receitas = emptyReceitas()
+  const receitas: Receitas = {}
   const verbaExtras: ItemCusto[] = []
 
   const sheetName = wb.SheetNames.find((n) => {
@@ -337,17 +324,18 @@ function lerResumoGeral(wb: XLSX.WorkBook): { receitas: Receitas; verbaExtras: I
     }
   }
   for (const row of rows) {
-    const label = (typeof row[1] === 'string' ? normLabel(row[1]) : '') ||
-                  (typeof row[0] === 'string' ? normLabel(row[0]) : '')
-    if (!label || SKIP_RESUMO.test(label) || /^verba\s*extra/.test(label)) continue
-    const field = mapLabelReceita(label)
-    if (!field) continue
+    const rawLabel = (typeof row[1] === 'string' ? String(row[1]).trim() : '') ||
+                     (typeof row[0] === 'string' ? String(row[0]).trim() : '')
+    if (!rawLabel) continue
+    const normalized = normLabel(rawLabel)
+    if (normalized.includes('receita baile')) break  // linha de total — parar
+    if (SKIP_RESUMO.test(normalized) || /^verba\s*extra/.test(normalized)) continue
     const vendido = parseNum(row[vendidoCol])
     const orcado = parseNum(row[orcadoCol])
     if (vendido === 0 && orcado === 0) continue
-    receitas[field] ??= { vendido: 0, orcado: 0, contratado: 0, pago: 0, faltaPagar: 0 }
-    receitas[field].vendido += vendido
-    receitas[field].orcado += orcado
+    receitas[rawLabel] ??= { vendido: 0, orcado: 0, contratado: 0, pago: 0, faltaPagar: 0 }
+    receitas[rawLabel].vendido += vendido
+    receitas[rawLabel].orcado += orcado
   }
 
   return { receitas, verbaExtras }
