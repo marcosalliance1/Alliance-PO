@@ -298,9 +298,9 @@ function parseReceitasFromResumo(values: unknown[][]): Receitas {
   // col A = "ITEM" E a linha contém "vendido"/"orcado" (evita falso positivo em outras linhas com "ITEM")
   let headerRow0 = -1
   for (let r = 0; r < Math.min(values.length, 50); r++) {
-    const colA = norm(parseStr(getCell(values, r, 0)))
+    const colLabel = norm(parseStr(getCell(values, r, 1))) || norm(parseStr(getCell(values, r, 0)))
     const rowJoined = ((values[r] as unknown[]) ?? []).map(c => norm(parseStr(c))).join(' ')
-    if ((colA === 'item' || colA === 'receitas') && (rowJoined.includes('vendido') || rowJoined.includes('orcado'))) {
+    if ((colLabel === 'item' || colLabel === 'receitas') && (rowJoined.includes('vendido') || rowJoined.includes('orcado'))) {
       headerRow0 = r
       break
     }
@@ -353,7 +353,8 @@ function parseReceitasFromResumo(values: unknown[][]): Receitas {
   const result: Receitas = {}
 
   for (let r = dataStart; r < values.length; r++) {
-    const rawLabel = parseStr(getCell(values, r, 0))  // coluna A — labels da seção de receitas
+    // Tenta coluna B (1) primeiro, fallback coluna A (0)
+    const rawLabel = parseStr(getCell(values, r, 1)) || parseStr(getCell(values, r, 0))
     if (!rawLabel) continue
 
     const ln = norm(rawLabel)
