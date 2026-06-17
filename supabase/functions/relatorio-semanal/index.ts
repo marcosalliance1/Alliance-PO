@@ -116,11 +116,20 @@ function varBadge(atual: number, anterior: number, invertido = false): string {
 
 Deno.serve(async (_req: Request) => {
   try {
+    const resendApiKey = Deno.env.get('RESEND_API_KEY')
+    console.log('RESEND_API_KEY exists:', !!resendApiKey)
+
+    if (!resendApiKey) {
+      return new Response(JSON.stringify({ error: 'RESEND_API_KEY não configurado como secret na Edge Function' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     )
-    const resendKey = Deno.env.get("RESEND_API_KEY")!
 
     // Referência temporal: semana ISO da data mais recente no boletim
     const { data: maxRow } = await supabase
@@ -287,7 +296,7 @@ Deno.serve(async (_req: Request) => {
 
     const emailRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendKey}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
       body: JSON.stringify({
         // TODO: trocar para relatorios@alliancebh.com.br após verificação do DNS
         from: "onboarding@resend.dev",
@@ -299,7 +308,8 @@ Deno.serve(async (_req: Request) => {
 
     if (!emailRes.ok) {
       const err = await emailRes.text()
-      return new Response(JSON.stringify({ error: err }), {
+      console.log('Resend error status:', emailRes.status, 'body:', err)
+      return new Response(JSON.stringify({ error: `Resend ${emailRes.status}: ${err}` }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       })
