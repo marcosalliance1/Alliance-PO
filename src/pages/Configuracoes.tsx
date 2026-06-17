@@ -3,7 +3,7 @@ import type { ConfiguracaoGlobal } from '../types'
 import { Header } from '../components/layout/Header'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { useAuth } from '../contexts/AuthContext'
-import { Plus, Trash2, Download, Upload } from 'lucide-react'
+import { Plus, Trash2, Download, Upload, Send } from 'lucide-react'
 
 interface ConfiguracoesProps {
   config: ConfiguracaoGlobal
@@ -11,16 +11,19 @@ interface ConfiguracoesProps {
   onExportar: () => Promise<void>
   onImportar: (json: string) => Promise<void>
   onLimpar: () => Promise<void>
+  onEnviarRelatorio?: () => Promise<void>
 }
 
 const INPUT = 'w-full bg-surface border border-white/10 rounded-inner px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary'
 
-export function Configuracoes({ config, onSalvar, onExportar, onImportar, onLimpar }: ConfiguracoesProps) {
+export function Configuracoes({ config, onSalvar, onExportar, onImportar, onLimpar, onEnviarRelatorio }: ConfiguracoesProps) {
   const { isAdmin } = useAuth()
   const [c, setC] = useState(config)
   const [novoForn, setNovoForn] = useState('')
   const [confirmLimpar, setConfirmLimpar] = useState(false)
   const [confirmLimpar2, setConfirmLimpar2] = useState(false)
+  const [enviando, setEnviando] = useState(false)
+  const [envioStatus, setEnvioStatus] = useState<'idle' | 'ok' | 'erro'>('idle')
 
   function addForn() {
     const v = novoForn.trim()
@@ -31,6 +34,20 @@ export function Configuracoes({ config, onSalvar, onExportar, onImportar, onLimp
 
   function removeForn(nome: string) {
     setC({ ...c, fornecedoresFavoritos: c.fornecedoresFavoritos.filter((f) => f !== nome) })
+  }
+
+  async function handleEnviarRelatorio() {
+    if (!onEnviarRelatorio) return
+    setEnviando(true)
+    setEnvioStatus('idle')
+    try {
+      await onEnviarRelatorio()
+      setEnvioStatus('ok')
+    } catch {
+      setEnvioStatus('erro')
+    } finally {
+      setEnviando(false)
+    }
   }
 
   function handleImportarJSON(e: React.ChangeEvent<HTMLInputElement>) {
@@ -110,6 +127,29 @@ export function Configuracoes({ config, onSalvar, onExportar, onImportar, onLimp
                 <Upload size={15} /> Importar JSON
                 <input type="file" accept=".json" className="hidden" onChange={handleImportarJSON} />
               </label>
+            </div>
+          </div>
+        )}
+
+        {isAdmin && onEnviarRelatorio && (
+          <div className="card">
+            <h3 className="text-sm font-semibold text-text-main mb-1">Relatório Semanal</h3>
+            <p className="text-text-muted text-xs mb-4">Envia o relatório semanal por e-mail agora, sem esperar a segunda-feira.</p>
+            <div className="flex items-center gap-3">
+              <button
+                className="btn-secondary flex items-center gap-2"
+                onClick={handleEnviarRelatorio}
+                disabled={enviando}
+              >
+                <Send size={14} />
+                {enviando ? 'Enviando...' : 'Enviar relatório agora'}
+              </button>
+              {envioStatus === 'ok' && (
+                <span className="text-xs text-green-400">E-mail enviado com sucesso.</span>
+              )}
+              {envioStatus === 'erro' && (
+                <span className="text-xs text-danger">Falha ao enviar. Verifique o RESEND_API_KEY.</span>
+              )}
             </div>
           </div>
         )}

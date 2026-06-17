@@ -164,6 +164,12 @@ function AppRoutes() {
     }
   }
 
+  // ── Relatório semanal ────────────────────────────────────────────────────────
+  async function enviarRelatorio() {
+    const { error } = await supabase.functions.invoke('relatorio-semanal')
+    if (error) throw error
+  }
+
   // ── Limpar ──────────────────────────────────────────────────────────────────
   async function limparDados() {
     await Promise.all([
@@ -266,6 +272,7 @@ function AppRoutes() {
               onExportar={exportarJSON}
               onImportar={importarJSON}
               onLimpar={limparDados}
+              onEnviarRelatorio={enviarRelatorio}
             />
           }
         />
