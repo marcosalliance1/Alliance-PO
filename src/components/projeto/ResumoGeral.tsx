@@ -147,7 +147,9 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao, on
               </td>
             </tr>
 
-            {Object.entries(r).map(([key, linha]) => {
+            {Object.entries(r).filter(([, linha]) =>
+              linha.vendido !== 0 || linha.orcado !== 0 || linha.contratado !== 0 || linha.pago !== 0
+            ).map(([key, linha]) => {
               const faltaPagar = linha.contratado - linha.pago
               return (
                 <tr key={key} className="border-b border-white/5 hover:bg-white/5">

@@ -299,8 +299,8 @@ export function Verbas() {
       for (let idx = 0; idx < comUrl.length; idx++) {
         const row = comUrl[idx]
         const nome =
-          (row.tap.nome as string | undefined) ??
-          (row.tap.instituicao as string | undefined) ??
+          (row.tap.turma as string | undefined) ||
+          (row.tap.instituicao as string | undefined) ||
           row.id
         const curso = row.tap.curso as string | undefined
         const layout: 'A' | 'B' = row.sheet_layout === 'B' ? 'B' : 'A'
