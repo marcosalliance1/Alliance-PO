@@ -670,14 +670,15 @@ export function Verbas() {
                         </td>
                       </tr>,
                       ...linhas.map((row, i) => {
-                        const vu = row.qtde > 0 ? row.total / row.qtde : null
+                        const qtdeDisplay = row.convidados > 0 ? row.convidados : row.qtde
+                        const vu = qtdeDisplay > 0 ? row.total / qtdeDisplay : null
                         const fonte = row.temCont && row.temOrc ? 'misto' : row.temCont ? 'cont' : 'orc'
                         return (
                           <tr key={`${ensino}-${i}`} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                             <td className="px-3 py-2 text-text-main">{row.projeto}</td>
                             <td className="px-3 py-2 text-text-muted">{row.itemNome || <span className="text-white/30">—</span>}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-text-main">
-                              {row.qtde > 0 ? row.qtde.toLocaleString('pt-BR') : <span className="text-white/30">—</span>}
+                              {qtdeDisplay > 0 ? qtdeDisplay.toLocaleString('pt-BR') : <span className="text-white/30">—</span>}
                             </td>
                             <td className="px-3 py-2 text-right tabular-nums font-medium text-text-main">
                               {vu !== null ? formatBRL(vu) : <span className="text-white/30">—</span>}
