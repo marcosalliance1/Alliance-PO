@@ -122,7 +122,12 @@ export async function sincronizarVerbas(
       const sub_categoria = parseStr(row[4])  // Col E
       const item = parseStr(row[5])           // Col F
       // Layout B: Total Orçado em O(14); Layout A: em P(15)
-      const valor_orcado = parseNum(row[layout === 'B' ? 14 : 15])
+      let valor_orcado = parseNum(row[layout === 'B' ? 14 : 15])
+      // Fallback Layout A: fórmula em P pode estar vazia — tenta Qtde×Unitário (N×O) depois Total Atual (J)
+      if (valor_orcado <= 0 && layout === 'A') {
+        const calc = parseNum(row[13]) * parseNum(row[14])
+        valor_orcado = calc > 0 ? calc : parseNum(row[9])
+      }
 
       if (valor_orcado <= 0) continue
       if (!sub_categoria && !item) continue
