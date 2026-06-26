@@ -496,6 +496,7 @@ export async function sincronizarComSheets(
   let resumoEncontrado = false
   let totalConvidadosAtual: number | null = null
   const avisosItens: string[] = []
+  let preEventoExtra: { id: string; numero: string; nome: string; itens: ItemCusto[] } | null = null
 
   for (const nomeAba of sheetNames) {
     const nomeN = norm(nomeAba)
@@ -548,6 +549,25 @@ export async function sincronizarComSheets(
       (secaoId === 'admin' && s.nome.toLowerCase().includes('admin')) ||
       (secaoId === 'preevento' && (s.nome.toLowerCase().includes('pré-event') || s.nome.toLowerCase().includes('pre-event') || s.nome.toLowerCase().includes('pre event') || s.nome.toLowerCase().includes('pré event')))
     )
+    // Seção Pré-Eventos pode não existir em projetos EM: criar dinamicamente
+    if (!secaoProjeto && secaoId === 'preevento') {
+      onProgress(`Lendo CUSTO PRÉ-EVENTOS (extra)...`)
+      try {
+        const values = await fetchAba(spreadsheetId, nomeAba, accessToken)
+        if (values) {
+          const { itens, avisos: avisosAba } = parseItens(values, 'preevento', 'CUSTO PRÉ-EVENTOS', layout)
+          if (itens.length > 0) {
+            preEventoExtra = { id: uuid(), numero: 'preevento', nome: 'CUSTO PRÉ-EVENTOS', itens }
+          }
+          avisosItens.push(...avisosAba)
+        }
+      } catch (e) {
+        if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
+        console.warn(`Erro ao ler aba "${nomeAba}":`, e)
+      }
+      continue
+    }
+
     if (!secaoProjeto) continue
 
     onProgress(`Lendo ${secaoProjeto.nome} (${secaoProjeto.numero})...`)
@@ -603,8 +623,12 @@ export async function sincronizarComSheets(
   }
   avisos.push(...avisosItens)
 
+  const secoesFinais = preEventoExtra
+    ? [...secoesAtualizadas, preEventoExtra]
+    : secoesAtualizadas
+
   return {
-    secoes: secoesAtualizadas,
+    secoes: secoesFinais,
     tap: tapParsed,
     receitas: receitasMerged,
     totalConvidadosAtual,

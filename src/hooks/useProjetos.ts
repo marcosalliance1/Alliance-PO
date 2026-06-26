@@ -3,7 +3,7 @@ import type { Projeto, SecaoCusto, ItemCusto, TAP, Receitas, ConciliacaoEverest,
 import type { SyncResult } from '../utils/sheetsSync'
 import { v4 as uuid } from '../utils/uuid'
 import { getSecoesPorTipo } from '../data/secoesPorTipo'
-import { calcItemTotais, migrateReceitas, emptyReceitas } from '../utils/calculos'
+import { calcItemTotais, filtrarItensCalculo, migrateReceitas, emptyReceitas } from '../utils/calculos'
 import { supabase } from '../lib/supabase'
 
 function rowToProjeto(row: Record<string, unknown>): Projeto {
@@ -259,13 +259,19 @@ export function useProjetos() {
       : projeto.tap
     const novasReceitas = Object.keys(result.receitas).length > 0 ? result.receitas : projeto.receitas
 
-    // Auto-fill Conciliação Everest: valorEverest = soma de valorPago de cada seção
-    const linhasEverest = result.secoes.map(secao => ({
-      secaoId: secao.id,
-      secaoNome: secao.nome,
-      valorEverest: secao.itens.reduce((s, i) => s + (i.valorPago || 0), 0),
-      observacao: projeto.conciliacaoEverest?.linhas.find(l => l.secaoId === secao.id)?.observacao ?? '',
-    }))
+    // Auto-fill Conciliação Everest: preserva valor já digitado; preenche seções novas
+    // usando a mesma filtragem do Sistema (filtrarItensCalculo) para garantir consistência
+    const linhasEverest = result.secoes.map(secao => {
+      const existing = projeto.conciliacaoEverest?.linhas.find(l => l.secaoId === secao.id)
+      return {
+        secaoId: secao.id,
+        secaoNome: secao.nome,
+        valorEverest: existing !== undefined
+          ? existing.valorEverest
+          : filtrarItensCalculo(secao.itens).reduce((s, i) => s + (i.valorPago || 0), 0),
+        observacao: existing?.observacao ?? '',
+      }
+    })
     const novaConciliacao = {
       linhas: linhasEverest,
       observacaoGeral: projeto.conciliacaoEverest?.observacaoGeral ?? '',
