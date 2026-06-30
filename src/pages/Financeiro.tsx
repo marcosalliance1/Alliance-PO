@@ -567,16 +567,44 @@ function normalizeEnsino(raw: string): string {
   return raw.trim() || 'Outros'
 }
 
-function ControleDespesas({ boletim: boletimRaw, dimensaoProjetos, filtroProj }: {
+function ControleDespesas({ boletim: boletimRaw, cap: capRaw, dimensaoProjetos, filtroProj }: {
   boletim: BoletimRecord[]
+  cap: CAPRecord[]
   dimensaoProjetos: DimensaoProjetoRecord[]
   filtroProj: string
 }) {
   const fp = filtroProj.toLowerCase().trim()
-  const despesas = (fp
-    ? boletimRaw.filter(r => r.tipo === 'DESPESA' && r.desc_centro_custo.toLowerCase().includes(fp))
-    : boletimRaw.filter(r => r.tipo === 'DESPESA')
+
+  // CAP é a fonte primária de despesas; Boletim entra apenas para TARIFAS BANCARIAS
+  // (o parser do CAP exclui tarifas explicitamente, evitando dupla contagem)
+  type DespNorm = {
+    v_lancamento: number; situacao: string; desc_conta_gerencial: string
+    desc_centro_custo: string; fantasia_cliente_fornecedor: string; d_competencia: string | null
+  }
+  const capF = fp ? capRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : capRaw
+  const tarifasF = boletimRaw.filter(r =>
+    r.tipo === 'DESPESA' &&
+    r.desc_conta_gerencial.toUpperCase() === 'TARIFAS BANCARIAS' &&
+    (!fp || r.desc_centro_custo.toLowerCase().includes(fp))
   )
+  const despesas: DespNorm[] = [
+    ...capF.map(i => ({
+      v_lancamento: i.v_titulo ?? 0,
+      situacao: i.situacao,
+      desc_conta_gerencial: i.desc_conta_gerencial,
+      desc_centro_custo: i.desc_centro_custo,
+      fantasia_cliente_fornecedor: i.fantasia_fornecedor,
+      d_competencia: i.d_competencia,
+    })),
+    ...tarifasF.map(i => ({
+      v_lancamento: i.v_lancamento ?? 0,
+      situacao: i.situacao,
+      desc_conta_gerencial: i.desc_conta_gerencial,
+      desc_centro_custo: i.desc_centro_custo,
+      fantasia_cliente_fornecedor: i.fantasia_cliente_fornecedor,
+      d_competencia: i.d_competencia,
+    })),
+  ]
   const [expandidosEnsino, setExpandidosEnsino] = useState<Record<string, boolean>>({})
   const [expandidosInst, setExpandidosInst] = useState<Record<string, boolean>>({})
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
@@ -1102,7 +1130,7 @@ export function Financeiro() {
         <>
           {abaAtiva === 'resultado' && <ResultadoProjetos boletim={boletim} cap={cap} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
           {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} filtroProj={filtroProj} />}
-          {abaAtiva === 'despesas' && <ControleDespesas boletim={boletim} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
+          {abaAtiva === 'despesas' && <ControleDespesas boletim={boletim} cap={cap} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
           {abaAtiva === 'dados'    && <TabelaDados boletim={boletim} filtroProj={filtroProj} />}
         </>
       )}
