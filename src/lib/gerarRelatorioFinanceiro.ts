@@ -143,8 +143,6 @@ function _cabecalho(doc: jsPDF, pw: number, titulo: string, filtro: string) {
 
 // ─── Resultado por Projeto (hierárquico) ───────────────────────────
 
-type ResNivel = { receita: number; despesa: number; filhos?: Record<string, ResNivel> }
-
 function _resultado(
   doc: jsPDF,
   boletim: BoletimRecord[],
@@ -224,7 +222,7 @@ function _resultado(
         { content: fmt(r.receita), styles: { fillColor: s.fill, textColor: s.text, fontStyle: s.fontStyle, fontSize: s.size, halign: 'right' as const } },
         { content: fmt(r.despesa), styles: { fillColor: s.fill, textColor: s.text, fontStyle: s.fontStyle, fontSize: s.size, halign: 'right' as const } },
         { content: fmt(res),       styles: { fillColor: s.fill, textColor: corRes,  fontStyle: 'bold' as const, fontSize: s.size, halign: 'right' as const } },
-        { content: marg,           styles: { fillColor: s.fill, textColor: corRes,  fontStyle: s.nivel === 'proj' ? 'bold' as const : s.fontStyle, fontSize: s.size, halign: 'right' as const } },
+        { content: marg,           styles: { fillColor: s.fill, textColor: corRes,  fontStyle: r.nivel === 'proj' ? 'bold' as const : s.fontStyle, fontSize: s.size, halign: 'right' as const } },
       ]
     }),
     foot: [['TOTAL GERAL', fmt(totRec), fmt(totDesp), fmt(totRes), totMarg.toFixed(1) + '%']],
