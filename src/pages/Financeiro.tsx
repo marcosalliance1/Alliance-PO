@@ -9,7 +9,7 @@ import { fmtCompact, tempoDesde, mesAno, nivelEnsino } from '../utils/parseFinan
 import { useAuth } from '../contexts/AuthContext'
 import { Toast } from '../components/ui/Toast'
 import { KPICard } from '../components/dashboard/KPICard'
-import { gerarRelatorioFinanceiro } from '../lib/gerarRelatorioFinanceiro'
+import { gerarRelatorioFinanceiro, capturarGraficos } from '../lib/gerarRelatorioFinanceiro'
 
 // ─── Constantes visuais ───────────────────────────────────────────
 const C_RECEITA = '#00b894'
@@ -995,10 +995,16 @@ export function Financeiro() {
   const [filtroProj, setFiltroProj] = useState('')
   const [processando, setProcessando] = useState({ BOLETIM: false, CAP: false })
   const [toast, setToast] = useState<{ mensagem: string; tipo: 'sucesso' | 'erro' } | null>(null)
-  const boletimRef = useRef<HTMLInputElement>(null)
-  const capRef     = useRef<HTMLInputElement>(null)
+  const boletimRef  = useRef<HTMLInputElement>(null)
+  const capRef      = useRef<HTMLInputElement>(null)
+  const conteudoRef = useRef<HTMLDivElement>(null)
 
   const semDados = boletim.length === 0
+
+  async function handleExportarPDF() {
+    const graficos = conteudoRef.current ? await capturarGraficos(conteudoRef.current) : []
+    gerarRelatorioFinanceiro(abaAtiva, boletim, cap, dimensaoProjetos, filtroProj, graficos)
+  }
 
   async function handleBoletim(arquivo: File | undefined) {
     if (!arquivo) return
@@ -1043,7 +1049,7 @@ export function Financeiro() {
 
         <div className="flex gap-3 flex-wrap items-start">
           <button
-            onClick={() => gerarRelatorioFinanceiro(abaAtiva, boletim, cap, dimensaoProjetos, filtroProj)}
+            onClick={handleExportarPDF}
             disabled={semDados}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 bg-white/5 border border-white/10 text-text-muted hover:text-text-main hover:bg-white/10"
           >
@@ -1139,12 +1145,12 @@ export function Financeiro() {
           </p>
         </div>
       ) : (
-        <>
+        <div ref={conteudoRef}>
           {abaAtiva === 'resultado' && <ResultadoProjetos boletim={boletim} cap={cap} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
           {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} filtroProj={filtroProj} />}
           {abaAtiva === 'despesas' && <ControleDespesas boletim={boletim} cap={cap} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
           {abaAtiva === 'dados'    && <TabelaDados boletim={boletim} filtroProj={filtroProj} />}
-        </>
+        </div>
       )}
 
       {toast && <Toast mensagem={toast.mensagem} tipo={toast.tipo} onFechar={() => setToast(null)} />}
