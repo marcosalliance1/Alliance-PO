@@ -3,12 +3,13 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts'
-import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight, Table2, Search, ChevronLeft } from 'lucide-react'
+import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight, Table2, Search, ChevronLeft, FileDown } from 'lucide-react'
 import { useFinanceiro, type BoletimRecord, type CAPRecord, type DimensaoProjetoRecord } from '../hooks/useFinanceiro'
 import { fmtCompact, tempoDesde, mesAno, nivelEnsino } from '../utils/parseFinanceiro'
 import { useAuth } from '../contexts/AuthContext'
 import { Toast } from '../components/ui/Toast'
 import { KPICard } from '../components/dashboard/KPICard'
+import { gerarRelatorioFinanceiro } from '../lib/gerarRelatorioFinanceiro'
 
 // ─── Constantes visuais ───────────────────────────────────────────
 const C_RECEITA = '#00b894'
@@ -1038,6 +1039,17 @@ export function Financeiro() {
         <div>
           <h1 className="text-text-main text-xl font-bold">Financeiro</h1>
           <p className="text-text-muted text-xs mt-0.5">Boletim Financeiro Consolidado</p>
+        </div>
+
+        <div className="flex gap-3 flex-wrap items-start">
+          <button
+            onClick={() => gerarRelatorioFinanceiro(abaAtiva, boletim, cap, dimensaoProjetos, filtroProj)}
+            disabled={semDados}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 bg-white/5 border border-white/10 text-text-muted hover:text-text-main hover:bg-white/10"
+          >
+            <FileDown size={14} />
+            Exportar PDF
+          </button>
         </div>
 
         {isAdmin && (
