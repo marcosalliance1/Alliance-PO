@@ -336,11 +336,19 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
   // ── Card Realizado ────────────────────────────────────────────────────────
   function renderCardRealizado(p: Projeto) {
     const resumo = calcResumoProjeto(p)
-    const totalContratado = resumo.custoTotal.contratado
-    const totalPago = p.conciliacaoEverest?.linhas.reduce((s, l) => s + (l.valorEverest ?? 0), 0) ?? 0
-    const margemReal = resumo.receitaBaile.contratado - totalPago
-    const margemPct  = resumo.receitaBaile.contratado > 0 ? (margemReal / resumo.receitaBaile.contratado) * 100 : 0
-    const progressPct = totalContratado > 0 ? Math.min((totalPago / totalContratado) * 100, 100) : 0
+    const totalContratado   = resumo.custoTotal.contratado
+    const totalPago         = p.conciliacaoEverest?.linhas.reduce((s, l) => s + (l.valorEverest ?? 0), 0) ?? 0
+    const progressPct       = totalContratado > 0 ? Math.min((totalPago / totalContratado) * 100, 100) : 0
+
+    // Margem Contratada: (receita contratada - custo contratado) / receita contratada
+    const margemContratada    = resumo.margem.contratado
+    const margemContratadaPct = resumo.receitaBaile.contratado > 0
+      ? (margemContratada / resumo.receitaBaile.contratado) * 100 : 0
+
+    // Margem Paga: (receita paga - custo pago P.O.) / receita paga
+    const margemPaga    = resumo.margem.pago
+    const margemPagaPct = resumo.receitaBaile.pago > 0
+      ? (margemPaga / resumo.receitaBaile.pago) * 100 : 0
 
     return (
       <div
@@ -359,8 +367,8 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
           </span>
         </div>
 
-        {/* Dados financeiros */}
-        <div className="flex items-center gap-3 text-xs mb-2.5">
+        {/* Dados financeiros — linha 1 */}
+        <div className="flex items-center gap-3 text-xs mb-1.5">
           <div>
             <span className="text-text-muted">Contratado</span>
             <p className="font-semibold text-text-main">{formatBRL(totalContratado)}</p>
@@ -369,16 +377,21 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
             <span className="text-text-muted">Pago (Everest)</span>
             <p className="font-semibold text-text-main">{totalPago > 0 ? formatBRL(totalPago) : '—'}</p>
           </div>
+        </div>
+        {/* Dados financeiros — linha 2: duas margens */}
+        <div className="flex items-center gap-3 text-xs mb-2.5">
           <div>
-            <span className="text-text-muted">Margem Real</span>
-            <p className={`font-semibold ${margemReal >= 0 ? 'text-success' : 'text-danger'}`}>
-              {formatBRL(margemReal)}
+            <span className="text-text-muted">M. Contratada</span>
+            <p className={`font-semibold ${margemContratada >= 0 ? 'text-success' : 'text-danger'}`}>
+              {formatBRL(margemContratada)}{' '}
+              <span className="font-normal opacity-75">({margemContratadaPct.toFixed(1)}%)</span>
             </p>
           </div>
           <div>
-            <span className="text-text-muted">Margem %</span>
-            <p className={`font-semibold ${margemPct >= 0 ? 'text-success' : 'text-danger'}`}>
-              {margemPct.toFixed(1)}%
+            <span className="text-text-muted">M. Paga (P.O.)</span>
+            <p className={`font-semibold ${margemPaga >= 0 ? 'text-success' : 'text-danger'}`}>
+              {formatBRL(margemPaga)}{' '}
+              <span className="font-normal opacity-75">({margemPagaPct.toFixed(1)}%)</span>
             </p>
           </div>
         </div>
