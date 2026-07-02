@@ -8,7 +8,8 @@ import { ProjectDashboard } from '../components/projeto/ProjectDashboard'
 import { Header } from '../components/layout/Header'
 import { BadgeEscola } from '../components/ui/Badge'
 import { useAuth } from '../contexts/AuthContext'
-import { ArrowLeft, Save, Check, Loader } from 'lucide-react'
+import { gerarRelatorioPendencias } from '../lib/gerarRelatorioPendencias'
+import { ArrowLeft, Save, Check, Loader, FileWarning } from 'lucide-react'
 
 interface ViewProjetoProps {
   projeto: Projeto
@@ -89,6 +90,13 @@ export function ViewProjeto({
         actions={
           <>
             <BadgeEscola tipo={projeto.tap.tipoEscola} />
+            <button
+              className="btn-secondary flex items-center gap-2"
+              onClick={() => gerarRelatorioPendencias(projeto)}
+              title="Gerar PDF com itens ainda não fechados (estimado/orçando) para enviar à produção"
+            >
+              <FileWarning size={15} /> Relatório Pendências
+            </button>
             <button className="btn-secondary flex items-center gap-2" onClick={() => navigate('/projetos')}>
               <ArrowLeft size={15} /> Projetos
             </button>
