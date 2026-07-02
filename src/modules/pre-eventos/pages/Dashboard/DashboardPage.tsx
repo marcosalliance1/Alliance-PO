@@ -144,14 +144,15 @@ export const DashboardPage: React.FC = () => {
       .map(([, v]) => v)
   }, [filtered])
 
-  const EventosLabel = (props: { x?: number; y?: number; index?: number }) => {
+  const EventosLabel = (props: { x?: string | number; y?: string | number; index?: number }) => {
     const { x, y, index } = props
     if (x === undefined || y === undefined || index === undefined) return null
+    const nx = Number(x), ny = Number(y)
     const eventos = eventosPorMes[index]?.eventos ?? []
     return (
       <text textAnchor="middle" fill="#fff" fontSize={9}>
         {eventos.map((ev, i) => (
-          <tspan key={i} x={x} y={y - 10 - i * 11}>{ev}</tspan>
+          <tspan key={i} x={nx} y={ny - 10 - i * 11}>{ev}</tspan>
         ))}
       </text>
     )
