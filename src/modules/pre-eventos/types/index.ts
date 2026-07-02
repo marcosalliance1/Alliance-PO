@@ -145,6 +145,7 @@ export interface Simulacao {
   quantidadeConvidados: number
   notas: string
   bolsaFolia: number
+  loteIngressos: SymplaLote[]
   baseline: SimulacaoCategoriaBaseline
   criadoEm: string
   atualizadoEm: string

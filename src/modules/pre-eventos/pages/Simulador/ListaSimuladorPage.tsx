@@ -4,7 +4,7 @@ import { Plus, Pencil, Trash2, Calculator } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS } from '../../data/defaults'
 import { formatBRL } from '../../utils/formatters'
-import { calcularCenarios } from '../../utils/simulador'
+import { calcularResultado } from '../../utils/simulador'
 
 export const ListaSimuladorPage: React.FC = () => {
   const navigate = useNavigate()
@@ -40,7 +40,7 @@ export const ListaSimuladorPage: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {simulacoes.map((sim) => {
-            const saldoSemVenda = calcularCenarios(sim.baseline, sim.bolsaFolia)[0].saldoMin
+            const { saldo } = calcularResultado(sim.baseline, sim.bolsaFolia, sim.loteIngressos)
             return (
               <div key={sim.id} className="bg-surface-2 border border-bordercol rounded-card p-4">
                 <div className="flex items-start justify-between gap-2 mb-2">
@@ -71,9 +71,9 @@ export const ListaSimuladorPage: React.FC = () => {
                   <span className="text-white text-sm font-medium">{formatBRL(sim.bolsaFolia)}</span>
                 </div>
                 <div className="flex items-center justify-between mt-1.5">
-                  <span className="text-muted text-xs">Saldo (sem venda)</span>
-                  <span className={`text-sm font-bold ${saldoSemVenda >= 0 ? 'text-success' : 'text-danger'}`}>
-                    {formatBRL(saldoSemVenda)}
+                  <span className="text-muted text-xs">Saldo Projetado</span>
+                  <span className={`text-sm font-bold ${saldo >= 0 ? 'text-success' : 'text-danger'}`}>
+                    {formatBRL(saldo)}
                   </span>
                 </div>
               </div>

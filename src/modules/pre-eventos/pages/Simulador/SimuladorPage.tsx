@@ -4,10 +4,11 @@ import { ArrowLeft, Save } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { newItemId } from '../../utils/formatters'
-import { calcularMediaHistorica, calcularCenarios } from '../../utils/simulador'
+import { calcularMediaHistorica, calcularResultado } from '../../utils/simulador'
 import { PainelBaseline } from '../../components/Simulador/PainelBaseline'
-import { ResumoCenarios } from '../../components/Simulador/ResumoCenarios'
+import { ResumoResultado } from '../../components/Simulador/ResumoResultado'
 import CampoMoeda from '../../components/UI/CampoMoeda'
+import TabelaLotes from '../../components/UI/TabelaLotes'
 import type { Simulacao, EventType, CategoriaCusto } from '../../types'
 
 const BASELINE_VAZIO = { operacaoEstrutura: 0, equipe: 0, atracao: 0, abBebidas: 0, extras: 0 }
@@ -21,6 +22,7 @@ function criarSimulacaoVazia(): Simulacao {
     quantidadeConvidados: 200,
     notas: '',
     bolsaFolia: 0,
+    loteIngressos: [],
     baseline: { ...BASELINE_VAZIO },
     criadoEm: now,
     atualizadoEm: now,
@@ -53,10 +55,10 @@ export const SimuladorPage: React.FC = () => {
     return calcularMediaHistorica(orcamentos, sim.tipoEvento, sim.quantidadeConvidados)
   }, [orcamentos, sim?.tipoEvento, sim?.quantidadeConvidados])
 
-  const resultados = useMemo(() => {
-    if (!sim) return []
-    return calcularCenarios(sim.baseline, sim.bolsaFolia)
-  }, [sim?.baseline, sim?.bolsaFolia])
+  const resultado = useMemo(() => {
+    if (!sim) return null
+    return calcularResultado(sim.baseline, sim.bolsaFolia, sim.loteIngressos)
+  }, [sim?.baseline, sim?.bolsaFolia, sim?.loteIngressos])
 
   function set<K extends keyof Simulacao>(field: K, value: Simulacao[K]) {
     setSim(prev => (prev ? { ...prev, [field]: value } : prev))
@@ -189,7 +191,21 @@ export const SimuladorPage: React.FC = () => {
         </div>
       </div>
 
-      <ResumoCenarios resultados={resultados} />
+      {/* Venda de Ingressos */}
+      <div className="bg-surface-2 border border-bordercol rounded-card p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <span className="w-1 h-6 bg-accent rounded-full" />
+          <h2 className="text-white font-semibold">Venda de Ingressos</h2>
+        </div>
+        <TabelaLotes
+          lotes={sim.loteIngressos}
+          onChange={l => set('loteIngressos', l)}
+          labelTotal="TOTAL INGRESSOS"
+          nomeItem="Lote"
+        />
+      </div>
+
+      {resultado && <ResumoResultado resultado={resultado} />}
     </div>
   )
 }
