@@ -12,7 +12,8 @@ import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL, formatDate, parseLocalDate } from '../../utils/formatters'
 import type { EventType, OrcamentoStatus } from '../../types'
 
-const CHART_COLORS = ['#E63329', '#F56060', '#C44242', '#FF7A6E', '#B8302A', '#FF9B8C', '#A02525', '#FF6B5B']
+const CHART_COLORS = ['#E63329', '#3B82F6', '#F5A524', '#14B8A6', '#8B5CF6', '#EC4899', '#22C55E', '#64748B']
+const LINE_COLOR = '#3B82F6'
 
 function allItemsOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
   return [...o.operacaoEstrutura, ...o.equipe, ...o.atracao, ...o.abBebidas, ...o.extras]
@@ -47,6 +48,12 @@ export const DashboardPage: React.FC = () => {
   const instituicoes = useMemo(() =>
     [...new Set(orcamentos.map(o => o.instituicao).filter(Boolean))].sort(),
   [orcamentos])
+
+  const corDaInstituicao = useMemo(() => {
+    const map = new Map<string, string>()
+    instituicoes.forEach((inst, i) => map.set(inst, CHART_COLORS[i % CHART_COLORS.length]))
+    return (nome: string) => map.get(nome) ?? '#64748B'
+  }, [instituicoes])
 
   const turmasDaInst = useMemo(() =>
     filtroInst
@@ -134,7 +141,8 @@ export const DashboardPage: React.FC = () => {
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       const mes = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')
       const label = `${mes.charAt(0).toUpperCase()}${mes.slice(1)}/${String(d.getFullYear()).slice(2)}`
-      const nomeEvento = o.turma || EVENT_TYPE_LABELS[o.tipo] || '—'
+      const tipoLabel = EVENT_TYPE_LABELS[o.tipo]
+      const nomeEvento = o.turma && tipoLabel ? `${o.turma} - ${tipoLabel}` : (o.turma || tipoLabel || '—')
       const cur = map.get(key)
       if (cur) { cur.value += 1; cur.eventos.push(nomeEvento) }
       else map.set(key, { label, value: 1, eventos: [nomeEvento] })
@@ -334,7 +342,7 @@ export const DashboardPage: React.FC = () => {
                   <Pie data={donutData} innerRadius={36} outerRadius={58} paddingAngle={3} dataKey="value"
                     label={({ percent }: { percent?: number }) => percent ? `${(percent * 100).toFixed(0)}%` : ''}
                     labelLine={false}>
-                    {donutData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                    {donutData.map(d => <Cell key={d.name} fill={corDaInstituicao(d.name)} />)}
                   </Pie>
                   <Tooltip
                     formatter={(v, name) => [`${v} orçamento${Number(v) !== 1 ? 's' : ''}`, String(name)]}
@@ -344,9 +352,9 @@ export const DashboardPage: React.FC = () => {
                 </PieChart>
               </ResponsiveContainer>
               <div className="space-y-1.5 mt-2">
-                {donutData.slice(0, 5).map((d, i) => (
+                {donutData.slice(0, 5).map(d => (
                   <div key={d.name} className="flex items-center gap-2 text-xs">
-                    <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
+                    <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: corDaInstituicao(d.name) }} />
                     <span className="text-muted flex-1 truncate">{d.name}</span>
                     <span className="text-white font-medium">{d.value}</span>
                   </div>
@@ -370,7 +378,9 @@ export const DashboardPage: React.FC = () => {
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#8892a4' }}
                   axisLine={false} tickLine={false} width={75} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="value" name="Orçado" fill="#E63329" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="value" name="Orçado" radius={[0, 4, 4, 0]}>
+                  {barInstData.map(d => <Cell key={d.name} fill={corDaInstituicao(d.name)} />)}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -426,8 +436,8 @@ export const DashboardPage: React.FC = () => {
                 contentStyle={{ background: '#16213e', border: '1px solid #2a2a4a', borderRadius: 8, fontSize: 12 }}
                 labelStyle={{ color: '#fff' }}
               />
-              <Line type="monotone" dataKey="value" stroke="#E63329" strokeWidth={2}
-                dot={{ fill: '#E63329', r: 4 }} activeDot={{ r: 6 }}>
+              <Line type="monotone" dataKey="value" stroke={LINE_COLOR} strokeWidth={2}
+                dot={{ fill: LINE_COLOR, r: 4 }} activeDot={{ r: 6 }}>
                 <LabelList dataKey="eventos" content={EventosLabel} />
               </Line>
             </LineChart>
