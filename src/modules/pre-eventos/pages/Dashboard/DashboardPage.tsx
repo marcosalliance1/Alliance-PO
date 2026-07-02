@@ -12,8 +12,18 @@ import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL, formatDate, parseLocalDate } from '../../utils/formatters'
 import type { EventType, OrcamentoStatus } from '../../types'
 
-const CHART_COLORS = ['#E63329', '#3B82F6', '#F5A524', '#14B8A6', '#8B5CF6', '#EC4899', '#22C55E', '#64748B']
 const LINE_COLOR = '#3B82F6'
+
+// Gradiente harmônico azul → verde → âmbar → vermelho, distribuído entre N itens.
+function escalaGradiente(n: number): string[] {
+  if (n <= 1) return ['#3B82F6']
+  const hueInicio = 210 // azul
+  const hueFim = 0      // vermelho
+  return Array.from({ length: n }, (_, i) => {
+    const hue = hueInicio + (hueFim - hueInicio) * (i / (n - 1))
+    return `hsl(${hue}, 72%, 55%)`
+  })
+}
 
 function allItemsOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
   return [...o.operacaoEstrutura, ...o.equipe, ...o.atracao, ...o.abBebidas, ...o.extras]
@@ -50,8 +60,9 @@ export const DashboardPage: React.FC = () => {
   [orcamentos])
 
   const corDaInstituicao = useMemo(() => {
+    const cores = escalaGradiente(instituicoes.length)
     const map = new Map<string, string>()
-    instituicoes.forEach((inst, i) => map.set(inst, CHART_COLORS[i % CHART_COLORS.length]))
+    instituicoes.forEach((inst, i) => map.set(inst, cores[i]))
     return (nome: string) => map.get(nome) ?? '#64748B'
   }, [instituicoes])
 
