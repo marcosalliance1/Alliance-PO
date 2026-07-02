@@ -4,7 +4,7 @@ import { ArrowLeft, Save } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { newItemId } from '../../utils/formatters'
-import { calcularMediaHistorica, calcularResultado } from '../../utils/simulador'
+import { calcularMediaHistorica, calcularResultado, calcularCombinacaoIngressos } from '../../utils/simulador'
 import { PainelBaseline } from '../../components/Simulador/PainelBaseline'
 import { ResumoResultado } from '../../components/Simulador/ResumoResultado'
 import CampoMoeda from '../../components/UI/CampoMoeda'
@@ -59,6 +59,11 @@ export const SimuladorPage: React.FC = () => {
     if (!sim) return null
     return calcularResultado(sim.baseline, sim.bolsaFolia, sim.loteIngressos)
   }, [sim?.baseline, sim?.bolsaFolia, sim?.loteIngressos])
+
+  const combinacao = useMemo(() => {
+    if (!resultado || !sim) return []
+    return calcularCombinacaoIngressos(resultado.necessarioIngressos, sim.loteIngressos)
+  }, [resultado, sim?.loteIngressos])
 
   function set<K extends keyof Simulacao>(field: K, value: Simulacao[K]) {
     setSim(prev => (prev ? { ...prev, [field]: value } : prev))
@@ -205,7 +210,7 @@ export const SimuladorPage: React.FC = () => {
         />
       </div>
 
-      {resultado && <ResumoResultado resultado={resultado} />}
+      {resultado && <ResumoResultado resultado={resultado} combinacao={combinacao} />}
     </div>
   )
 }

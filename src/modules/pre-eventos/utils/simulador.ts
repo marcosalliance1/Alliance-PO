@@ -56,6 +56,7 @@ export interface ResultadoSimulacao {
   totalIngressos: number
   receitaTotal: number
   saldo: number
+  necessarioIngressos: number // custoTotal - bolsaFolia: quanto falta vender em ingresso pra empatar (0 a 0)
 }
 
 export function calcularResultado(
@@ -66,5 +67,28 @@ export function calcularResultado(
   const custoTotal = CATEGORIAS_CUSTO.reduce((s, cat) => s + baseline[cat], 0)
   const totalIngressos = loteIngressos.reduce((s, l) => s + l.total, 0)
   const receitaTotal = bolsaFolia + totalIngressos
-  return { custoTotal, totalIngressos, receitaTotal, saldo: receitaTotal - custoTotal }
+  return {
+    custoTotal,
+    totalIngressos,
+    receitaTotal,
+    saldo: receitaTotal - custoTotal,
+    necessarioIngressos: custoTotal - bolsaFolia,
+  }
+}
+
+// Quantos ingressos de CADA lote seriam necessários (isoladamente, ao preço daquele
+// lote) pra cobrir o valor que falta vender até bater o ponto de equilíbrio.
+export interface CombinacaoLote {
+  lote: SymplaLote
+  qtdeNecessaria: number
+}
+
+export function calcularCombinacaoIngressos(
+  necessarioIngressos: number,
+  loteIngressos: SymplaLote[],
+): CombinacaoLote[] {
+  if (necessarioIngressos <= 0) return []
+  return loteIngressos
+    .filter((l) => l.valorUnitario > 0)
+    .map((lote) => ({ lote, qtdeNecessaria: Math.ceil(necessarioIngressos / lote.valorUnitario) }))
 }
