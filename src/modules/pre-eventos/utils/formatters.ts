@@ -12,6 +12,13 @@ export function formatDate(dateStr: string): string {
   return `${d}/${m}/${y}`
 }
 
+// `new Date('YYYY-MM-DD')` parses as UTC midnight, which shifts to the previous
+// day once converted to a UTC-3 local time — this parses the date as local instead.
+export function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
 export function newItemId(): string {
   return crypto.randomUUID()
 }

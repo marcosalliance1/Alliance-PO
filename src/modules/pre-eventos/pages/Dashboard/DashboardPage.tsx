@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList,
 } from 'recharts'
 import {
   FileText, TrendingUp, DollarSign, BarChart2,
@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
-import { formatBRL } from '../../utils/formatters'
+import { formatBRL, formatDate, parseLocalDate } from '../../utils/formatters'
 import type { EventType, OrcamentoStatus } from '../../types'
 
 const CHART_COLORS = ['#E63329', '#F56060', '#C44242', '#FF7A6E', '#B8302A', '#FF9B8C', '#A02525', '#FF6B5B']
@@ -118,12 +118,30 @@ export const DashboardPage: React.FC = () => {
     [...filtered]
       .filter(o => o.data)
       .map(o => {
-        const d = new Date(o.data)
+        const d = parseLocalDate(o.data)
         const diffDias = Math.ceil((d.getTime() - hoje.getTime()) / 86400000)
         return { ...o, _date: d, _diffDias: diffDias }
       })
       .sort((a, b) => a._date.getTime() - b._date.getTime()),
   [filtered, hoje])
+
+  // ── Gráfico 4: Eventos por mês ────────────────────────────────────────────────
+  const eventosPorMes = useMemo(() => {
+    const map = new Map<string, { label: string; value: number }>()
+    for (const o of filtered) {
+      if (!o.data) continue
+      const d = parseLocalDate(o.data)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const mes = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')
+      const label = `${mes.charAt(0).toUpperCase()}${mes.slice(1)}/${String(d.getFullYear()).slice(2)}`
+      const cur = map.get(key)
+      if (cur) cur.value += 1
+      else map.set(key, { label, value: 1 })
+    }
+    return [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, v]) => v)
+  }, [filtered])
 
   // ── Drilldown por instituição ─────────────────────────────────────────────────
   const drilldown = useMemo(() => {
@@ -296,9 +314,9 @@ export const DashboardPage: React.FC = () => {
           <h2 className="text-white font-semibold text-sm mb-4">Distribuição por Instituição</h2>
           {donutData.length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={160}>
-                <PieChart>
-                  <Pie data={donutData} innerRadius={38} outerRadius={62} paddingAngle={3} dataKey="value"
+              <ResponsiveContainer width="100%" height={190}>
+                <PieChart margin={{ top: 16, right: 16, bottom: 16, left: 16 }}>
+                  <Pie data={donutData} innerRadius={36} outerRadius={58} paddingAngle={3} dataKey="value"
                     label={({ percent }: { percent?: number }) => percent ? `${(percent * 100).toFixed(0)}%` : ''}
                     labelLine={false}>
                     {donutData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
@@ -366,7 +384,7 @@ export const DashboardPage: React.FC = () => {
                     <p className="text-muted text-[10px] truncate">{o.instituicao}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-muted text-[10px]">{new Date(o.data).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-muted text-[10px]">{formatDate(o.data)}</p>
                     {soon && (
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-accent/20 text-accent">
                         {o._diffDias === 0 ? 'HOJE' : `${o._diffDias}d`}
@@ -378,6 +396,29 @@ export const DashboardPage: React.FC = () => {
             })}
           </div>
         </div>
+      </div>
+
+      {/* Gráfico 4: Eventos por mês */}
+      <div className="bg-surface-2 border border-bordercol rounded-card p-5">
+        <h2 className="text-white font-semibold text-sm mb-4">Eventos por Mês</h2>
+        {eventosPorMes.length > 0 ? (
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={eventosPorMes} margin={{ top: 24, right: 12, left: 0, bottom: 0 }}>
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#8892a4' }} axisLine={false} tickLine={false} />
+              <YAxis hide allowDecimals={false} />
+              <Tooltip
+                formatter={v => [`${v} evento${Number(v) !== 1 ? 's' : ''}`, '']}
+                contentStyle={{ background: '#16213e', border: '1px solid #2a2a4a', borderRadius: 8, fontSize: 12 }}
+                labelStyle={{ color: '#fff' }}
+              />
+              <Bar dataKey="value" fill="#E63329" radius={[4, 4, 0, 0]} maxBarSize={48}>
+                <LabelList dataKey="value" position="top" fill="#fff" fontSize={11} fontWeight={600} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-48 flex items-center justify-center text-muted text-sm">Sem dados</div>
+        )}
       </div>
 
       {/* ── Drilldown por instituição → turma ── */}
@@ -397,13 +438,13 @@ export const DashboardPage: React.FC = () => {
                 ? <ChevronDown className="w-4 h-4 text-muted shrink-0" />
                 : <ChevronRight className="w-4 h-4 text-muted shrink-0" />}
               <span className="text-white font-semibold text-sm flex-1 uppercase tracking-wide">{inst}</span>
-              <span className="text-muted text-xs mr-4">{orcs.length} turma{orcs.length !== 1 ? 's' : ''}</span>
+              <span className="text-muted text-xs mr-4">{orcs.length} evento{orcs.length !== 1 ? 's' : ''}</span>
               <span className="text-white text-sm font-bold">{formatBRL(total)}</span>
             </button>
 
             {/* Nível 2: Turmas */}
             {expandidos[inst] && orcs.map(o => {
-              const eventDate = o.data ? new Date(o.data) : null
+              const eventDate = o.data ? parseLocalDate(o.data) : null
               const past = eventDate && eventDate < hoje
               const soon = eventDate && !past && eventDate <= em30
               return (
@@ -411,9 +452,12 @@ export const DashboardPage: React.FC = () => {
                   onClick={() => navigate(`/pre-eventos/orcamentos/${o.id}`)}
                   className={`w-full flex items-center gap-3 px-5 py-2.5 pl-12 border-b border-bordercol/30 hover:bg-white/[0.03] transition-colors bg-black/10 text-left ${past ? 'opacity-50' : ''}`}>
                   <div className="flex-1 min-w-0 flex items-center gap-2">
-                    <span className="text-sm text-white">{o.turma || o.id.slice(0, 8)}</span>
+                    <span className="text-sm text-white">
+                      {o.turma || o.id.slice(0, 8)}
+                      {o.tipo && <span className="text-muted"> - {EVENT_TYPE_LABELS[o.tipo]}</span>}
+                    </span>
                     {eventDate && (
-                      <span className="text-muted text-xs">{eventDate.toLocaleDateString('pt-BR')}</span>
+                      <span className="text-muted text-xs">{formatDate(o.data)}</span>
                     )}
                     {soon && (
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-accent/20 text-accent">30 dias</span>
