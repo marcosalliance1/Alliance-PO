@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList,
+  PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList,
 } from 'recharts'
 import {
   FileText, TrendingUp, DollarSign, BarChart2,
@@ -127,21 +127,35 @@ export const DashboardPage: React.FC = () => {
 
   // ── Gráfico 4: Eventos por mês ────────────────────────────────────────────────
   const eventosPorMes = useMemo(() => {
-    const map = new Map<string, { label: string; value: number }>()
+    const map = new Map<string, { label: string; value: number; eventos: string[] }>()
     for (const o of filtered) {
       if (!o.data) continue
       const d = parseLocalDate(o.data)
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       const mes = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')
       const label = `${mes.charAt(0).toUpperCase()}${mes.slice(1)}/${String(d.getFullYear()).slice(2)}`
+      const nomeEvento = o.turma || EVENT_TYPE_LABELS[o.tipo] || '—'
       const cur = map.get(key)
-      if (cur) cur.value += 1
-      else map.set(key, { label, value: 1 })
+      if (cur) { cur.value += 1; cur.eventos.push(nomeEvento) }
+      else map.set(key, { label, value: 1, eventos: [nomeEvento] })
     }
     return [...map.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, v]) => v)
   }, [filtered])
+
+  const EventosLabel = (props: { x?: number; y?: number; index?: number }) => {
+    const { x, y, index } = props
+    if (x === undefined || y === undefined || index === undefined) return null
+    const eventos = eventosPorMes[index]?.eventos ?? []
+    return (
+      <text textAnchor="middle" fill="#fff" fontSize={9}>
+        {eventos.map((ev, i) => (
+          <tspan key={i} x={x} y={y - 10 - i * 11}>{ev}</tspan>
+        ))}
+      </text>
+    )
+  }
 
   // ── Drilldown por instituição ─────────────────────────────────────────────────
   const drilldown = useMemo(() => {
@@ -402,19 +416,20 @@ export const DashboardPage: React.FC = () => {
       <div className="bg-surface-2 border border-bordercol rounded-card p-5">
         <h2 className="text-white font-semibold text-sm mb-4">Eventos por Mês</h2>
         {eventosPorMes.length > 0 ? (
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={eventosPorMes} margin={{ top: 24, right: 12, left: 0, bottom: 0 }}>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={eventosPorMes} margin={{ top: 36, right: 20, left: 20, bottom: 0 }}>
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#8892a4' }} axisLine={false} tickLine={false} />
               <YAxis hide allowDecimals={false} />
               <Tooltip
-                formatter={v => [`${v} evento${Number(v) !== 1 ? 's' : ''}`, '']}
+                formatter={(_, __, item) => [(item.payload.eventos as string[]).join(', '), `${item.payload.value} evento${item.payload.value !== 1 ? 's' : ''}`]}
                 contentStyle={{ background: '#16213e', border: '1px solid #2a2a4a', borderRadius: 8, fontSize: 12 }}
                 labelStyle={{ color: '#fff' }}
               />
-              <Bar dataKey="value" fill="#E63329" radius={[4, 4, 0, 0]} maxBarSize={48}>
-                <LabelList dataKey="value" position="top" fill="#fff" fontSize={11} fontWeight={600} />
-              </Bar>
-            </BarChart>
+              <Line type="monotone" dataKey="value" stroke="#E63329" strokeWidth={2}
+                dot={{ fill: '#E63329', r: 4 }} activeDot={{ r: 6 }}>
+                <LabelList dataKey="eventos" content={EventosLabel} />
+              </Line>
+            </LineChart>
           </ResponsiveContainer>
         ) : (
           <div className="h-48 flex items-center justify-center text-muted text-sm">Sem dados</div>
