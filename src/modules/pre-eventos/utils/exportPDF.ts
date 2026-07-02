@@ -149,6 +149,67 @@ function receitasTable(doc: jsPDF, orc: Orcamento) {
   })
 }
 
+function secaoTablePendentes(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
+  const pendentes = items.filter(i => i.status === 'PENDENTE' && temDados(i))
+  if (pendentes.length === 0) return
+
+  let y = (doc as any).lastAutoTable?.finalY ?? 40
+  const estimatedH = 20 + (pendentes.length + 1) * 7
+  if (200 - y < Math.min(estimatedH, 45)) {
+    doc.addPage()
+    y = 8
+    ;(doc as any).lastAutoTable = { finalY: 8 }
+  }
+
+  doc.setFillColor(...RED)
+  doc.rect(10, y + 3, 277, 7, 'F')
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...HDR_TEXT)
+  doc.text(titulo, 13, y + 8.5)
+
+  const rows = pendentes.map(i => {
+    const fornDisplay = i.fornecedor
+      ? i.fornecedor.split('||').map(s => s.trim()).filter(Boolean).join(', ')
+      : '—'
+    return [i.item, fornDisplay, String(i.qtde), formatBRL(i.custoUnitario), formatBRL(i.totalOrcado), i.notas || '—']
+  })
+
+  autoTable(doc, {
+    startY: y + 12,
+    head: [['Item', 'Fornecedor', 'Qtde', 'Custo Unitário', 'Total Orçado', 'Notas']],
+    body: rows,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [60, 60, 90] as [number,number,number],
+      textColor: HDR_TEXT,
+      fontSize: 9,
+      fontStyle: 'bold',
+    },
+    bodyStyles: {
+      textColor: TEXT,
+      fontSize: 9,
+      fillColor: ROW_ODD,
+    },
+    alternateRowStyles: {
+      fillColor: ROW_EVEN,
+    },
+    styles: {
+      lineColor: [220, 220, 230] as [number,number,number],
+      lineWidth: 0.1,
+    },
+    margin: { left: 10, right: 10 },
+    columnStyles: {
+      0: { cellWidth: 55 },
+      1: { cellWidth: 55 },
+      2: { cellWidth: 18, halign: 'right' },
+      3: { cellWidth: 40, halign: 'right' },
+      4: { cellWidth: 40, halign: 'right' },
+      5: { cellWidth: 69 },
+    },
+  })
+}
+
 function logoParaBranco(img: HTMLImageElement): string {
   const canvas = document.createElement('canvas')
   canvas.width  = img.naturalWidth
@@ -268,5 +329,87 @@ export async function exportarPDF(orc: Orcamento) {
   }
 
   const filename = `orcamento_${orc.instituicao}_${orc.turma}_${orc.tipo}`.replace(/[\s/]/g, '_').toLowerCase()
+  doc.save(`${filename}.pdf`)
+}
+
+export async function exportarPendenciasPDF(orc: Orcamento) {
+  const logoImg = await new Promise<HTMLImageElement>((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(img)
+    img.src = allianceLogo
+  })
+  const hasLogo   = logoImg.naturalWidth > 0
+  const logoRatio = hasLogo ? logoImg.naturalWidth / logoImg.naturalHeight : 4
+  const logoBranco = hasLogo ? logoParaBranco(logoImg) : ''
+  const logoH     = 11
+  const logoW     = logoH * logoRatio
+  const logoHF    = 4.5
+  const logoWF    = logoHF * logoRatio
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+
+  doc.setFillColor(255, 255, 255)
+  doc.rect(0, 0, 297, 210, 'F')
+
+  // Cabeçalho
+  doc.setFillColor(...RED)
+  doc.rect(0, 0, 297, 16, 'F')
+  if (hasLogo) doc.addImage(logoBranco, 'PNG', 10, 2.5, logoW, logoH)
+  doc.setFontSize(13)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...HDR_TEXT)
+  doc.text('ALLIANCE FORMATURAS', hasLogo ? 10 + logoW + 3 : 10, 11)
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Itens Pendentes de Fechamento — Para Produção', 287, 11, { align: 'right' })
+
+  // Info evento
+  doc.setFontSize(11)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...TEXT)
+  doc.text(`${orc.instituicao || '—'} — ${orc.turma || '—'}`, 10, 24)
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(...TEXT_MUT)
+  doc.text(
+    `${EVENT_TYPE_LABELS[orc.tipo]}  |  Data: ${formatDate(orc.data)}  |  Emitido em ${new Date().toLocaleDateString('pt-BR')}`,
+    10, 30,
+  )
+
+  doc.setDrawColor(220, 220, 230)
+  doc.setLineWidth(0.3)
+  doc.line(10, 33, 287, 33)
+  ;(doc as any).lastAutoTable = { finalY: 33 }
+
+  // Seções — só itens com status PENDENTE
+  secaoTablePendentes(doc, 'OPERAÇÃO / ESTRUTURA',       orc.operacaoEstrutura)
+  secaoTablePendentes(doc, 'EQUIPE',                      orc.equipe)
+  secaoTablePendentes(doc, 'ATRAÇÃO',                     orc.atracao)
+  secaoTablePendentes(doc, 'A&B — ALIMENTOS E BEBIDAS',   orc.abBebidas)
+  secaoTablePendentes(doc, 'EXTRAS',                      orc.extras)
+
+  const allItems = [...orc.operacaoEstrutura, ...orc.equipe, ...orc.atracao, ...orc.abBebidas, ...orc.extras]
+  if (!allItems.some(i => i.status === 'PENDENTE' && temDados(i))) {
+    const y = ((doc as any).lastAutoTable?.finalY ?? 33) + 10
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...TEXT_MUT)
+    doc.text('Nenhum item pendente — tudo contratado ou pago.', 10, y)
+  }
+
+  // Rodapé
+  const total = doc.getNumberOfPages()
+  for (let p = 1; p <= total; p++) {
+    doc.setPage(p)
+    doc.setFillColor(245, 245, 248)
+    doc.rect(0, 203, 297, 7, 'F')
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...TEXT_MUT)
+    if (hasLogo) doc.addImage(logoImg, 'PNG', 10, 204, logoWF, logoHF)
+    doc.text('Alliance Formaturas — Documento Confidencial', hasLogo ? 10 + logoWF + 2 : 10, 207.5)
+    doc.text(`Página ${p} de ${total}`, 287, 207.5, { align: 'right' })
+  }
+
+  const filename = `pendencias_${orc.instituicao}_${orc.turma}`.replace(/[\s/]/g, '_').toLowerCase()
   doc.save(`${filename}.pdf`)
 }

@@ -1,13 +1,13 @@
 ﻿import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink } from 'lucide-react'
+import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL, newItemId } from '../../utils/formatters'
 import TabelaItens from '../../components/Orcamento/TabelaItens'
 import { ResumoFinanceiro } from '../../components/Orcamento/ResumoFinanceiro'
 import { SecaoAccordion } from '../../components/Orcamento/SecaoAccordion'
-import { exportarPDF } from '../../utils/exportPDF'
+import { exportarPDF, exportarPendenciasPDF } from '../../utils/exportPDF'
 import { exportarExcel } from '../../utils/exportExcel'
 import CampoMoeda from '../../components/UI/CampoMoeda'
 import { ModalImportarPlanilha } from '../../components/Orcamento/ModalImportarPlanilha'
@@ -220,6 +220,12 @@ export const OrcamentoPage: React.FC = () => {
     if (!orc) return
     await exportarPDF(orc)
     addToast('PDF gerado!', 'success')
+  }
+
+  async function handlePendenciasPDF() {
+    if (!orc) return
+    await exportarPendenciasPDF(orc)
+    addToast('Relatório de pendências gerado!', 'success')
   }
 
   function handleExcel() {
@@ -460,6 +466,13 @@ export const OrcamentoPage: React.FC = () => {
           className="hidden md:flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors"
         >
           <ExternalLink className="w-4 h-4" /> Drive
+        </button>
+        <button
+          onClick={handlePendenciasPDF}
+          title="Gerar PDF com itens ainda pendentes para enviar à produção"
+          className="hidden md:flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors"
+        >
+          <FileWarning className="w-4 h-4" /> Pendências
         </button>
         <button
           onClick={handlePDF}
