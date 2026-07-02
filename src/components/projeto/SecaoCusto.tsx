@@ -26,7 +26,8 @@ const COLUNAS = [
   'Qtde O.', '$ Unit. Orç.', 'Valor Orç.',
   '|',
   'Qtde C.', '$ Unit. Cont.', 'Valor Cont.',
-  'Responsável', 'Status', 'Pgto.',
+  '|',
+  'Status', 'Pgto.',
   'Vlr. Final', 'Vlr. Pago', 'Falta Pagar', 'Total Prog.', 'Em Aberto', '',
 ]
 
@@ -67,7 +68,7 @@ export function SecaoCusto({
   )
 
   return (
-    <div className="overflow-x-auto rounded-inner shadow-card">
+    <div className="rounded-inner shadow-card">
       {/* Legenda de cores */}
       <div className="flex items-center gap-4 px-3 py-1.5 bg-surface border-b border-white/5 text-[10px] text-text-muted">
         <span className="font-medium">Status:</span>
@@ -83,6 +84,7 @@ export function SecaoCusto({
           </span>
         ))}
       </div>
+      <div className="overflow-auto max-h-[75vh]">
       <table className="table-po">
         <thead>
           <tr>
@@ -131,6 +133,7 @@ export function SecaoCusto({
           <TotaisSecaoRow totais={totais} nomeSecao={secao.nome} />
         </tbody>
       </table>
+      </div>
 
       {isAdmin && (
         <div className="bg-white px-4 py-2 border-t border-gray-100 flex gap-2">

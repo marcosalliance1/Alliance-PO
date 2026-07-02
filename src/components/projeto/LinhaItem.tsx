@@ -210,7 +210,8 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
         ) : ''}
       </Td>
 
-      <Td><TextInput value={item.responsavel} onChange={(v) => upd({ responsavel: v })} width="80px" readOnly={ro} /></Td>
+      <td className="col-sep" />
+
       <Td>
         <select value={item.status} onChange={(e) => upd({ status: e.target.value as StatusItem })} style={{ width: '80px' }} disabled={ro}>
           {STATUS_OPTS.map((o) => <option key={o} value={o}>{o}</option>)}

@@ -25,7 +25,8 @@ export function TotaisSecaoRow({ totais, nomeSecao }: TotaisSecaoProps) {
         <td />
         <td />
         <td className="font-bold">{formatBRL(totais.totalContratado)}</td>
-        <td colSpan={3} />
+        <td />
+        <td colSpan={2} />
         <td />
         <td className="font-bold">{formatBRL(totais.totalPago)}</td>
         <td className="font-bold">{formatBRL(totais.totalFaltaPagar)}</td>
@@ -44,7 +45,9 @@ export function TotaisSecaoRow({ totais, nomeSecao }: TotaisSecaoProps) {
         <td />
         <td />
         <td>{formatBRL(totais.custoPorFormandoContratado)}</td>
-        <td colSpan={7} />
+        <td />
+        <td colSpan={2} />
+        <td colSpan={6} />
       </tr>
     </>
   )
