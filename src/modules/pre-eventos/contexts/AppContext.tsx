@@ -4,6 +4,7 @@ import { useConfirm } from '../hooks/useConfirm'
 import { useOrcamentos } from '../hooks/useOrcamentos'
 import { useConfiguracoes } from '../hooks/useConfiguracoes'
 import { useFornecedores } from '../hooks/useFornecedores'
+import { useSimulacoes } from '../hooks/useSimulacoes'
 import type { ToastMessage, ToastType } from '../types'
 
 interface AppContextValue {
@@ -33,6 +34,12 @@ interface AppContextValue {
   adicionarFornecedor: ReturnType<typeof useFornecedores>['adicionarFornecedor']
   removerFornecedor: ReturnType<typeof useFornecedores>['removerFornecedor']
   salvarFornecedores: ReturnType<typeof useFornecedores>['salvarFornecedores']
+  // Simulações
+  simulacoes: ReturnType<typeof useSimulacoes>['simulacoes']
+  loadingSimulacoes: boolean
+  salvarSimulacao: ReturnType<typeof useSimulacoes>['salvar']
+  excluirSimulacao: ReturnType<typeof useSimulacoes>['excluir']
+  buscarSimulacao: ReturnType<typeof useSimulacoes>['buscarPorId']
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -43,6 +50,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const { orcamentos, loading: loadingOrcamentos, salvar, excluir, buscarPorId, atualizarEquipe, recalcularSecao } = useOrcamentos()
   const { config, salvarConfig, resetarConfig } = useConfiguracoes()
   const { fornecedores, adicionarFornecedor, removerFornecedor, salvarFornecedores } = useFornecedores()
+  const {
+    simulacoes,
+    loading: loadingSimulacoes,
+    salvar: salvarSimulacao,
+    excluir: excluirSimulacao,
+    buscarPorId: buscarSimulacao,
+  } = useSimulacoes()
 
   return (
     <AppContext.Provider value={{
@@ -57,6 +71,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       recalcularSecao,
       config, salvarConfig, resetarConfig,
       fornecedores, adicionarFornecedor, removerFornecedor, salvarFornecedores,
+      simulacoes, loadingSimulacoes, salvarSimulacao, excluirSimulacao, buscarSimulacao,
     }}>
       {children}
     </AppContext.Provider>

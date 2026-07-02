@@ -30,6 +30,8 @@ import { ListaOrcamentosPage } from './modules/pre-eventos/pages/Orcamentos/List
 import { NovoOrcamentoPage } from './modules/pre-eventos/pages/Orcamentos/NovoOrcamentoPage'
 import { OrcamentoPage } from './modules/pre-eventos/pages/Orcamentos/OrcamentoPage'
 import { ConfiguracoesPage } from './modules/pre-eventos/pages/Configuracoes/ConfiguracoesPage'
+import { ListaSimuladorPage } from './modules/pre-eventos/pages/Simulador/ListaSimuladorPage'
+import { SimuladorPage } from './modules/pre-eventos/pages/Simulador/SimuladorPage'
 import { Operacional } from './pages/Operacional'
 
 // ── Spinner simples ──────────────────────────────────────────────────────────
@@ -303,6 +305,9 @@ function AppRoutes() {
         <Route path="orcamentos/novo" element={<NovoOrcamentoPage />} />
         <Route path="orcamentos/:id" element={<OrcamentoPage />} />
         <Route path="configuracoes" element={<ConfiguracoesPage />} />
+        <Route path="simulador" element={<ListaSimuladorPage />} />
+        <Route path="simulador/novo" element={<SimuladorPage />} />
+        <Route path="simulador/:id" element={<SimuladorPage />} />
       </Route>
     </Routes>
   )

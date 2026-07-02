@@ -132,3 +132,20 @@ export interface ResumoOrcamento {
   totalBV: number
   status: OrcamentoStatus
 }
+
+// ─── Simulador ───────────────────────────────────────────────────────────────
+
+export type CategoriaCusto = 'operacaoEstrutura' | 'equipe' | 'atracao' | 'abBebidas' | 'extras'
+export type SimulacaoCategoriaBaseline = Record<CategoriaCusto, number>
+
+export interface Simulacao {
+  id: string
+  nome: string
+  tipoEvento: EventType | ''
+  quantidadeConvidados: number
+  notas: string
+  bolsaFolia: number
+  baseline: SimulacaoCategoriaBaseline
+  criadoEm: string
+  atualizadoEm: string
+}

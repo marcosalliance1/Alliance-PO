@@ -6,12 +6,14 @@ import {
   Settings,
   PlusCircle,
   ArrowLeft,
+  Calculator,
 } from 'lucide-react'
 import allianceLogo from '../../../../assets/alliance-logo.png'
 
 const NAV = [
   { to: '/pre-eventos',              icon: <LayoutDashboard className="w-5 h-5" />, label: 'Dashboard' },
   { to: '/pre-eventos/orcamentos',   icon: <FileText        className="w-5 h-5" />, label: 'Orçamentos' },
+  { to: '/pre-eventos/simulador',    icon: <Calculator      className="w-5 h-5" />, label: 'Simulador' },
   { to: '/pre-eventos/configuracoes',icon: <Settings        className="w-5 h-5" />, label: 'Configurações' },
 ]
 
