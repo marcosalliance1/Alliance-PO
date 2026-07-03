@@ -76,14 +76,14 @@ export function calcularResultado(
   }
 }
 
-// ─── Escala de lotes pra bater o ponto de equilíbrio ────────────────────────────
-// Simula uma venda escalonada: cada lote comporta 10% dos convidados, e o preço
-// sobe R$15 a cada lote, partindo do preço do 1º lote já cadastrado. Mesma regra
-// pra todo tipo de evento — Festa de Meio de Curso já sai com lotes maiores
-// naturalmente, por ter muito mais convidados.
+// ─── Escala de lotes ────────────────────────────────────────────────────────────
+// Simula uma quantidade fixa de lotes (definida pelo usuário — normalmente uns 5),
+// cada um comportando no máximo 10% dos convidados, com o preço subindo R$15 a
+// cada lote, partindo do preço do 1º lote já cadastrado. Mesma regra pra todo tipo
+// de evento — Festa de Meio de Curso já sai com lotes maiores naturalmente, por
+// ter muito mais convidados.
 const PCT_CONVIDADOS_POR_LOTE = 0.10
 const INCREMENTO_LOTE = 15
-const LIMITE_LOTES = 50 // trava de segurança contra loop (preço muito baixo / meta muito alta)
 
 export interface EscalaLote {
   numero: number
@@ -93,28 +93,18 @@ export interface EscalaLote {
 }
 
 export function calcularEscalaLotes(
-  necessarioIngressos: number,
   precoInicial: number,
   quantidadeConvidados: number,
+  numeroLotes: number,
 ): EscalaLote[] {
-  if (necessarioIngressos <= 0 || precoInicial <= 0 || quantidadeConvidados <= 0) return []
+  if (precoInicial <= 0 || quantidadeConvidados <= 0 || numeroLotes <= 0) return []
 
   const capacidadeLote = Math.max(Math.round(quantidadeConvidados * PCT_CONVIDADOS_POR_LOTE), 1)
   const escala: EscalaLote[] = []
-  let acumulado = 0
   let preco = precoInicial
 
-  for (let numero = 1; numero <= LIMITE_LOTES && acumulado < necessarioIngressos; numero++) {
-    const faltando = necessarioIngressos - acumulado
-    const receitaCheia = capacidadeLote * preco
-    if (receitaCheia >= faltando) {
-      const qtde = Math.min(Math.ceil(faltando / preco), capacidadeLote)
-      escala.push({ numero, preco, qtde, receita: qtde * preco })
-      acumulado += qtde * preco
-    } else {
-      escala.push({ numero, preco, qtde: capacidadeLote, receita: receitaCheia })
-      acumulado += receitaCheia
-    }
+  for (let numero = 1; numero <= numeroLotes; numero++) {
+    escala.push({ numero, preco, qtde: capacidadeLote, receita: capacidadeLote * preco })
     preco += INCREMENTO_LOTE
   }
 

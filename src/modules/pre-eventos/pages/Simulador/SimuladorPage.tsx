@@ -23,6 +23,7 @@ function criarSimulacaoVazia(): Simulacao {
     notas: '',
     bolsaFolia: 0,
     loteIngressos: [],
+    numeroLotesEscala: 5,
     baseline: { ...BASELINE_VAZIO },
     criadoEm: now,
     atualizadoEm: now,
@@ -45,7 +46,7 @@ export const SimuladorPage: React.FC = () => {
       return
     }
     const found = buscarSimulacao(id)
-    if (found) setSim(found)
+    if (found) setSim({ ...found, numeroLotesEscala: found.numeroLotesEscala || 5 })
     else navigate('/pre-eventos/simulador')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
@@ -63,9 +64,9 @@ export const SimuladorPage: React.FC = () => {
   const precoInicial = sim?.loteIngressos[0]?.valorUnitario ?? 0
 
   const escala = useMemo(() => {
-    if (!resultado || !sim) return []
-    return calcularEscalaLotes(resultado.necessarioIngressos, precoInicial, sim.quantidadeConvidados)
-  }, [resultado, precoInicial, sim?.quantidadeConvidados])
+    if (!sim) return []
+    return calcularEscalaLotes(precoInicial, sim.quantidadeConvidados, sim.numeroLotesEscala)
+  }, [precoInicial, sim?.quantidadeConvidados, sim?.numeroLotesEscala])
 
   function set<K extends keyof Simulacao>(field: K, value: Simulacao[K]) {
     setSim(prev => (prev ? { ...prev, [field]: value } : prev))
@@ -210,6 +211,21 @@ export const SimuladorPage: React.FC = () => {
           labelTotal="TOTAL INGRESSOS"
           nomeItem="Lote"
         />
+        <div className="max-w-xs mt-4">
+          <label className={labelCls}>Nº de Lotes (escala do ponto de equilíbrio)</label>
+          <input
+            type="number"
+            min={1}
+            max={10}
+            className={inputCls}
+            value={sim.numeroLotesEscala || ''}
+            onChange={e => set('numeroLotesEscala', Number(e.target.value) || 0)}
+          />
+          <p className="text-muted text-[10px] mt-1">
+            Cada lote comporta no máximo 10% dos convidados, com o preço subindo R$15 a cada lote,
+            partindo do preço do 1º lote acima.
+          </p>
+        </div>
       </div>
 
       {resultado && (

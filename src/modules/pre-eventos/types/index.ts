@@ -146,6 +146,7 @@ export interface Simulacao {
   notas: string
   bolsaFolia: number
   loteIngressos: SymplaLote[]
+  numeroLotesEscala: number
   baseline: SimulacaoCategoriaBaseline
   criadoEm: string
   atualizadoEm: string

@@ -12,6 +12,8 @@ export const ResumoResultado: React.FC<Props> = ({ resultado, escala, temPrecoIn
   const { custoTotal, totalIngressos, receitaTotal, saldo, necessarioIngressos } = resultado
   const precisaVender = necessarioIngressos > 0
   const totalIngressosEscala = escala.reduce((s, l) => s + l.qtde, 0)
+  const totalReceitaEscala = escala.reduce((s, l) => s + l.receita, 0)
+  const escalaCobreMeta = totalReceitaEscala >= necessarioIngressos
 
   const Row = ({ label, value, big }: { label: string; value: number; big?: boolean }) => (
     <div className="flex justify-between items-center py-1.5 border-b border-bordercol/50 last:border-0">
@@ -47,26 +49,33 @@ export const ResumoResultado: React.FC<Props> = ({ resultado, escala, temPrecoIn
                 ? 'Precisa vender isso em ingressos pra cobrir o custo total'
                 : `Bolsa Folia já cobre o custo — sobra ${formatBRL(-necessarioIngressos)} sem vender ingresso`}
             </p>
-            {precisaVender && escala.length > 0 && (
+            {escala.length > 0 && (
               <div className="mt-3 pt-3 border-t border-accent/20 space-y-1">
                 <p className="text-muted text-[10px] mb-1">
-                  Escala de lotes sugerida (10% dos convidados por lote, +R$15 a cada lote):
+                  Escala de lotes (10% dos convidados por lote, +R$15 a cada lote):
                 </p>
                 {escala.map((l) => (
                   <div key={l.numero} className="flex justify-between items-center text-xs">
                     <span className="text-muted truncate pr-2">{l.numero}º Lote ({formatBRL(l.preco)})</span>
-                    <span className="text-white font-semibold shrink-0">{l.qtde} ingressos</span>
+                    <span className="text-white font-semibold shrink-0">{l.qtde} × {formatBRL(l.preco)} = {formatBRL(l.receita)}</span>
                   </div>
                 ))}
                 <div className="flex justify-between items-center text-xs pt-1.5 mt-1 border-t border-accent/20">
-                  <span className="text-muted font-semibold">Total de ingressos</span>
-                  <span className="text-white font-bold">{totalIngressosEscala}</span>
+                  <span className="text-muted font-semibold">Total ({totalIngressosEscala} ingressos)</span>
+                  <span className="text-white font-bold">{formatBRL(totalReceitaEscala)}</span>
                 </div>
+                {precisaVender && (
+                  <p className={`text-[10px] mt-1 font-medium ${escalaCobreMeta ? 'text-success' : 'text-danger'}`}>
+                    {escalaCobreMeta
+                      ? `Esses lotes cobrem o ponto de equilíbrio, com sobra de ${formatBRL(totalReceitaEscala - necessarioIngressos)}`
+                      : `Esses lotes ainda não cobrem o ponto de equilíbrio — falta ${formatBRL(necessarioIngressos - totalReceitaEscala)}`}
+                  </p>
+                )}
               </div>
             )}
-            {precisaVender && escala.length === 0 && !temPrecoInicial && (
+            {escala.length === 0 && !temPrecoInicial && (
               <p className="text-muted text-[10px] mt-3 pt-3 border-t border-accent/20">
-                Preencha o 1º lote de ingressos e a quantidade de convidados pra ver a escala sugerida.
+                Preencha o 1º lote de ingressos e a quantidade de convidados pra ver a escala.
               </p>
             )}
           </div>
