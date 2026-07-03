@@ -1,15 +1,17 @@
 import React from 'react'
-import type { ResultadoSimulacao, CombinacaoLote } from '../../utils/simulador'
+import type { ResultadoSimulacao, EscalaLote } from '../../utils/simulador'
 import { formatBRL } from '../../utils/formatters'
 
 interface Props {
   resultado: ResultadoSimulacao
-  combinacao: CombinacaoLote[]
+  escala: EscalaLote[]
+  temPrecoInicial: boolean
 }
 
-export const ResumoResultado: React.FC<Props> = ({ resultado, combinacao }) => {
+export const ResumoResultado: React.FC<Props> = ({ resultado, escala, temPrecoInicial }) => {
   const { custoTotal, totalIngressos, receitaTotal, saldo, necessarioIngressos } = resultado
   const precisaVender = necessarioIngressos > 0
+  const totalIngressosEscala = escala.reduce((s, l) => s + l.qtde, 0)
 
   const Row = ({ label, value, big }: { label: string; value: number; big?: boolean }) => (
     <div className="flex justify-between items-center py-1.5 border-b border-bordercol/50 last:border-0">
@@ -45,16 +47,27 @@ export const ResumoResultado: React.FC<Props> = ({ resultado, combinacao }) => {
                 ? 'Precisa vender isso em ingressos pra cobrir o custo total'
                 : `Bolsa Folia já cobre o custo — sobra ${formatBRL(-necessarioIngressos)} sem vender ingresso`}
             </p>
-            {precisaVender && combinacao.length > 0 && (
+            {precisaVender && escala.length > 0 && (
               <div className="mt-3 pt-3 border-t border-accent/20 space-y-1">
-                <p className="text-muted text-[10px] mb-1">Vendendo só de um lote, precisaria de:</p>
-                {combinacao.map(({ lote, qtdeNecessaria }) => (
-                  <div key={lote.id} className="flex justify-between items-center text-xs">
-                    <span className="text-muted truncate pr-2">{lote.nome || 'Lote'} ({formatBRL(lote.valorUnitario)})</span>
-                    <span className="text-white font-semibold shrink-0">{qtdeNecessaria} ingressos</span>
+                <p className="text-muted text-[10px] mb-1">
+                  Escala de lotes sugerida (10% dos convidados por lote, +R$15 a cada lote):
+                </p>
+                {escala.map((l) => (
+                  <div key={l.numero} className="flex justify-between items-center text-xs">
+                    <span className="text-muted truncate pr-2">{l.numero}º Lote ({formatBRL(l.preco)})</span>
+                    <span className="text-white font-semibold shrink-0">{l.qtde} ingressos</span>
                   </div>
                 ))}
+                <div className="flex justify-between items-center text-xs pt-1.5 mt-1 border-t border-accent/20">
+                  <span className="text-muted font-semibold">Total de ingressos</span>
+                  <span className="text-white font-bold">{totalIngressosEscala}</span>
+                </div>
               </div>
+            )}
+            {precisaVender && escala.length === 0 && !temPrecoInicial && (
+              <p className="text-muted text-[10px] mt-3 pt-3 border-t border-accent/20">
+                Preencha o 1º lote de ingressos e a quantidade de convidados pra ver a escala sugerida.
+              </p>
             )}
           </div>
         </div>

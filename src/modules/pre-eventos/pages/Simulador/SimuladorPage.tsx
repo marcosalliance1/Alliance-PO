@@ -4,7 +4,7 @@ import { ArrowLeft, Save } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { newItemId } from '../../utils/formatters'
-import { calcularMediaHistorica, calcularResultado, calcularCombinacaoIngressos } from '../../utils/simulador'
+import { calcularMediaHistorica, calcularResultado, calcularEscalaLotes } from '../../utils/simulador'
 import { PainelBaseline } from '../../components/Simulador/PainelBaseline'
 import { ResumoResultado } from '../../components/Simulador/ResumoResultado'
 import CampoMoeda from '../../components/UI/CampoMoeda'
@@ -60,10 +60,12 @@ export const SimuladorPage: React.FC = () => {
     return calcularResultado(sim.baseline, sim.bolsaFolia, sim.loteIngressos)
   }, [sim?.baseline, sim?.bolsaFolia, sim?.loteIngressos])
 
-  const combinacao = useMemo(() => {
+  const precoInicial = sim?.loteIngressos[0]?.valorUnitario ?? 0
+
+  const escala = useMemo(() => {
     if (!resultado || !sim) return []
-    return calcularCombinacaoIngressos(resultado.necessarioIngressos, sim.loteIngressos)
-  }, [resultado, sim?.loteIngressos])
+    return calcularEscalaLotes(resultado.necessarioIngressos, precoInicial, sim.quantidadeConvidados)
+  }, [resultado, precoInicial, sim?.quantidadeConvidados])
 
   function set<K extends keyof Simulacao>(field: K, value: Simulacao[K]) {
     setSim(prev => (prev ? { ...prev, [field]: value } : prev))
@@ -210,7 +212,9 @@ export const SimuladorPage: React.FC = () => {
         />
       </div>
 
-      {resultado && <ResumoResultado resultado={resultado} combinacao={combinacao} />}
+      {resultado && (
+        <ResumoResultado resultado={resultado} escala={escala} temPrecoInicial={precoInicial > 0} />
+      )}
     </div>
   )
 }
