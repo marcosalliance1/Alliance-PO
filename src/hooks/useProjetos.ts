@@ -284,12 +284,12 @@ export function useProjetos() {
     const now = new Date().toISOString()
     const { error: err } = await supabase
       .from('projetos')
-      .update({ secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacao_everest: novaConciliacao, total_convidados_atual: result.totalConvidadosAtual ?? null, atualizado_em: now })
+      .update({ secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacao_everest: novaConciliacao, resumo_comercial: result.resumoComercial, total_convidados_atual: result.totalConvidadosAtual ?? null, atualizado_em: now })
       .eq('id', id)
     if (err) throw new Error(err.message)
     setProjetos((prev) => prev.map((p) =>
       p.id === id
-        ? { ...p, secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacaoEverest: novaConciliacao, totalConvidadosAtual: result.totalConvidadosAtual ?? undefined, atualizadoEm: now }
+        ? { ...p, secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacaoEverest: novaConciliacao, resumoComercial: result.resumoComercial, totalConvidadosAtual: result.totalConvidadosAtual ?? undefined, atualizadoEm: now }
         : p
     ))
   }, [projetos])

@@ -1,4 +1,4 @@
-import type { Projeto, SecaoCusto, ItemCusto, StatusItem, StatusPagamento, TipoCusto, TAP, TipoEscola, Receitas } from '../types'
+import type { Projeto, SecaoCusto, ItemCusto, StatusItem, StatusPagamento, TipoCusto, TAP, TipoEscola, Receitas, LinhaResumoComercial } from '../types'
 import { v4 as uuid } from './uuid'
 
 
@@ -6,6 +6,7 @@ export interface SyncResult {
   secoes: SecaoCusto[]
   tap: Partial<TAP>
   receitas: Receitas
+  resumoComercial: LinhaResumoComercial[]
   totalConvidadosAtual: number | null
   avisos: string[]
 }
@@ -35,7 +36,7 @@ function encontrarSecao(nomeAba: string): string | null {
   return null
 }
 
-function encontrarAbaEspecial(nomeAba: string): 'tap' | 'resumo' | null {
+function encontrarAbaEspecial(nomeAba: string): 'tap' | 'resumo' | 'resumoComercial' | null {
   const n = norm(nomeAba)
   if (
     n === 'simulador' || n.includes('simulador de eventos') ||
@@ -43,6 +44,7 @@ function encontrarAbaEspecial(nomeAba: string): 'tap' | 'resumo' | null {
     n.includes('termo de abertura') || n.includes('termo abertura') ||
     (n === 'tap') || (n.startsWith('tap '))
   ) return 'tap'
+  if (n.includes('resumo') && n.includes('custos')) return 'resumoComercial'
   if (n === 'resumo geral' || n === 'resumo' || n.includes('resumo geral')) return 'resumo'
   return null
 }
@@ -388,6 +390,46 @@ function parseReceitasFromResumo(values: unknown[][]): Receitas {
   return result
 }
 
+// Lê a aba "1.1 RESUMO CUSTOS" (FEE Alliance, Imposto FEE, etc.) — colunas descobertas
+// dinamicamente pela linha de cabeçalho, mesma ideia de parseReceitasFromResumo.
+function parseResumoComercialFromSheet(values: unknown[][]): LinhaResumoComercial[] {
+  const linhas: LinhaResumoComercial[] = []
+
+  let headerRow = -1
+  let colDescricao = -1, colComercial = -1, colProducao = -1, colPercentual = -1, colReal = -1
+
+  for (let r = 0; r < values.length; r++) {
+    const row = (values[r] as unknown[]) ?? []
+    for (let c = 0; c < row.length; c++) {
+      if (norm(parseStr(row[c])) === 'custos') { headerRow = r; colDescricao = c; break }
+    }
+    if (headerRow === -1) continue
+    for (let c = 0; c < row.length; c++) {
+      const lab = norm(parseStr(row[c]))
+      if (lab.includes('comercial')) colComercial = c
+      else if (lab.includes('producao')) colProducao = c
+      else if (lab === '%' || lab.includes('percentual')) colPercentual = c
+      else if (lab.includes('valor real') || lab === 'real') colReal = c
+    }
+    break
+  }
+  if (headerRow === -1) return linhas
+
+  for (let r = headerRow + 1; r < values.length; r++) {
+    const descricao = parseStr(getCell(values, r, colDescricao))
+    if (!descricao) continue
+    linhas.push({
+      descricao,
+      valorComercial: colComercial >= 0 ? parseNum(getCell(values, r, colComercial)) : 0,
+      valorProducao: colProducao >= 0 ? parseNum(getCell(values, r, colProducao)) : 0,
+      percentual: colPercentual >= 0 ? parseNum(getCell(values, r, colPercentual)) : 0,
+      valorReal: colReal >= 0 ? parseNum(getCell(values, r, colReal)) : 0,
+    })
+  }
+
+  return linhas
+}
+
 export async function fetchSheetNames(spreadsheetId: string, accessToken: string): Promise<string[]> {
   const resp = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties.title`,
@@ -494,6 +536,7 @@ export async function sincronizarComSheets(
   let tapParsed: Partial<TAP> = {}
   let receitasParsed: Partial<Receitas> = {}
   let resumoEncontrado = false
+  let resumoComercialParsed: LinhaResumoComercial[] = []
   let totalConvidadosAtual: number | null = null
   const avisosItens: string[] = []
   let preEventoExtra: { id: string; numero: string; nome: string; itens: ItemCusto[] } | null = null
@@ -522,6 +565,18 @@ export async function sincronizarComSheets(
       } catch (e) {
         if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
         console.warn(`Erro ao ler aba TAP "${nomeAba}":`, e)
+      }
+      continue
+    }
+
+    if (especial === 'resumoComercial') {
+      onProgress(`Lendo Resumo Comercial (${nomeAba})...`)
+      try {
+        const values = await fetchAba(spreadsheetId, nomeAba, accessToken)
+        if (values) resumoComercialParsed = parseResumoComercialFromSheet(values)
+      } catch (e) {
+        if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
+        console.warn(`Erro ao ler aba Resumo Comercial "${nomeAba}":`, e)
       }
       continue
     }
@@ -631,6 +686,7 @@ export async function sincronizarComSheets(
     secoes: secoesFinais,
     tap: tapParsed,
     receitas: receitasMerged,
+    resumoComercial: resumoComercialParsed.length > 0 ? resumoComercialParsed : (projeto.resumoComercial ?? []),
     totalConvidadosAtual,
     avisos,
   }
