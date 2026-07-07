@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Projeto, SecaoCusto, ItemCusto, TAP, Receitas, ConciliacaoEverest, CustoAdicional } from '../types'
+import type { Projeto, SecaoCusto, ItemCusto, TAP, Receitas, ConciliacaoEverest, CustoAdicional, LinhaResumoComercial } from '../types'
 import type { SyncResult } from '../utils/sheetsSync'
 import { v4 as uuid } from '../utils/uuid'
 import { getSecoesPorTipo } from '../data/secoesPorTipo'
@@ -14,6 +14,7 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
     receitas: migrateReceitas(row.receitas),
     custosAdicionais: (row.custos_adicionais as CustoAdicional[]) ?? [],
     conciliacaoEverest: (row.conciliacao_everest as ConciliacaoEverest) ?? undefined,
+    resumoComercial: (row.resumo_comercial as LinhaResumoComercial[]) ?? [],
     criadoEm: row.criado_em as string,
     atualizadoEm: row.atualizado_em as string,
     importadoDe: (row.importado_de as string) ?? undefined,
@@ -86,6 +87,7 @@ export function useProjetos() {
         receitas: projeto.receitas,
         custos_adicionais: projeto.custosAdicionais ?? [],
         conciliacao_everest: projeto.conciliacaoEverest ?? null,
+        resumo_comercial: projeto.resumoComercial ?? [],
         importado_de: projeto.importadoDe ?? null,
         atualizado_em: now,
       })
@@ -104,6 +106,7 @@ export function useProjetos() {
         receitas: projeto.receitas,
         custos_adicionais: projeto.custosAdicionais ?? [],
         conciliacao_everest: projeto.conciliacaoEverest ?? null,
+        resumo_comercial: projeto.resumoComercial ?? [],
         importado_de: projeto.importadoDe ?? null,
         atualizado_em: new Date().toISOString(),
       })
@@ -122,6 +125,7 @@ export function useProjetos() {
       .update({
         tap: novosProjeto.tap,
         secoes: novosProjeto.secoes,
+        resumo_comercial: novosProjeto.resumoComercial ?? [],
         importado_de: novosProjeto.importadoDe ?? null,
         atualizado_em: now,
       })
@@ -129,7 +133,7 @@ export function useProjetos() {
     if (err) throw new Error(err.message)
     setProjetos((prev) => prev.map((p) =>
       p.id === id
-        ? { ...p, tap: novosProjeto.tap, secoes: novosProjeto.secoes, importadoDe: novosProjeto.importadoDe, atualizadoEm: now }
+        ? { ...p, tap: novosProjeto.tap, secoes: novosProjeto.secoes, resumoComercial: novosProjeto.resumoComercial, importadoDe: novosProjeto.importadoDe, atualizadoEm: now }
         : p,
     ))
   }, [])

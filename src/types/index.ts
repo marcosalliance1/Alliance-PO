@@ -113,6 +113,14 @@ export interface CustoAdicional {
   pago: number
 }
 
+export interface LinhaResumoComercial {
+  descricao: string       // "FEE Alliance", "Imposto FEE", "(CC) Custo Cerimonial", etc.
+  valorComercial: number  // "Valor Previsto Comercial"
+  valorProducao: number   // "Valor Previsto Produção"
+  percentual: number      // "%" — normalizado pra escala 0–100 (13.07, não 0.1307)
+  valorReal: number       // "Valor real"
+}
+
 export interface Projeto {
   id: string
   tap: TAP
@@ -120,6 +128,7 @@ export interface Projeto {
   receitas: Receitas
   custosAdicionais?: CustoAdicional[]
   conciliacaoEverest?: ConciliacaoEverest
+  resumoComercial?: LinhaResumoComercial[]
   criadoEm: string
   atualizadoEm: string
   importadoDe?: string

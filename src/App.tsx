@@ -33,6 +33,9 @@ import { ConfiguracoesPage } from './modules/pre-eventos/pages/Configuracoes/Con
 import { ListaSimuladorPage } from './modules/pre-eventos/pages/Simulador/ListaSimuladorPage'
 import { SimuladorPage } from './modules/pre-eventos/pages/Simulador/SimuladorPage'
 import { Operacional } from './pages/Operacional'
+import { ComercialProvider } from './modules/alliance-comercial/contexts/ComercialContext'
+import { Layout as ComercialLayout } from './modules/alliance-comercial/components/Layout/Layout'
+import { DashboardPage as ComercialDashboardPage } from './modules/alliance-comercial/pages/Dashboard/DashboardPage'
 
 // ── Spinner simples ──────────────────────────────────────────────────────────
 function Spinner() {
@@ -308,6 +311,20 @@ function AppRoutes() {
         <Route path="simulador" element={<ListaSimuladorPage />} />
         <Route path="simulador/novo" element={<SimuladorPage />} />
         <Route path="simulador/:id" element={<SimuladorPage />} />
+      </Route>
+
+      {/* Módulo Alliance Comercial */}
+      <Route
+        path="/comercial/*"
+        element={
+          <RequireAuth>
+            <ComercialProvider projetos={projetos}>
+              <ComercialLayout />
+            </ComercialProvider>
+          </RequireAuth>
+        }
+      >
+        <Route index element={<ComercialDashboardPage />} />
       </Route>
     </Routes>
   )

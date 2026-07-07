@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import type { Projeto, SecaoCusto, ItemCusto, TAP, TipoEscola, StatusItem, StatusPagamento, TipoCusto, DivergenciaDetalhe, Receitas } from '../types'
+import type { Projeto, SecaoCusto, ItemCusto, TAP, TipoEscola, StatusItem, StatusPagamento, TipoCusto, DivergenciaDetalhe, Receitas, LinhaResumoComercial } from '../types'
 import { v4 as uuid } from './uuid'
 import { getSecoesPorTipo } from '../data/secoesPorTipo'
 
@@ -341,6 +341,63 @@ function lerResumoGeral(wb: XLSX.WorkBook): { receitas: Receitas; verbaExtras: I
   return { receitas, verbaExtras }
 }
 
+// Lê a aba "1.1 RESUMO CUSTOS" (FEE Alliance, Imposto FEE, etc.) — colunas descobertas
+// dinamicamente pela linha de cabeçalho, sem índice fixo (mesma ideia de lerResumoGeral).
+function lerResumoComercial(wb: XLSX.WorkBook): LinhaResumoComercial[] {
+  const linhas: LinhaResumoComercial[] = []
+
+  const sheetName = wb.SheetNames.find((n) => {
+    const norm = normalizarNomeAba(n)
+    return norm.includes('resumo') && norm.includes('custos')
+  })
+  if (!sheetName) return linhas
+
+  const ws = wb.Sheets[sheetName]
+  const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
+
+  let headerRow = -1
+  let colDescricao = -1, colComercial = -1, colProducao = -1, colPercentual = -1, colReal = -1
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    for (let j = 0; j < row.length; j++) {
+      if (normLabel(row[j]) === 'custos') { headerRow = i; colDescricao = j; break }
+    }
+    if (headerRow === -1) continue
+    for (let j = 0; j < row.length; j++) {
+      const norm = normLabel(row[j])
+      if (norm.includes('comercial')) colComercial = j
+      else if (norm.includes('producao')) colProducao = j
+      else if (norm === '%' || norm.includes('percentual')) colPercentual = j
+      else if (norm.includes('valor real') || norm === 'real') colReal = j
+    }
+    break
+  }
+  if (headerRow === -1) return linhas
+
+  for (let i = headerRow + 1; i < rows.length; i++) {
+    const row = rows[i]
+    const descricao = String(row[colDescricao] ?? '').trim()
+    if (!descricao) continue
+
+    let percentual = colPercentual >= 0 ? parseNum(row[colPercentual]) : 0
+    if (colPercentual >= 0) {
+      const cell = ws[XLSX.utils.encode_cell({ r: i, c: colPercentual })]
+      if (cell && typeof cell.z === 'string' && cell.z.includes('%')) percentual *= 100
+    }
+
+    linhas.push({
+      descricao,
+      valorComercial: colComercial >= 0 ? parseNum(row[colComercial]) : 0,
+      valorProducao: colProducao >= 0 ? parseNum(row[colProducao]) : 0,
+      percentual,
+      valorReal: colReal >= 0 ? parseNum(row[colReal]) : 0,
+    })
+  }
+
+  return linhas
+}
+
 function lerTAP(ws: XLSX.WorkSheet): Partial<TAP> {
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
   const map: Record<string, unknown> = {}
@@ -455,6 +512,9 @@ export function importarXlsx(buffer: ArrayBuffer, nomeArquivo: string): ImportRe
     secoes.push({ id: uuid(), numero: 'extras', nome: 'VERBAS EXTRAS', itens: verbaExtras })
   }
 
+  // Ler "1.1 RESUMO CUSTOS": FEE Alliance, Imposto FEE, etc.
+  const resumoComercial = lerResumoComercial(wb)
+
   const tap: TAP = {
     instituicao: tapParcial.instituicao ?? '',
     curso: tapParcial.curso ?? '',
@@ -482,6 +542,7 @@ export function importarXlsx(buffer: ArrayBuffer, nomeArquivo: string): ImportRe
     tap,
     secoes,
     receitas: receitasImportadas,
+    resumoComercial,
     criadoEm: new Date().toISOString(),
     atualizadoEm: new Date().toISOString(),
     importadoDe: nomeArquivo,
