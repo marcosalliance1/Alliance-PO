@@ -151,6 +151,9 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
   }), [projeto])
 
   const resumo = useMemo(() => calcResumoProjeto(projetoFiltrado), [projetoFiltrado])
+  // Sem o filtro de administrativos — usado só pro "Saldo em Conta", que precisa bater
+  // com o Saldo Everest da aba Financeiro (custo total real, não o exibido nesta tela).
+  const resumoCompleto = useMemo(() => calcResumoProjeto(projeto), [projeto])
 
   const anyOpen = Object.values(expandidos).some(Boolean)
 
@@ -241,12 +244,12 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
 
       {/* Saldo em Conta — resumo + drill-down das linhas de receita */}
       {(() => {
-        const receitaPaga = resumo.receitaBaile.pago
-        const custoPago = resumo.custoTotal.pago
-        const saldoConta = resumo.margem.pago
+        const receitaPaga = resumoCompleto.receitaBaile.pago
+        const custoPago = resumoCompleto.custoTotal.pago
+        const saldoConta = resumoCompleto.margem.pago
         const pctConsumido = receitaPaga > 0 ? Math.min(100, (custoPago / receitaPaga) * 100) : 0
         const isOpen = expandidos['__saldo_conta__'] ?? false
-        const linhasReceita = resumo.receitas.filter(r => r.orcado > 0 || r.pago > 0)
+        const linhasReceita = resumoCompleto.receitas.filter(r => r.orcado > 0 || r.pago > 0)
 
         return (
           <div className={`rounded-xl overflow-hidden transition-all mb-2 ${isOpen ? 'bg-surface ring-1 ring-white/10' : 'bg-bg'}`}>
