@@ -16,7 +16,7 @@ import type { Orcamento, ItemOrcamento } from '../../modules/pre-eventos/types'
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmtBRL(v: number) {
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function fmtData(iso: string) {
@@ -62,7 +62,7 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
 
   const chartData = resumo.custos
     .filter(c => c.contratado > 0 || c.pago > 0)
-    .map(c => ({ nome: c.nome.split(' ')[0], Orçado: Math.round(c.contratado), Pago: Math.round(c.pago) }))
+    .map(c => ({ nome: c.nome.split(' ')[0], 'Custo Previsto': Math.round(c.contratado), Pago: Math.round(c.pago) }))
 
   return (
     <div className="space-y-6">
@@ -71,10 +71,10 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
         <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-3">Saldo da Turma</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: 'Receita Orçada',  value: fmtBRL(resumo.receitaBaile.orcado), color: 'text-primary' },
-            { label: 'Receita Everest', value: fmtBRL(resumo.receitaBaile.pago),   color: 'text-success' },
-            { label: 'Saldo Orçado',    value: fmtBRL(resumo.margem.orcado),       color: resumo.margem.orcado >= 0 ? 'text-success' : 'text-danger' },
-            { label: 'Saldo Everest',   value: fmtBRL(resumo.margem.pago),         color: resumo.margem.pago >= 0 ? 'text-success' : 'text-danger' },
+            { label: 'Receita Prevista', value: fmtBRL(resumo.receitaBaile.orcado), color: 'text-primary' },
+            { label: 'Receita Everest',  value: fmtBRL(resumo.receitaBaile.pago),   color: 'text-success' },
+            { label: 'Saldo Previsto',   value: fmtBRL(resumo.margem.orcado),       color: resumo.margem.orcado >= 0 ? 'text-success' : 'text-danger' },
+            { label: 'Saldo Everest',    value: fmtBRL(resumo.margem.pago),         color: resumo.margem.pago >= 0 ? 'text-success' : 'text-danger' },
           ].map(({ label, value, color }) => (
             <div key={label} className="bg-bg rounded-xl px-4 py-4">
               <div className="text-text-muted text-xs mb-1">{label}</div>
@@ -87,7 +87,7 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total Orçado',    value: fmtBRL(totalContratado), color: 'text-primary' },
+          { label: 'Custo Previsto',   value: fmtBRL(totalContratado), color: 'text-primary' },
           { label: 'Total Pago',       value: fmtBRL(totalPago),       color: 'text-success' },
           { label: 'Falta Pagar',      value: fmtBRL(faltaPagar),      color: 'text-warning' },
           { label: '% Pago',           value: `${pctPago.toFixed(1)}%`, color: pctPago >= 80 ? 'text-success' : 'text-primary' },
@@ -99,10 +99,10 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
         ))}
       </div>
 
-      {/* Gráfico Contratado × Pago por seção */}
+      {/* Gráfico Custo Previsto × Pago por seção */}
       {chartData.length > 0 && (
         <div className="bg-bg rounded-xl p-4">
-          <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-4">Orçado × Pago por Seção</h3>
+          <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-4">Custo Previsto × Pago por Seção</h3>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={chartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -110,8 +110,8 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
               <YAxis tick={AXIS_STYLE} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} width={52} />
               <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, name) => [fmtBRL(Number(v)), String(name)]} />
               <Legend wrapperStyle={{ fontSize: 11, color: '#8892a4' }} />
-              <Bar dataKey="Orçado" fill="#E63329" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="Pago"   fill="#00b894" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Custo Previsto" fill="#E63329" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Pago"           fill="#00b894" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -332,12 +332,13 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
               {/* Drill-down inline */}
               {isOpen && secao && (() => {
                 const itensFiltrados = filtrarItensCalculo(secao.itens)
-                const porSubcat: Record<string, { contratado: number; pago: number }> = {}
+                const porSubcat: Record<string, { contratado: number; pago: number; itens: typeof itensFiltrados }> = {}
                 for (const item of itensFiltrados) {
                   const sub = item.subcategoria?.trim() || item.area?.trim() || 'Geral'
-                  if (!porSubcat[sub]) porSubcat[sub] = { contratado: 0, pago: 0 }
+                  if (!porSubcat[sub]) porSubcat[sub] = { contratado: 0, pago: 0, itens: [] }
                   porSubcat[sub].contratado += item.valorContratado
                   porSubcat[sub].pago += item.valorPago
+                  porSubcat[sub].itens.push(item)
                 }
                 return (
                   <div className="border-t border-white/8 px-4 pb-4 pt-3 space-y-2">
@@ -357,6 +358,29 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
                           {vals.contratado > 0 && (
                             <div className="ml-[25px] h-1 bg-white/10 rounded-full overflow-hidden">
                               <div className="h-full bg-success/60 rounded-full" style={{ width: `${p}%` }} />
+                            </div>
+                          )}
+
+                          {/* Itens da subcategoria — qual item custou o quê */}
+                          {vals.itens.length > 0 && (
+                            <div className="ml-[25px] mt-1.5 space-y-1.5 border-l border-white/8 pl-3">
+                              {vals.itens.map(item => {
+                                const pi = item.valorContratado > 0 ? Math.min(100, (item.valorPago / item.valorContratado) * 100) : 0
+                                return (
+                                  <div key={item.id} className="space-y-0.5">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-text-muted flex-1 truncate">{item.item || sub}</span>
+                                      <span className="text-[11px] text-success shrink-0">{fmtBRL(item.valorPago)}</span>
+                                      <span className="text-[11px] text-text-muted shrink-0">/ {fmtBRL(item.valorContratado)}</span>
+                                    </div>
+                                    {item.valorContratado > 0 && (
+                                      <div className="h-0.5 bg-white/10 rounded-full overflow-hidden">
+                                        <div className="h-full bg-success/50 rounded-full" style={{ width: `${pi}%` }} />
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
                             </div>
                           )}
                         </div>
