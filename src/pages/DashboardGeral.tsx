@@ -4,6 +4,7 @@ import type { Projeto, TipoEscola } from '../types'
 import { KPICard } from '../components/dashboard/KPICard'
 import { GraficoBarras } from '../components/dashboard/GraficoBarras'
 import { GraficoLinha } from '../components/dashboard/GraficoLinha'
+import { CalendarioEventos } from '../components/dashboard/CalendarioEventos'
 import { Header } from '../components/layout/Header'
 import { calcResumoProjeto, calcPercentFechados, filtrarItensCalculo } from '../utils/calculos'
 import { formatBRL, formatPercent } from '../utils/formatters'
@@ -362,6 +363,9 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
           )}
         </div>
       )}
+
+      {/* ── Calendário de Eventos ──────────────────────────────────────── */}
+      <CalendarioEventos projetos={projetosFiltrados} />
 
       {/* ── Convidados por Ensino ─────────────────────────────────────── */}
       {totalConvidadosGeral > 0 && (

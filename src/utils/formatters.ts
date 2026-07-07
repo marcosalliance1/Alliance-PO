@@ -26,8 +26,14 @@ export function parseNumBR(value: string): number {
   return isNaN(n) ? 0 : n
 }
 
+// `new Date('YYYY-MM-DD')` parses as UTC midnight, which shifts to the previous
+// day once converted to a UTC-3 local time — this parses the date as local instead.
+export function parseLocalDate(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
 export function formatDate(iso: string): string {
   if (!iso) return ''
-  const d = new Date(iso)
-  return d.toLocaleDateString('pt-BR')
+  return parseLocalDate(iso).toLocaleDateString('pt-BR')
 }
