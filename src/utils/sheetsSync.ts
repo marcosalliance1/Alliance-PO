@@ -397,15 +397,27 @@ function parseReceitasFromResumo(values: unknown[][]): Receitas {
 function parseResumoComercialFromSheet(values: unknown[][]): LinhaResumoComercial[] {
   const linhas: LinhaResumoComercial[] = []
 
+  // Âncora exige "Custos" numa célula E "comercial"/"real" em algum lugar da mesma
+  // linha ou da linha seguinte — evita travar numa menção solta da palavra "Custos"
+  // em outro lugar da aba, antes da tabela de verdade.
   let headerRow = -1
   let colDescricao = -1
 
   for (let r = 0; r < values.length; r++) {
     const row = (values[r] as unknown[]) ?? []
+    let foundCustos = -1
     for (let c = 0; c < row.length; c++) {
-      if (norm(parseStr(row[c])) === 'custos') { headerRow = r; colDescricao = c; break }
+      if (norm(parseStr(row[c])) === 'custos') { foundCustos = c; break }
     }
-    if (headerRow >= 0) break
+    if (foundCustos === -1) continue
+    const nextRow = (values[r + 1] as unknown[]) ?? []
+    const rowJoined = row.map((c) => norm(parseStr(c))).join(' ')
+    const nextJoined = nextRow.map((c) => norm(parseStr(c))).join(' ')
+    if (rowJoined.includes('comercial') || nextJoined.includes('comercial') || rowJoined.includes('real') || nextJoined.includes('real')) {
+      headerRow = r
+      colDescricao = foundCustos
+      break
+    }
   }
   if (headerRow === -1) return linhas
 
@@ -419,9 +431,11 @@ function parseResumoComercialFromSheet(values: unknown[][]): LinhaResumoComercia
     if (g) currentGroup = g
     const combinado = norm(`${currentGroup} ${s}`)
     const soLinha0 = norm(g)
+    // Atenção: norm() remove o caractere "%" (só mantém letras/números), então a
+    // comparação com "%" precisa ser feita no texto bruto, não no normalizado.
     if (combinado.includes('comercial')) colComercial = c
     else if (combinado.includes('producao')) colProducao = c
-    else if (soLinha0 === '%' || combinado.includes('percentual')) colPercentual = c
+    else if (g.trim() === '%' || combinado.includes('percentual')) colPercentual = c
     else if (combinado.includes('valor real') || soLinha0 === 'real' || norm(s) === 'real') colReal = c
   }
 

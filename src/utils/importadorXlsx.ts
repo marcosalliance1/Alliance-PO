@@ -355,15 +355,27 @@ function lerResumoComercial(wb: XLSX.WorkBook): LinhaResumoComercial[] {
   const ws = wb.Sheets[sheetName]
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
 
+  // Âncora exige "Custos" numa célula E "comercial"/"real" em algum lugar da mesma
+  // linha ou da linha seguinte — evita travar numa menção solta da palavra "Custos"
+  // em outro lugar da aba, antes da tabela de verdade.
   let headerRow = -1
   let colDescricao = -1
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
+    let foundCustos = -1
     for (let j = 0; j < row.length; j++) {
-      if (normLabel(row[j]) === 'custos') { headerRow = i; colDescricao = j; break }
+      if (normLabel(row[j]) === 'custos') { foundCustos = j; break }
     }
-    if (headerRow >= 0) break
+    if (foundCustos === -1) continue
+    const nextRow = rows[i + 1] ?? []
+    const rowJoined = row.map((c) => normLabel(c)).join(' ')
+    const nextJoined = nextRow.map((c) => normLabel(c)).join(' ')
+    if (rowJoined.includes('comercial') || nextJoined.includes('comercial') || rowJoined.includes('real') || nextJoined.includes('real')) {
+      headerRow = i
+      colDescricao = foundCustos
+      break
+    }
   }
   if (headerRow === -1) return linhas
 
@@ -379,9 +391,11 @@ function lerResumoComercial(wb: XLSX.WorkBook): LinhaResumoComercial[] {
     if (g) currentGroup = g
     const combinado = normLabel(`${currentGroup} ${s}`)
     const soLinha0 = normLabel(g)
+    // Atenção: normLabel() remove o caractere "%" (só mantém letras/números), então a
+    // comparação com "%" precisa ser feita no texto bruto, não no normalizado.
     if (combinado.includes('comercial')) colComercial = j
     else if (combinado.includes('producao')) colProducao = j
-    else if (soLinha0 === '%' || combinado.includes('percentual')) colPercentual = j
+    else if (g.trim() === '%' || combinado.includes('percentual')) colPercentual = j
     else if (combinado.includes('valor real') || soLinha0 === 'real' || normLabel(s) === 'real') colReal = j
   }
 
