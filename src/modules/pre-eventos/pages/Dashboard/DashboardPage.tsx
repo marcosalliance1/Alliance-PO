@@ -31,6 +31,18 @@ function allItemsOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
 function orcadoOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
   return allItemsOf(o).reduce((s, i) => s + i.totalOrcado, 0)
 }
+function pagoOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
+  return allItemsOf(o).reduce((s, i) => s + i.totalPagoReal, 0)
+}
+
+const BarraPercentualPago: React.FC<{ orcado: number; pago: number }> = ({ orcado, pago }) => {
+  const pct = orcado > 0 ? Math.min((pago / orcado) * 100, 100) : 0
+  return (
+    <div className="w-28 h-1.5 bg-white/10 rounded-full overflow-hidden shrink-0">
+      <div className="h-full bg-success rounded-full transition-all" style={{ width: `${pct}%` }} />
+    </div>
+  )
+}
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; fill?: string; color?: string }[]; label?: string }) => {
   if (!active || !payload?.length) return null
@@ -193,7 +205,12 @@ export const DashboardPage: React.FC = () => {
           if (!b.data) return -1
           return new Date(a.data).getTime() - new Date(b.data).getTime()
         })
-        return { inst, orcs: sorted, total: orcs.reduce((s, o) => s + orcadoOf(o), 0) }
+        return {
+          inst,
+          orcs: sorted,
+          total: orcs.reduce((s, o) => s + orcadoOf(o), 0),
+          totalPago: orcs.reduce((s, o) => s + pagoOf(o), 0),
+        }
       })
       .sort((a, b) => b.total - a.total)
   }, [filtered])
@@ -461,11 +478,11 @@ export const DashboardPage: React.FC = () => {
       {/* ── Drilldown por instituição → turma ── */}
       <div className="bg-surface-2 border border-bordercol rounded-card overflow-hidden">
         <div className="px-5 py-3 border-b border-bordercol">
-          <h2 className="text-white font-semibold text-sm">Orçamentos por Instituição</h2>
+          <h2 className="text-white font-semibold text-sm">Orçamento por Turma</h2>
         </div>
         {drilldown.length === 0 ? (
           <div className="px-5 py-8 text-center text-muted text-sm">Nenhum orçamento</div>
-        ) : drilldown.map(({ inst, orcs, total }) => (
+        ) : drilldown.map(({ inst, orcs, total, totalPago }) => (
           <div key={inst}>
             {/* Nível 1: Instituição */}
             <button
@@ -476,7 +493,16 @@ export const DashboardPage: React.FC = () => {
                 : <ChevronRight className="w-4 h-4 text-muted shrink-0" />}
               <span className="text-white font-semibold text-sm flex-1 uppercase tracking-wide">{inst}</span>
               <span className="text-muted text-xs mr-4">{orcs.length} evento{orcs.length !== 1 ? 's' : ''}</span>
-              <span className="text-white text-sm font-bold">{formatBRL(total)}</span>
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="text-right">
+                  <p className="text-[10px] text-muted leading-tight">
+                    Orçado <span className="text-white font-semibold">{formatBRL(total)}</span>
+                    {'  ·  '}
+                    Pago <span className="text-success font-semibold">{formatBRL(totalPago)}</span>
+                  </p>
+                </div>
+                <BarraPercentualPago orcado={total} pago={totalPago} />
+              </div>
             </button>
 
             {/* Nível 2: Turmas */}
@@ -503,7 +529,14 @@ export const DashboardPage: React.FC = () => {
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-muted">realizado</span>
                     )}
                   </div>
-                  <span className="text-white text-sm font-medium shrink-0">{formatBRL(orcadoOf(o))}</span>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <p className="text-[10px] text-muted leading-tight text-right">
+                      Orçado <span className="text-white font-semibold">{formatBRL(orcadoOf(o))}</span>
+                      {'  ·  '}
+                      Pago <span className="text-success font-semibold">{formatBRL(pagoOf(o))}</span>
+                    </p>
+                    <BarraPercentualPago orcado={orcadoOf(o)} pago={pagoOf(o)} />
+                  </div>
                   <ChevronRight className="w-3.5 h-3.5 text-muted shrink-0" />
                 </button>
               )
