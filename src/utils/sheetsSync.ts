@@ -391,31 +391,48 @@ function parseReceitasFromResumo(values: unknown[][]): Receitas {
 }
 
 // Lê a aba "1.1 RESUMO CUSTOS" (FEE Alliance, Imposto FEE, etc.) — colunas descobertas
-// dinamicamente pela linha de cabeçalho, mesma ideia de parseReceitasFromResumo.
+// dinamicamente. Cobre tanto cabeçalho de uma linha só quanto grupo+subgrupo em duas
+// linhas (ex: "Valor Previsto" numa linha, "Comercial"/"Produção" na linha de baixo —
+// mesmo padrão de duas linhas que a tabela de Resumo Geral já usa).
 function parseResumoComercialFromSheet(values: unknown[][]): LinhaResumoComercial[] {
   const linhas: LinhaResumoComercial[] = []
 
   let headerRow = -1
-  let colDescricao = -1, colComercial = -1, colProducao = -1, colPercentual = -1, colReal = -1
+  let colDescricao = -1
 
   for (let r = 0; r < values.length; r++) {
     const row = (values[r] as unknown[]) ?? []
     for (let c = 0; c < row.length; c++) {
       if (norm(parseStr(row[c])) === 'custos') { headerRow = r; colDescricao = c; break }
     }
-    if (headerRow === -1) continue
-    for (let c = 0; c < row.length; c++) {
-      const lab = norm(parseStr(row[c]))
-      if (lab.includes('comercial')) colComercial = c
-      else if (lab.includes('producao')) colProducao = c
-      else if (lab === '%' || lab.includes('percentual')) colPercentual = c
-      else if (lab.includes('valor real') || lab === 'real') colReal = c
-    }
-    break
+    if (headerRow >= 0) break
   }
   if (headerRow === -1) return linhas
 
-  for (let r = headerRow + 1; r < values.length; r++) {
+  let colComercial = -1, colProducao = -1, colPercentual = -1, colReal = -1
+  const row0 = (values[headerRow] as unknown[]) ?? []
+  const row1 = (values[headerRow + 1] as unknown[]) ?? []
+  let currentGroup = ''
+  for (let c = 0; c < Math.max(row0.length, row1.length); c++) {
+    const g = parseStr(row0[c] ?? null)
+    const s = parseStr(row1[c] ?? null)
+    if (g) currentGroup = g
+    const combinado = norm(`${currentGroup} ${s}`)
+    const soLinha0 = norm(g)
+    if (combinado.includes('comercial')) colComercial = c
+    else if (combinado.includes('producao')) colProducao = c
+    else if (soLinha0 === '%' || combinado.includes('percentual')) colPercentual = c
+    else if (combinado.includes('valor real') || soLinha0 === 'real' || norm(s) === 'real') colReal = c
+  }
+
+  // Se a linha seguinte também é cabeçalho (grupo+subgrupo), os dados começam duas
+  // linhas depois; senão, uma linha depois.
+  const row1Norm = norm(row1.map((c) => parseStr(c)).join(' '))
+  const dataStart = (row1Norm.includes('comercial') || row1Norm.includes('producao') || row1Norm.includes('real'))
+    ? headerRow + 2
+    : headerRow + 1
+
+  for (let r = dataStart; r < values.length; r++) {
     const descricao = parseStr(getCell(values, r, colDescricao))
     if (!descricao) continue
     linhas.push({

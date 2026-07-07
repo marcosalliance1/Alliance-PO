@@ -356,26 +356,41 @@ function lerResumoComercial(wb: XLSX.WorkBook): LinhaResumoComercial[] {
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
 
   let headerRow = -1
-  let colDescricao = -1, colComercial = -1, colProducao = -1, colPercentual = -1, colReal = -1
+  let colDescricao = -1
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
     for (let j = 0; j < row.length; j++) {
       if (normLabel(row[j]) === 'custos') { headerRow = i; colDescricao = j; break }
     }
-    if (headerRow === -1) continue
-    for (let j = 0; j < row.length; j++) {
-      const norm = normLabel(row[j])
-      if (norm.includes('comercial')) colComercial = j
-      else if (norm.includes('producao')) colProducao = j
-      else if (norm === '%' || norm.includes('percentual')) colPercentual = j
-      else if (norm.includes('valor real') || norm === 'real') colReal = j
-    }
-    break
+    if (headerRow >= 0) break
   }
   if (headerRow === -1) return linhas
 
-  for (let i = headerRow + 1; i < rows.length; i++) {
+  // Cobre tanto cabeçalho de uma linha só quanto grupo+subgrupo em duas linhas
+  // (ex: "Valor Previsto" numa linha, "Comercial"/"Produção" na linha de baixo).
+  let colComercial = -1, colProducao = -1, colPercentual = -1, colReal = -1
+  const row0 = rows[headerRow] ?? []
+  const row1 = rows[headerRow + 1] ?? []
+  let currentGroup = ''
+  for (let j = 0; j < Math.max(row0.length, row1.length); j++) {
+    const g = String(row0[j] ?? '').trim()
+    const s = String(row1[j] ?? '').trim()
+    if (g) currentGroup = g
+    const combinado = normLabel(`${currentGroup} ${s}`)
+    const soLinha0 = normLabel(g)
+    if (combinado.includes('comercial')) colComercial = j
+    else if (combinado.includes('producao')) colProducao = j
+    else if (soLinha0 === '%' || combinado.includes('percentual')) colPercentual = j
+    else if (combinado.includes('valor real') || soLinha0 === 'real' || normLabel(s) === 'real') colReal = j
+  }
+
+  const row1Norm = normLabel(row1.map((c) => String(c ?? '')).join(' '))
+  const dataStart = (row1Norm.includes('comercial') || row1Norm.includes('producao') || row1Norm.includes('real'))
+    ? headerRow + 2
+    : headerRow + 1
+
+  for (let i = dataStart; i < rows.length; i++) {
     const row = rows[i]
     const descricao = String(row[colDescricao] ?? '').trim()
     if (!descricao) continue
