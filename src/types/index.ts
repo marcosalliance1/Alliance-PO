@@ -129,6 +129,33 @@ export interface Projeto {
   totalConvidadosAtual?: number
 }
 
+export interface LineupItemEvento {
+  horario: string
+  artista: string
+  obs: string
+}
+
+export interface EventoOperacional {
+  id: string
+  tabName: string
+  turma: string
+  nomeEvento: string
+  tipo: string
+  dataStr: string
+  dataIso: string | null
+  diaSemana: string
+  local: string
+  horario: string
+  tematica: string
+  totalConvidados: string
+  dataAdimplencia: string
+  vendaDeConvite: string
+  linkVenda: string | null
+  lineup: LineupItemEvento[]
+  isRealizado: boolean
+  sincronizadoEm: string
+}
+
 export interface ItemCatalogo {
   id: string
   codigo: string

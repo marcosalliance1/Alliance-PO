@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { useGoogleAuth } from '../contexts/GoogleAuthContext'
 import { fetchSheetNames, fetchAba } from '../utils/sheetsSync'
+import { supabase } from '../lib/supabase'
 
 const SHEET_ID = '1VpA4_lRcZlJ75Qc93VZZZvwW748Xnw-UsmQVCB-tRjc'
 
@@ -387,6 +388,50 @@ function SecaoExpandivel({
   )
 }
 
+// ── Sync com Supabase (pro Portal Clientes) ─────────────────────────────────────
+// Só grava campos apropriados pro cliente ver — Bolsa Folia individual e
+// fornecedores ficam de fora de propósito, não são gravados nesta tabela.
+
+async function syncEventoToSupabase(evento: EventoInfo, det: EventoDetalhes) {
+  const { error } = await supabase.from('eventos_operacional').upsert(
+    {
+      tab_name: evento.tabName,
+      turma: evento.nome,
+      nome_evento: det.nomeEvento,
+      tipo: det.tipo,
+      data_str: det.data,
+      data_iso: evento.date ? evento.date.toISOString().slice(0, 10) : null,
+      dia_semana: det.diaSemana,
+      local: det.local,
+      horario: det.horario,
+      tematica: det.tematica,
+      total_convidados: det.totalConvidados,
+      data_adimplencia: det.dataAdimplencia,
+      venda_de_convite: det.vendaDeConvite,
+      link_venda: det.linkVenda,
+      lineup: det.lineup,
+      is_realizado: evento.isRealizado,
+      sincronizado_em: new Date().toISOString(),
+    },
+    { onConflict: 'tab_name' },
+  )
+  if (error) console.error('[Supabase] eventos_operacional upsert error:', error.message)
+}
+
+// Sincroniza em segundo plano os eventos "Em Andamento" assim que a lista carrega,
+// pra manter o Portal Clientes atualizado sem exigir que o admin abra cada card.
+async function syncEmAndamentoEmSegundoPlano(eventos: EventoInfo[], token: string) {
+  for (const evento of eventos.filter(e => !e.isRealizado)) {
+    try {
+      const rows = await fetchAba(SHEET_ID, evento.tabName, token)
+      if (!rows || rows.length === 0) continue
+      await syncEventoToSupabase(evento, parseEventoDetalhes(rows, evento.tabName))
+    } catch {
+      // Falha pontual não deve interromper a sincronização dos demais eventos.
+    }
+  }
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export function Operacional() {
@@ -419,6 +464,7 @@ export function Operacional() {
         })
       }
       setEventos(parsed)
+      void syncEmAndamentoEmSegundoPlano(parsed, token)
     } catch (err) {
       if ((err as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') invalidarToken()
       else setErro('error')
@@ -442,7 +488,10 @@ export function Operacional() {
           setDetalhes(prev => ({ ...prev, [tabName]: 'error' }))
           return
         }
-        setDetalhes(prev => ({ ...prev, [tabName]: parseEventoDetalhes(rows, tabName) }))
+        const det = parseEventoDetalhes(rows, tabName)
+        setDetalhes(prev => ({ ...prev, [tabName]: det }))
+        const evento = eventos.find(e => e.tabName === tabName)
+        if (evento) void syncEventoToSupabase(evento, det)
       } catch (err) {
         if ((err as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') invalidarToken()
         setDetalhes(prev => ({ ...prev, [tabName]: 'error' }))

@@ -5,12 +5,12 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
   PieChart, Pie, Cell,
 } from 'recharts'
-import { CheckCircle2, AlertTriangle, LogOut, ChevronDown, ChevronRight } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, LogOut, ChevronDown, ChevronRight, Ticket } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { usePortalAuth } from '../../contexts/PortalAuthContext'
 import { calcResumoProjeto, filtrarItensCalculo } from '../../utils/calculos'
 import allianceLogo from '../../assets/alliance-logo.png'
-import type { Projeto, SecaoCusto, TAP, Receitas, CustoAdicional, ConciliacaoEverest } from '../../types'
+import type { Projeto, SecaoCusto, TAP, Receitas, CustoAdicional, ConciliacaoEverest, EventoOperacional, LineupItemEvento } from '../../types'
 import type { Orcamento, ItemOrcamento } from '../../modules/pre-eventos/types'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -66,6 +66,24 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
 
   return (
     <div className="space-y-6">
+      {/* Saldo da Turma */}
+      <div>
+        <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-3">Saldo da Turma</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'Receita Orçada',  value: fmtBRL(resumo.receitaBaile.orcado), color: 'text-primary' },
+            { label: 'Receita Everest', value: fmtBRL(resumo.receitaBaile.pago),   color: 'text-success' },
+            { label: 'Saldo Orçado',    value: fmtBRL(resumo.margem.orcado),       color: resumo.margem.orcado >= 0 ? 'text-success' : 'text-danger' },
+            { label: 'Saldo Everest',   value: fmtBRL(resumo.margem.pago),         color: resumo.margem.pago >= 0 ? 'text-success' : 'text-danger' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="bg-bg rounded-xl px-4 py-4">
+              <div className="text-text-muted text-xs mb-1">{label}</div>
+              <div className={`text-lg font-semibold ${color}`}>{value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
@@ -220,6 +238,67 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
           </div>
         )}
       </div>
+
+      {/* Saldo em Conta — resumo + drill-down das linhas de receita */}
+      {(() => {
+        const receitaPaga = resumo.receitaBaile.pago
+        const custoPago = resumo.custoTotal.pago
+        const saldoConta = resumo.margem.pago
+        const pctConsumido = receitaPaga > 0 ? Math.min(100, (custoPago / receitaPaga) * 100) : 0
+        const isOpen = expandidos['__saldo_conta__'] ?? false
+        const linhasReceita = resumo.receitas.filter(r => r.orcado > 0 || r.pago > 0)
+
+        return (
+          <div className={`rounded-xl overflow-hidden transition-all mb-2 ${isOpen ? 'bg-surface ring-1 ring-white/10' : 'bg-bg'}`}>
+            <button
+              onClick={() => toggle('__saldo_conta__')}
+              className="w-full px-4 py-3 text-left hover:bg-white/3 transition-colors"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-text-muted shrink-0">{isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</span>
+                <span className="flex-1 text-sm font-medium text-text-main">Saldo em Conta</span>
+                <span className={`text-xs font-semibold ${saldoConta >= 0 ? 'text-success' : 'text-danger'}`}>{fmtBRL(saldoConta)}</span>
+                <span className="text-xs text-text-muted">/ Receita Recebida {fmtBRL(receitaPaga)}</span>
+              </div>
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${pctConsumido}%`, background: saldoConta >= 0 ? '#00b894' : '#e17055' }}
+                />
+              </div>
+              <div className="text-right text-xs text-text-muted mt-1">{pctConsumido.toFixed(0)}% da receita recebida já utilizada</div>
+            </button>
+
+            {isOpen && (
+              <div className="border-t border-white/8 px-4 pb-4 pt-3 space-y-2">
+                {linhasReceita.length === 0 ? (
+                  <p className="text-text-muted text-xs text-center py-2">Nenhuma linha de receita lançada.</p>
+                ) : linhasReceita.map(r => {
+                  const p = r.orcado > 0 ? Math.min(100, (r.pago / r.orcado) * 100) : 0
+                  return (
+                    <div key={r.descricao} className="space-y-1">
+                      <div className="flex items-center gap-3">
+                        {r.pago > 0
+                          ? <CheckCircle2 size={13} className="text-success shrink-0" />
+                          : <AlertTriangle size={13} className="text-warning/60 shrink-0" />
+                        }
+                        <span className="text-sm text-text-main flex-1">{r.descricao}</span>
+                        <span className="text-xs text-success">{fmtBRL(r.pago)}</span>
+                        <span className="text-xs text-text-muted">/ {fmtBRL(r.orcado)}</span>
+                      </div>
+                      {r.orcado > 0 && (
+                        <div className="ml-[25px] h-1 bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-full bg-success/60 rounded-full" style={{ width: `${p}%` }} />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Lista de seções com drill-down inline */}
       <div className="space-y-2">
@@ -574,14 +653,159 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
   )
 }
 
+// ─── Seção 5: Eventos ──────────────────────────────────────────────────────────
+
+function InfoCardPortal({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-bg rounded-xl px-3 py-3">
+      <div className="text-text-muted text-xs mb-1">{label}</div>
+      <div className="text-text-main text-sm font-semibold leading-snug">{value}</div>
+    </div>
+  )
+}
+
+function rowToEventoOperacional(row: Record<string, unknown>): EventoOperacional {
+  return {
+    id: row.id as string,
+    tabName: row.tab_name as string,
+    turma: (row.turma as string) ?? '',
+    nomeEvento: (row.nome_evento as string) ?? '',
+    tipo: (row.tipo as string) ?? '',
+    dataStr: (row.data_str as string) ?? '',
+    dataIso: (row.data_iso as string) ?? null,
+    diaSemana: (row.dia_semana as string) ?? '',
+    local: (row.local as string) ?? '',
+    horario: (row.horario as string) ?? '',
+    tematica: (row.tematica as string) ?? '',
+    totalConvidados: (row.total_convidados as string) ?? '',
+    dataAdimplencia: (row.data_adimplencia as string) ?? '',
+    vendaDeConvite: (row.venda_de_convite as string) ?? '',
+    linkVenda: (row.link_venda as string) ?? null,
+    lineup: (row.lineup as LineupItemEvento[]) ?? [],
+    isRealizado: !!row.is_realizado,
+    sincronizadoEm: (row.sincronizado_em as string) ?? '',
+  }
+}
+
+function SecaoEventos({ projeto }: { projeto: Projeto }) {
+  const [eventos, setEventos] = useState<EventoOperacional[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase.from('eventos_operacional').select('*')
+      const todos = ((data ?? []) as Record<string, unknown>[]).map(rowToEventoOperacional)
+
+      const turmaProjeto = (projeto.tap.turma ?? '').toLowerCase().trim()
+      const filtrados = todos
+        .filter(e => (e.turma ?? '').toLowerCase().trim() === turmaProjeto)
+        .sort((a, b) => (a.dataIso ?? '').localeCompare(b.dataIso ?? ''))
+
+      setEventos(filtrados)
+      setLoading(false)
+    }
+    load()
+  }, [projeto.tap.turma])
+
+  if (loading) return <div className="text-text-muted text-sm text-center py-8">Carregando eventos…</div>
+  if (eventos.length === 0) return <div className="text-text-muted text-sm text-center py-8">Nenhum evento encontrado.</div>
+
+  return (
+    <div className="space-y-3">
+      {eventos.map(ev => {
+        const isOpen = expandidos[ev.id] ?? false
+        return (
+          <div key={ev.id} className={`rounded-xl overflow-hidden transition-all ${ev.isRealizado ? 'opacity-50' : ''} ${isOpen ? 'bg-surface ring-1 ring-white/10' : 'bg-bg'}`}>
+            <button
+              onClick={() => setExpandidos(prev => ({ ...prev, [ev.id]: !prev[ev.id] }))}
+              className="w-full flex items-center gap-3 px-4 py-4 hover:bg-white/3 transition-colors text-left"
+            >
+              <span className="text-text-muted shrink-0">
+                {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-text-main font-semibold text-sm">{ev.nomeEvento || ev.turma}</div>
+                {ev.dataStr && (
+                  <div className="text-text-muted text-xs mt-0.5">{ev.dataStr}{ev.diaSemana ? ` — ${ev.diaSemana}` : ''}</div>
+                )}
+              </div>
+              {ev.isRealizado && <span className="text-xs text-text-muted/60 shrink-0">Realizado</span>}
+            </button>
+
+            {isOpen && (
+              <div className="border-t border-white/8 px-4 py-5 space-y-5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {ev.tipo            && <InfoCardPortal label="Tipo"             value={ev.tipo} />}
+                  {ev.dataStr         && <InfoCardPortal label="Data"             value={`${ev.dataStr}${ev.diaSemana ? ` — ${ev.diaSemana}` : ''}`} />}
+                  {ev.local           && <InfoCardPortal label="Local"            value={ev.local} />}
+                  {ev.horario         && <InfoCardPortal label="Horário"          value={ev.horario} />}
+                  {ev.tematica        && <InfoCardPortal label="Temática"         value={ev.tematica} />}
+                  {ev.totalConvidados && <InfoCardPortal label="Total Convidados" value={ev.totalConvidados} />}
+                </div>
+
+                {ev.lineup.length > 0 && (
+                  <div>
+                    <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Lineup Artístico</h4>
+                    <div className="rounded-xl border border-white/8 overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-white/4 border-b border-white/8">
+                            <th className="text-left px-3 py-2 text-text-muted font-medium w-20">Horário</th>
+                            <th className="text-left px-3 py-2 text-text-muted font-medium">Artista</th>
+                            <th className="text-left px-3 py-2 text-text-muted font-medium hidden sm:table-cell">Obs.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ev.lineup.map((l, i) => (
+                            <tr key={i} className="border-b border-white/5 last:border-0">
+                              <td className="px-3 py-2.5 text-text-muted tabular-nums">{l.horario || '—'}</td>
+                              <td className="px-3 py-2.5 text-text-main font-medium">{l.artista}</td>
+                              <td className="px-3 py-2.5 text-text-muted hidden sm:table-cell">{l.obs}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {(ev.dataAdimplencia || ev.vendaDeConvite || ev.linkVenda) && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      {ev.dataAdimplencia && <InfoCardPortal label="Data p/ Adimplência" value={ev.dataAdimplencia} />}
+                      {ev.vendaDeConvite  && <InfoCardPortal label="Venda de Convite"    value={ev.vendaDeConvite} />}
+                    </div>
+                    {ev.linkVenda && (
+                      <a
+                        href={ev.linkVenda}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold py-3 px-5 rounded-xl transition-colors w-fit"
+                      >
+                        <Ticket size={15} /> Link de Venda
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Dashboard Principal ──────────────────────────────────────────────────────
 
-type TabId = 'financeiro' | 'po' | 'pre-eventos'
+type TabId = 'financeiro' | 'po' | 'pre-eventos' | 'eventos'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'financeiro',   label: 'Financeiro' },
   { id: 'po',           label: 'P.O. Resumido' },
   { id: 'pre-eventos',  label: 'Pré-Eventos' },
+  { id: 'eventos',      label: 'Eventos' },
 ]
 
 export function DashboardPortal() {
@@ -699,6 +923,7 @@ export function DashboardPortal() {
         {tabAtiva === 'financeiro'  && <SecaoFinanceiro projeto={projeto} vencimentos={vencimentos} />}
         {tabAtiva === 'po'          && <SecaoPO projeto={projeto} />}
         {tabAtiva === 'pre-eventos' && <SecaoPreEventos projeto={projeto} />}
+        {tabAtiva === 'eventos'     && <SecaoEventos projeto={projeto} />}
       </main>
     </div>
   )
