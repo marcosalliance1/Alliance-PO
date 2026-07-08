@@ -36,8 +36,8 @@ import { Operacional } from './pages/Operacional'
 import { ComercialProvider } from './modules/alliance-comercial/contexts/ComercialContext'
 import { Layout as ComercialLayout } from './modules/alliance-comercial/components/Layout/Layout'
 import { DashboardPage as ComercialDashboardPage } from './modules/alliance-comercial/pages/Dashboard/DashboardPage'
-import NovoProjetoPage from './modules/alliance-comercial/pages/NovoProjeto/NovoProjetoPage'
-import ContratosGeradosPage from './modules/alliance-comercial/pages/ContratosGerados/ContratosGeradosPage'
+import ContratosPage from './modules/alliance-comercial/pages/Contratos/ContratosPage'
+import ComprasComercialPage from './modules/alliance-comercial/pages/ComprasComercial/ComprasComercialPage'
 
 // ── Spinner simples ──────────────────────────────────────────────────────────
 function Spinner() {
@@ -327,8 +327,8 @@ function AppRoutes() {
         }
       >
         <Route index element={<ComercialDashboardPage />} />
-        <Route path="novo-projeto" element={<NovoProjetoPage />} />
-        <Route path="contratos" element={<ContratosGeradosPage />} />
+        <Route path="contratos" element={<ContratosPage />} />
+        <Route path="compras" element={<ComprasComercialPage />} />
       </Route>
     </Routes>
   )

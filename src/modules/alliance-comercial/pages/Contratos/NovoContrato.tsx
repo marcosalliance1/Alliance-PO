@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react'
 import type { ReactNode, FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useGoogleLogin } from '@react-oauth/google'
 import { supabaseComercial } from '../../lib/supabase'
 import type { ProjetoData, PacoteData } from '../../lib/gerarContratos'
@@ -94,9 +93,7 @@ function formToProjetoData(id: string, f: ProjetoForm): ProjetoData {
 
 // ─── Componente ───────────────────────────────────────────────────────────
 
-export default function NovoProjetoPage() {
-  const navigate = useNavigate()
-
+export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
   const [step, setStep]           = useState<Step>('projeto')
   const [projeto, setProjeto]     = useState<ProjetoForm>(projetoInicial)
   const [projetoId, setProjetoId] = useState<string>('')
@@ -304,7 +301,7 @@ export default function NovoProjetoPage() {
         { projeto_id: projetoId, tipo_documento: 'termo_adesao',      tipo_contrato: 'assessoria' },
         { projeto_id: projetoId, tipo_documento: 'contrato_comissao', tipo_contrato: 'assessoria' },
       ])
-      navigate('/comercial/contratos')
+      onGerado()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao gerar documentos.')
     } finally {
@@ -331,11 +328,6 @@ export default function NovoProjetoPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-text-main font-bold text-xl">Novo Projeto</h1>
-        <p className="text-text-muted text-sm mt-1">Cadastre um projeto e gere o Termo de Adesão + Contrato de Comissão.</p>
-      </div>
-
       {/* Progresso */}
       <div className="flex flex-wrap gap-2">
         <span className={step === 'projeto' ? badgeAtivo : badgeConcluido}>
@@ -514,7 +506,7 @@ export default function NovoProjetoPage() {
             </div>
             <button type="button" onClick={reiniciar}
               className="text-xs text-text-muted hover:text-text-main underline">
-              Novo projeto
+              Novo contrato
             </button>
           </div>
 
@@ -663,7 +655,7 @@ export default function NovoProjetoPage() {
             </div>
             <button type="button" onClick={reiniciar}
               className="text-xs text-text-muted hover:text-text-main underline">
-              Novo projeto
+              Novo contrato
             </button>
           </div>
 

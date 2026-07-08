@@ -16,7 +16,7 @@ interface CardData {
 const btnOutline =
   'flex items-center gap-1.5 px-4 py-2 border-2 border-primary text-primary hover:bg-primary hover:text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
 
-export default function ContratosGeradosPage() {
+export default function ContratosGerados() {
   const [cards, setCards]         = useState<CardData[]>([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro]           = useState<string | null>(null)
@@ -98,11 +98,7 @@ export default function ContratosGeradosPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-text-main font-bold text-xl">Contratos Gerados</h1>
-          <p className="text-text-muted text-sm mt-1">Termos de Adesão e Contratos de Comissão já gerados.</p>
-        </div>
+      <div className="flex items-center justify-end">
         <button onClick={carregar}
           className="text-xs text-text-muted hover:text-text-main underline">
           Atualizar
@@ -119,7 +115,7 @@ export default function ContratosGeradosPage() {
         <div className="bg-surface rounded-xl border border-dashed border-white/10 p-12 text-center space-y-2">
           <p className="text-text-muted text-sm">Nenhum contrato gerado ainda.</p>
           <p className="text-text-muted/70 text-xs">
-            Cadastre um projeto na aba "Novo Projeto" e clique em "Gerar Contratos".
+            Cadastre um projeto na aba "Novo Contrato" e clique em "Gerar Contratos".
           </p>
         </div>
       )}
