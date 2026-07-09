@@ -28,21 +28,22 @@ function EmptyChart({ label = 'Sem dados' }: { label?: string }) {
 export default function DashboardCompras() {
   const { compras, carregando } = useComprasComercial()
 
-  const { totalGeral, totalMesAtual, mesAtualLabel, topContas, topCentros, evolucaoMensal } = useMemo(() => {
+  const { totalGeral, totalMesAtual, mesAtualLabel, topContas, topProjetos, evolucaoMensal } = useMemo(() => {
     const hoje = new Date()
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
 
     let totalGeral = 0
     let totalMesAtual = 0
     const porConta = new Map<string, number>()
-    const porCentro = new Map<string, number>()
+    const porProjeto = new Map<string, number>()
     const porMes = new Map<string, number>()
 
     for (const c of compras) {
       totalGeral += c.valor
       if (c.data.startsWith(mesAtual)) totalMesAtual += c.valor
       porConta.set(c.desc_conta_gerencial, (porConta.get(c.desc_conta_gerencial) ?? 0) + c.valor)
-      porCentro.set(c.desc_centro_custo, (porCentro.get(c.desc_centro_custo) ?? 0) + c.valor)
+      const chaveProjeto = c.projeto ?? 'Não vinculado'
+      porProjeto.set(chaveProjeto, (porProjeto.get(chaveProjeto) ?? 0) + c.valor)
       const chaveMes = c.data.slice(0, 7)
       porMes.set(chaveMes, (porMes.get(chaveMes) ?? 0) + c.valor)
     }
@@ -59,7 +60,7 @@ export default function DashboardCompras() {
       totalMesAtual,
       mesAtualLabel: mesAno(`${mesAtual}-01`) ?? mesAtual,
       topContas: topN(porConta),
-      topCentros: topN(porCentro),
+      topProjetos: topN(porProjeto),
       evolucaoMensal,
     }
   }, [compras])
@@ -93,10 +94,10 @@ export default function DashboardCompras() {
         </div>
 
         <div className="card">
-          <h3 className="text-text-main text-sm font-semibold mb-4">Gastos por Centro de Custo</h3>
-          {topCentros.length > 0 ? (
+          <h3 className="text-text-main text-sm font-semibold mb-4">Gastos por Projeto / Turma</h3>
+          {topProjetos.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={topCentros} layout="vertical">
+              <BarChart data={topProjetos} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
                 <XAxis type="number" tickFormatter={v => fmtCompact(v as number)} tick={{ fill: '#8892b0', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="name" tick={{ fill: '#8892b0', fontSize: 10 }} axisLine={false} tickLine={false} width={140} />
