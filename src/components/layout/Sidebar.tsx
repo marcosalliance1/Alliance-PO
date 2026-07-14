@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, FolderOpen, BookOpen, BarChart2, DollarSign, Settings, Globe, CheckCircle, LogOut, Loader, Users, ArrowLeft, Calendar } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, BookOpen, BarChart2, DollarSign, Settings, Globe, CheckCircle, LogOut, Loader, Users, ArrowLeft, Calendar, Megaphone } from 'lucide-react'
 import allianceLogo from '../../assets/alliance-logo.png'
 import { useGoogleAuth } from '../../contexts/GoogleAuthContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -11,6 +11,7 @@ const links = [
   { to: '/banco-de-itens', icon: BookOpen, label: 'Banco de Itens' },
   { to: '/verbas', icon: BarChart2, label: 'Verbas' },
   { to: '/financeiro', icon: DollarSign, label: 'Financeiro' },
+  { to: '/marketing', icon: Megaphone, label: 'Marketing' },
   { to: '/configuracoes', icon: Settings, label: 'Configurações' },
   { to: '/portal-admin', icon: Users, label: 'Portal Clientes' },
 ]

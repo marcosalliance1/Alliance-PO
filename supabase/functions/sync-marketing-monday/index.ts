@@ -4,6 +4,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2"
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const BOARD_ID = "8225814416"
+// Board de subitens vinculado via a coluna "subelementos_mkm5w4z1" (subtasks) do board Marketing.
+const SUBITEMS_BOARD_ID = "8228218601"
 const MONDAY_API_URL = "https://api.monday.com/v2"
 const MONDAY_API_VERSION = "2024-10"
 const PAGE_LIMIT = 500
@@ -26,12 +28,19 @@ interface MondayGroup {
   title: string
 }
 
+interface MondaySubitem {
+  id: string
+  name: string
+  column_values: MondayColumnValue[]
+}
+
 interface MondayItem {
   id: string
   name: string
   updated_at: string | null
   group: MondayGroup
   column_values: MondayColumnValue[]
+  subitems: MondaySubitem[]
 }
 
 interface ItemsPage {
@@ -55,6 +64,10 @@ interface DemandaRow {
   prioridade: string | null
   data_inicio: string | null
   data_fim: string | null
+  turma: string | null
+  solicitante: string | null
+  link_demandas_texto: string | null
+  tem_arquivo: boolean
   monday_updated_at: string | null
   synced_at: string
 }
@@ -63,6 +76,17 @@ interface ResponsavelRow {
   item_id: number
   person_id: number
   person_name: string
+}
+
+interface SubitemRow {
+  id: number
+  item_id: number
+  nome: string
+  owner_person_id: number | null
+  owner_person_name: string | null
+  status: string | null
+  status_is_done: boolean
+  data: string | null
 }
 
 // ── Monday API helpers ──────────────────────────────────────────────────────────
@@ -100,14 +124,28 @@ const ITEM_FIELDS = `
   name
   updated_at
   group { id title }
-  column_values(ids: ["project_status", "project_owner", "project_timeline", "project_priority"]) {
+  column_values(ids: [
+    "project_status", "project_owner", "project_timeline", "project_priority",
+    "dropdown_mkv1whw8", "lookup_mkv1qzjr", "board_relation_mkv1rnq4", "file_mm1t1erc"
+  ]) {
     id
     text
     value
   }
+  subitems {
+    id
+    name
+    column_values(ids: ["person", "status", "date0"]) {
+      id
+      text
+      value
+    }
+  }
 `
 
-async function fetchBoardMeta(token: string): Promise<{ statusSettings: StatusColumnSettings; groups: MondayGroup[] }> {
+async function fetchBoardMeta(
+  token: string
+): Promise<{ statusSettings: StatusColumnSettings; subitemStatusSettings: StatusColumnSettings; groups: MondayGroup[] }> {
   const data = await mondayRequest(
     token,
     `query {
@@ -115,18 +153,26 @@ async function fetchBoardMeta(token: string): Promise<{ statusSettings: StatusCo
         columns(ids: ["project_status"]) { id settings_str }
         groups { id title }
       }
+      subitemsBoard: boards(ids: [${SUBITEMS_BOARD_ID}]) {
+        columns(ids: ["status"]) { id settings_str }
+      }
     }`
   )
   const board = data.boards?.[0]
-  const settingsStr = board?.columns?.[0]?.settings_str ?? "{}"
-  let statusSettings: StatusColumnSettings = {}
-  try {
-    statusSettings = JSON.parse(settingsStr)
-  } catch {
-    statusSettings = {}
+  const subitemsBoard = data.subitemsBoard?.[0]
+
+  const parseSettings = (settingsStr: string | undefined): StatusColumnSettings => {
+    try {
+      return JSON.parse(settingsStr ?? "{}")
+    } catch {
+      return {}
+    }
   }
+
+  const statusSettings = parseSettings(board?.columns?.[0]?.settings_str)
+  const subitemStatusSettings = parseSettings(subitemsBoard?.columns?.[0]?.settings_str)
   const groups: MondayGroup[] = board?.groups ?? []
-  return { statusSettings, groups }
+  return { statusSettings, subitemStatusSettings, groups }
 }
 
 async function fetchFirstPage(token: string): Promise<ItemsPage> {
@@ -184,8 +230,10 @@ function extrairCliente(nome: string): string {
   return resultado.toUpperCase()
 }
 
-function parseStatus(item: MondayItem, doneMap: Map<string, boolean>): { status: string; isDone: boolean } {
-  const col = getColumnValue(item, "project_status")
+function parseStatusValue(
+  col: MondayColumnValue | undefined,
+  doneMap: Map<string, boolean>
+): { status: string; isDone: boolean } {
   const status = col?.text ?? ""
   let isDone = false
   if (col?.value) {
@@ -198,6 +246,58 @@ function parseStatus(item: MondayItem, doneMap: Map<string, boolean>): { status:
     }
   }
   return { status, isDone }
+}
+
+function parseStatus(item: MondayItem, doneMap: Map<string, boolean>): { status: string; isDone: boolean } {
+  return parseStatusValue(getColumnValue(item, "project_status"), doneMap)
+}
+
+function parseTurma(item: MondayItem): string | null {
+  const text = (getColumnValue(item, "dropdown_mkv1whw8")?.text ?? "").trim()
+  return text.length > 0 ? text : null
+}
+
+function parseSolicitante(item: MondayItem): string | null {
+  const text = (getColumnValue(item, "lookup_mkv1qzjr")?.text ?? "").trim()
+  return text.length > 0 ? text : null
+}
+
+function parseLinkDemandas(item: MondayItem): string | null {
+  const text = (getColumnValue(item, "board_relation_mkv1rnq4")?.text ?? "").trim()
+  return text.length > 0 ? text : null
+}
+
+function parseTemArquivo(item: MondayItem): boolean {
+  const col = getColumnValue(item, "file_mm1t1erc")
+  if (!col?.value) return false
+  try {
+    const parsed = JSON.parse(col.value)
+    return Array.isArray(parsed.files) && parsed.files.length > 0
+  } catch {
+    return false
+  }
+}
+
+function parseSubitemOwner(col: MondayColumnValue | undefined): { id: number | null; name: string | null } {
+  if (!col?.value) return { id: null, name: null }
+  try {
+    const parsed = JSON.parse(col.value)
+    const person = (parsed.personsAndTeams ?? []).find((p: any) => p.kind === "person")
+    if (!person) return { id: null, name: null }
+    return { id: person.id, name: col.text || null }
+  } catch {
+    return { id: null, name: null }
+  }
+}
+
+function parseSubitemData(col: MondayColumnValue | undefined): string | null {
+  if (!col?.value) return null
+  try {
+    const parsed = JSON.parse(col.value)
+    return parsed.date ?? null
+  } catch {
+    return null
+  }
 }
 
 function parsePriority(item: MondayItem): string | null {
@@ -255,8 +355,9 @@ Deno.serve(async (req: Request) => {
     )
 
     // ── Metadados do board: labels de status (is_done) e grupos ─────────────
-    const { statusSettings, groups } = await fetchBoardMeta(mondayToken)
+    const { statusSettings, subitemStatusSettings, groups } = await fetchBoardMeta(mondayToken)
     const doneMap = buildDoneMap(statusSettings)
+    const subDoneMap = buildDoneMap(subitemStatusSettings)
 
     if (groups.length > 0) {
       const { error: groupsErr } = await supabase
@@ -270,11 +371,13 @@ Deno.serve(async (req: Request) => {
 
     // ── Paginação dos itens ──────────────────────────────────────────────────
     let synced = 0
+    let subitensSynced = 0
     let page: ItemsPage = await fetchFirstPage(mondayToken)
 
     while (true) {
       const demandas: DemandaRow[] = []
       const responsaveis: ResponsavelRow[] = []
+      const subitens: SubitemRow[] = []
       const nowIso = new Date().toISOString()
 
       for (const item of page.items) {
@@ -295,12 +398,34 @@ Deno.serve(async (req: Request) => {
             prioridade,
             data_inicio: inicio,
             data_fim: fim,
+            turma: parseTurma(item),
+            solicitante: parseSolicitante(item),
+            link_demandas_texto: parseLinkDemandas(item),
+            tem_arquivo: parseTemArquivo(item),
             monday_updated_at: item.updated_at,
             synced_at: nowIso,
           })
 
           for (const p of pessoas) {
             responsaveis.push({ item_id: itemId, person_id: p.id, person_name: p.name })
+          }
+
+          for (const sub of item.subitems ?? []) {
+            const owner = parseSubitemOwner(sub.column_values.find((c) => c.id === "person"))
+            const { status: subStatus, isDone: subIsDone } = parseStatusValue(
+              sub.column_values.find((c) => c.id === "status"),
+              subDoneMap
+            )
+            subitens.push({
+              id: Number(sub.id),
+              item_id: itemId,
+              nome: sub.name,
+              owner_person_id: owner.id,
+              owner_person_name: owner.name,
+              status: subStatus || null,
+              status_is_done: subIsDone,
+              data: parseSubitemData(sub.column_values.find((c) => c.id === "date0")),
+            })
           }
         } catch (itemErr) {
           errors.push(`Item ${item.id}: ${String(itemErr)}`)
@@ -329,6 +454,20 @@ Deno.serve(async (req: Request) => {
               .insert(responsaveis)
             if (insErr) errors.push(`Insert responsaveis (página): ${insErr.message}`)
           }
+
+          const { error: delSubErr } = await supabase
+            .from("marketing_subitens")
+            .delete()
+            .in("item_id", itemIds)
+          if (delSubErr) errors.push(`Delete subitens (página): ${delSubErr.message}`)
+
+          if (subitens.length > 0) {
+            const { error: insSubErr } = await supabase
+              .from("marketing_subitens")
+              .insert(subitens)
+            if (insSubErr) errors.push(`Insert subitens (página): ${insSubErr.message}`)
+            else subitensSynced += subitens.length
+          }
         }
       }
 
@@ -337,7 +476,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ synced, groups: groups.length, errors }),
+      JSON.stringify({ synced, subitensSynced, groups: groups.length, errors }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
   } catch (err) {

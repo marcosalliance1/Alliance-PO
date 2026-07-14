@@ -14,6 +14,7 @@ import { ViewProjeto } from './pages/ViewProjeto'
 import { BancoDeItens } from './pages/BancoDeItens'
 import { Verbas } from './pages/Verbas'
 import { Financeiro } from './pages/Financeiro'
+import { Marketing } from './pages/Marketing'
 import { Configuracoes } from './pages/Configuracoes'
 import { LoginAdmin } from './pages/LoginAdmin'
 import { LoginViewer } from './pages/LoginViewer'
@@ -278,6 +279,7 @@ function AppRoutes() {
         <Route path="/operacional" element={<Operacional />} />
         <Route path="/verbas" element={<Verbas />} />
         <Route path="/financeiro" element={<Financeiro />} />
+        <Route path="/marketing" element={<Marketing />} />
         <Route path="/portal-admin" element={<AdminPortal />} />
         <Route
           path="/configuracoes"
