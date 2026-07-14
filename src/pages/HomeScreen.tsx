@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { ClipboardList, CalendarCheck, Clock, Users, Percent } from 'lucide-react'
+import { ClipboardList, CalendarCheck, Clock, Users, Percent, Megaphone } from 'lucide-react'
 import allianceLogo from '../assets/alliance-logo.png'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -32,6 +32,13 @@ const MODULES = [
     to: '/comercial',
     disabled: false,
   },
+  {
+    icon: Megaphone,
+    title: 'Marketing',
+    description: 'Demandas e indicadores do board Marketing',
+    to: '/marketing',
+    disabled: false,
+  },
 ]
 
 export function HomeScreen() {
@@ -56,7 +63,7 @@ export function HomeScreen() {
         <div className="text-text-muted text-sm">Selecione o módulo</div>
       </div>
 
-      <div className={`grid gap-5 w-full ${isAdmin ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 max-w-4xl' : 'grid-cols-2 sm:grid-cols-2 md:grid-cols-4 max-w-3xl'}`}>
+      <div className={`grid gap-5 w-full ${isAdmin ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 max-w-5xl' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5 max-w-4xl'}`}>
         {modules.map(({ icon: Icon, title, description, to, disabled }) => (
           <button
             key={to}
