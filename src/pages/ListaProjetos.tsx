@@ -337,7 +337,7 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
   function renderCardRealizado(p: Projeto) {
     const resumo = calcResumoProjeto(p)
     const totalContratado   = resumo.custoTotal.contratado
-    const totalPago         = p.conciliacaoEverest?.linhas.reduce((s, l) => s + (l.valorEverest ?? 0), 0) ?? 0
+    const totalPago         = resumo.custoTotal.pago
     const progressPct       = totalContratado > 0 ? Math.min((totalPago / totalContratado) * 100, 100) : 0
 
     // Margem Contratada: (receita contratada - custo contratado) / receita contratada
