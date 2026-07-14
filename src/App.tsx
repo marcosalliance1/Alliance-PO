@@ -279,7 +279,6 @@ function AppRoutes() {
         <Route path="/operacional" element={<Operacional />} />
         <Route path="/verbas" element={<Verbas />} />
         <Route path="/financeiro" element={<Financeiro />} />
-        <Route path="/marketing" element={<Marketing />} />
         <Route path="/portal-admin" element={<AdminPortal />} />
         <Route
           path="/configuracoes"
@@ -295,6 +294,9 @@ function AppRoutes() {
           }
         />
       </Route>
+
+      {/* Módulo Marketing (página única, sem sidebar do P.O. Alliance) */}
+      <Route path="/marketing" element={<RequireAuth><Marketing /></RequireAuth>} />
 
       {/* Módulo Pré-Eventos */}
       <Route

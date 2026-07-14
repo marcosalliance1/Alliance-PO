@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, LineChart, Line, Cell,
 } from 'recharts'
 import {
   RefreshCw, Loader, ListChecks, CheckCircle2, Clock, AlertTriangle,
-  Flame, UserX, Target, X,
+  Flame, UserX, Target, X, ArrowLeft,
 } from 'lucide-react'
 import { useMarketing, type MarketingDemanda, type MarketingGrupo } from '../hooks/useMarketing'
 import { tempoDesde } from '../utils/parseFinanceiro'
@@ -48,6 +49,7 @@ interface Filtro {
 }
 
 export function Marketing() {
+  const navigate = useNavigate()
   const { grupos, demandas, responsaveis, subitens, carregando, sincronizando, ultimoSync, sincronizarAgora } = useMarketing()
   const [filtro, setFiltro] = useState<Filtro | null>(null)
   const [esconderArquivo, setEsconderArquivo] = useState(true)
@@ -229,7 +231,7 @@ export function Marketing() {
 
   if (carregando) {
     return (
-      <div className="p-6 max-w-screen-xl mx-auto flex items-center justify-center h-64 gap-3 text-text-muted">
+      <div className="min-h-screen bg-bg p-6 max-w-screen-xl mx-auto flex items-center justify-center h-64 gap-3 text-text-muted">
         <Loader size={20} className="animate-spin" />
         <span className="text-sm">Carregando dados de marketing...</span>
       </div>
@@ -237,10 +239,17 @@ export function Marketing() {
   }
 
   return (
-    <div className="p-6 max-w-screen-xl mx-auto space-y-5">
+    <div className="min-h-screen bg-bg">
+      <div className="p-6 max-w-screen-xl mx-auto space-y-5">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
+          <button
+            onClick={() => navigate('/modulos')}
+            className="flex items-center gap-1.5 text-xs text-text-muted hover:text-text-main transition-colors mb-2"
+          >
+            <ArrowLeft size={13} /> Voltar à Home
+          </button>
           <h1 className="text-text-main text-xl font-bold">Marketing</h1>
           <p className="text-text-muted text-xs mt-0.5">
             Sincronização com o board Marketing do monday.com
@@ -502,6 +511,7 @@ export function Marketing() {
       </div>
 
       {syncMsg && <Toast mensagem={syncMsg.texto} tipo={syncMsg.erro ? 'erro' : 'sucesso'} onFechar={() => setSyncMsg(null)} />}
+      </div>
     </div>
   )
 }
