@@ -362,7 +362,7 @@ function erroToken(): Error {
 }
 
 export async function lerAba(spreadsheetId: string, aba: string, accessToken: string): Promise<unknown[][]> {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(`'${aba}'`)}?valueRenderOption=FORMATTED_VALUE`
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(aba)}?valueRenderOption=FORMATTED_VALUE`
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
   if (resp.status === 401) throw erroToken()
   if (resp.status === 403) throw new Error('Sem permissão para acessar esta planilha. Verifique se ela está compartilhada com sua conta.')
