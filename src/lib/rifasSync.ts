@@ -52,6 +52,32 @@ function parseSimNao(raw: string): boolean {
   return raw.trim().toUpperCase() === 'SIM'
 }
 
+// PREENCHIDO NA PLANILHA? usa texto livre na prática ("Preenchido", não só "SIM") —
+// trata qualquer palavra de confirmação como verdadeiro, mas rejeita explicitamente
+// negações (senão "NÃO PREENCHIDO" bateria em "PREENCHIDO" e viraria falso positivo).
+const PREENCHIDO_PALAVRAS = ['SIM', 'PREENCHIDO', 'OK', 'FEITO', 'CONCLUIDO', 'CONCLUÍDO', 'X']
+function parsePreenchidoPlanilha(raw: string): boolean {
+  const t = raw.trim().toUpperCase()
+  if (!t) return false
+  if (t.includes('NAO') || t.includes('NÃO')) return false
+  return PREENCHIDO_PALAVRAS.some(p => t.includes(p))
+}
+
+// CONTATO costuma vir com telefone e e-mail na mesma célula, às vezes sem separador
+// visível (quebra de linha da planilha vira espaço no FORMATTED_VALUE). Extrai o
+// e-mail por regex (funciona mesmo colado no telefone) e trata o resto como telefone.
+export interface ContatoParseado { telefone: string | null; email: string | null; formatado: string }
+export function parseContato(raw: string): ContatoParseado {
+  const texto = raw.trim()
+  if (!texto) return { telefone: null, email: null, formatado: '' }
+  const emailMatch = texto.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)
+  const email = emailMatch ? emailMatch[0] : null
+  let resto = email ? texto.replace(email, '') : texto
+  resto = resto.replace(/[,;/|\n\r]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const telefone = resto || null
+  return { telefone, email, formatado: [telefone, email].filter(Boolean).join(' · ') }
+}
+
 function parseInt10(raw: string): number | null {
   const n = parseInt(raw, 10)
   return isNaN(n) ? null : n
@@ -279,7 +305,7 @@ export function parseAbaGanhadores(values: unknown[][]): { linhas: GanhadorSheet
       data_sorteio: data,
       sorteado: parseSimNao(celula(row, colunas.sorteado)),
       nome_ganhador: nomeGanhador || null,
-      contato: celula(row, colunas.contato) || null,
+      contato: parseContato(celula(row, colunas.contato)).formatado || null,
       contato_feito: parseSimNao(celula(row, colunas.contato_feito)),
       premio_entregue: celula(row, colunas.premio_entregue) || null,
       financeiro: celula(row, colunas.financeiro) || null,
@@ -365,7 +391,7 @@ export function parseAbaCompras(values: unknown[][]): { linhas: CompraSheetRow[]
       data_compra: dataCompra,
       data_entrega_raw: celula(row, colunas.data_entrega_raw) || null,
       nome_cartao: celula(row, colunas.nome_cartao) || null,
-      preenchido_planilha: parseSimNao(celula(row, colunas.preenchido_planilha)),
+      preenchido_planilha: parsePreenchidoPlanilha(celula(row, colunas.preenchido_planilha)),
       hash: hashLinha(row),
     })
   }

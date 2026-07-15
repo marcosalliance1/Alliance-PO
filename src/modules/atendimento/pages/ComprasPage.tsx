@@ -1,17 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useAtendimento } from '../contexts/AtendimentoContext'
 import { SyncBar } from '../components/SyncBar'
-
-function formatarData(iso: string | null): string {
-  if (!iso) return '—'
-  const [y, m, d] = iso.split('-')
-  return `${d}/${m}/${y}`
-}
-
-function formatarValor(v: number | null): string {
-  if (v === null) return '—'
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
+import { formatarData, formatarValor } from '../lib/formatadores'
 
 function Badge({ children, cor }: { children: React.ReactNode; cor: string }) {
   return <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${cor}`}>{children}</span>

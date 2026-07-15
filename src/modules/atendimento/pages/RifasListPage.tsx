@@ -4,18 +4,8 @@ import { useAtendimento } from '../contexts/AtendimentoContext'
 import { SyncBar } from '../components/SyncBar'
 import { PipelineDots } from '../components/PipelineDots'
 import { calcularPipeline } from '../lib/rifaPipeline'
+import { formatarData, formatarValor } from '../lib/formatadores'
 import type { Rifa } from '../../../hooks/useRifas'
-
-function formatarData(iso: string | null): string {
-  if (!iso) return '—'
-  const [y, m, d] = iso.split('-')
-  return `${d}/${m}/${y}`
-}
-
-function formatarValor(v: number | null): string {
-  if (v === null) return '—'
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
 
 const SITUACAO_COR: Record<string, string> = {
   'EM ANDAMENTO': 'text-warning',
@@ -98,7 +88,7 @@ export function RifasListPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-text-main mb-4">Rifas</h1>
+      <h1 className="text-xl font-bold text-text-main mb-4">Todas as Rifas</h1>
       <SyncBar />
 
       <div className="card p-0 overflow-hidden">

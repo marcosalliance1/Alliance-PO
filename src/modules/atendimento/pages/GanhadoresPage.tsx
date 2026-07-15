@@ -4,17 +4,8 @@ import { useAtendimento } from '../contexts/AtendimentoContext'
 import { SyncBar } from '../components/SyncBar'
 import { pipelineDoGanhador, classificarPremioEntregue } from '../lib/rifaPipeline'
 import { PipelineDots } from '../components/PipelineDots'
-
-function formatarData(iso: string | null): string {
-  if (!iso) return '—'
-  const [y, m, d] = iso.split('-')
-  return `${d}/${m}/${y}`
-}
-
-function formatarValor(v: number | null): string {
-  if (v === null) return '—'
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
+import { ContatoBadges } from '../components/ContatoBadges'
+import { formatarData, formatarValor } from '../lib/formatadores'
 
 const TIPO_COR: Record<string, string> = {
   'Rifas do Projeto': 'bg-primary/15 text-primary',
@@ -129,7 +120,7 @@ export function GanhadoresPage() {
                       <td className="px-4 py-2 text-text-muted max-w-xs truncate" title={g.premio_descricao ?? ''}>{g.premio_descricao ?? '—'}</td>
                       <td className="px-4 py-2 text-text-muted whitespace-nowrap">{formatarData(g.data_sorteio)}</td>
                       <td className="px-4 py-2 text-text-main whitespace-nowrap">{g.nome_ganhador ?? '—'}</td>
-                      <td className="px-4 py-2 text-text-muted whitespace-nowrap">{g.contato ?? '—'}</td>
+                      <td className="px-4 py-2 whitespace-nowrap"><ContatoBadges contato={g.contato} /></td>
                       <td className="px-4 py-2"><BadgeSimNao valor={g.contato_feito} /></td>
                       <td className="px-4 py-2"><BadgePremioEntregue texto={g.premio_entregue} /></td>
                       <td className="px-4 py-2 text-text-muted">{g.financeiro ?? '—'}</td>
