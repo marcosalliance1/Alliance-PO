@@ -4,7 +4,7 @@ import {
   ABA_INFORMACOES, ABA_GANHADORES, ABA_COMPRAS,
   COLS_INFORMACOES, COLS_GANHADORES, COLS_COMPRAS,
   parseAbaInformacoes, parseAbaGanhadores, parseAbaCompras,
-  lerAba, escreverLinha, escreverCelula, anexarLinha,
+  lerAba, escreverLinha, escreverCelula, anexarLinha, listarAbas, encontrarAbaReal,
   formatarDataBR, hashLinha, construirLinhaArray, normalizarChave, mapearColunas,
   type RifaSheetRow, type GanhadorSheetRow, type CompraSheetRow,
 } from '../lib/rifasSync'
@@ -192,7 +192,7 @@ const CAMPOS_RIFAS: DiffCampo<RifaSheetRow, Rifa>[] = [
 ]
 
 async function sincronizarRifasTabela(
-  linhas: RifaSheetRow[], colunas: Record<string, number>, atuais: Rifa[],
+  linhas: RifaSheetRow[], colunas: Record<string, number>, atuais: Rifa[], abaReal: string,
   spreadsheetId: string, accessToken: string, ultimaSyncEm: string | null, erros: string[],
 ): Promise<{ criados: number; atualizados: number; conflitos: number }> {
   let criados = 0, atualizados = 0, conflitos = 0
@@ -228,10 +228,10 @@ async function sincronizarRifasTabela(
       try {
         const novoHash = hashLinha(construirLinhaArray(colunas, valores))
         if (acao.tipo === 'atualizar_sheet') {
-          await escreverLinha(spreadsheetId, ABA_INFORMACOES, d.sheet_row_number!, colunas, valores, accessToken)
+          await escreverLinha(spreadsheetId, abaReal, d.sheet_row_number!, colunas, valores, accessToken)
           await supabase.from('rifas').update({ sheet_row_hash: novoHash }).eq('id', d.id)
         } else {
-          const novaLinha = await anexarLinha(spreadsheetId, ABA_INFORMACOES, colunas, valores, accessToken)
+          const novaLinha = await anexarLinha(spreadsheetId, abaReal, colunas, valores, accessToken)
           await supabase.from('rifas').update({ sheet_row_number: novaLinha, sheet_row_hash: novoHash }).eq('id', d.id)
         }
         atualizados++
@@ -271,7 +271,7 @@ function resolverRifaId(s: GanhadorSheetRow, rifasAtuais: Rifa[]): string | null
 }
 
 async function sincronizarGanhadoresTabela(
-  linhas: GanhadorSheetRow[], colunas: Record<string, number>, atuais: RifaGanhador[], rifasAtuais: Rifa[],
+  linhas: GanhadorSheetRow[], colunas: Record<string, number>, atuais: RifaGanhador[], rifasAtuais: Rifa[], abaReal: string,
   spreadsheetId: string, accessToken: string, ultimaSyncEm: string | null, erros: string[],
 ): Promise<{ criados: number; atualizados: number; conflitos: number }> {
   let criados = 0, atualizados = 0, conflitos = 0
@@ -310,10 +310,10 @@ async function sincronizarGanhadoresTabela(
       try {
         const novoHash = hashLinha(construirLinhaArray(colunas, valores))
         if (acao.tipo === 'atualizar_sheet') {
-          await escreverLinha(spreadsheetId, ABA_GANHADORES, d.sheet_row_number!, colunas, valores, accessToken)
+          await escreverLinha(spreadsheetId, abaReal, d.sheet_row_number!, colunas, valores, accessToken)
           await supabase.from('rifas_ganhadores').update({ sheet_row_hash: novoHash }).eq('id', d.id)
         } else {
-          const novaLinha = await anexarLinha(spreadsheetId, ABA_GANHADORES, colunas, valores, accessToken)
+          const novaLinha = await anexarLinha(spreadsheetId, abaReal, colunas, valores, accessToken)
           await supabase.from('rifas_ganhadores').update({ sheet_row_number: novaLinha, sheet_row_hash: novoHash }).eq('id', d.id)
         }
         atualizados++
@@ -355,7 +355,7 @@ function resolverGanhadorId(s: CompraSheetRow, ganhadoresAtuais: RifaGanhador[])
 }
 
 async function sincronizarComprasTabela(
-  linhas: CompraSheetRow[], colunas: Record<string, number>, atuais: RifaCompra[], ganhadoresAtuais: RifaGanhador[],
+  linhas: CompraSheetRow[], colunas: Record<string, number>, atuais: RifaCompra[], ganhadoresAtuais: RifaGanhador[], abaReal: string,
   spreadsheetId: string, accessToken: string, ultimaSyncEm: string | null, erros: string[],
 ): Promise<{ criados: number; atualizados: number; conflitos: number }> {
   let criados = 0, atualizados = 0, conflitos = 0
@@ -398,10 +398,10 @@ async function sincronizarComprasTabela(
       try {
         const novoHash = hashLinha(construirLinhaArray(colunas, valores))
         if (acao.tipo === 'atualizar_sheet') {
-          await escreverLinha(spreadsheetId, ABA_COMPRAS, d.sheet_row_number!, colunas, valores, accessToken)
+          await escreverLinha(spreadsheetId, abaReal, d.sheet_row_number!, colunas, valores, accessToken)
           await supabase.from('rifas_compras').update({ sheet_row_hash: novoHash }).eq('id', d.id)
         } else {
-          const novaLinha = await anexarLinha(spreadsheetId, ABA_COMPRAS, colunas, valores, accessToken)
+          const novaLinha = await anexarLinha(spreadsheetId, abaReal, colunas, valores, accessToken)
           await supabase.from('rifas_compras').update({ sheet_row_number: novaLinha, sheet_row_hash: novoHash }).eq('id', d.id)
         }
         atualizados++
@@ -470,10 +470,19 @@ export function useRifas() {
     try {
       const ultimaSyncEm = ultimoSync
 
+      const todasAbas = await listarAbas(spreadsheetId, accessToken)
+      const abaInformacoesReal = encontrarAbaReal(ABA_INFORMACOES, todasAbas)
+      const abaGanhadoresReal = encontrarAbaReal(ABA_GANHADORES, todasAbas)
+      const abaComprasReal = encontrarAbaReal(ABA_COMPRAS, todasAbas)
+
+      if (!abaInformacoesReal) erros.push(`Aba "${ABA_INFORMACOES}" não encontrada na planilha. Abas disponíveis: ${todasAbas.join(', ')}`)
+      if (!abaGanhadoresReal) erros.push(`Aba "${ABA_GANHADORES}" não encontrada na planilha. Abas disponíveis: ${todasAbas.join(', ')}`)
+      if (!abaComprasReal) erros.push(`Aba "${ABA_COMPRAS}" não encontrada na planilha. Abas disponíveis: ${todasAbas.join(', ')}`)
+
       const [valoresInformacoes, valoresGanhadores, valoresCompras] = await Promise.all([
-        lerAba(spreadsheetId, ABA_INFORMACOES, accessToken),
-        lerAba(spreadsheetId, ABA_GANHADORES, accessToken),
-        lerAba(spreadsheetId, ABA_COMPRAS, accessToken),
+        abaInformacoesReal ? lerAba(spreadsheetId, abaInformacoesReal, accessToken) : Promise.resolve([]),
+        abaGanhadoresReal ? lerAba(spreadsheetId, abaGanhadoresReal, accessToken) : Promise.resolve([]),
+        abaComprasReal ? lerAba(spreadsheetId, abaComprasReal, accessToken) : Promise.resolve([]),
       ])
 
       const infoParsed = parseAbaInformacoes(valoresInformacoes)
@@ -481,17 +490,26 @@ export function useRifas() {
       const compParsed = parseAbaCompras(valoresCompras)
       erros.push(...infoParsed.avisos, ...ganhParsed.avisos, ...compParsed.avisos)
 
-      const r1 = await sincronizarRifasTabela(infoParsed.linhas, infoParsed.colunas, rifas, spreadsheetId, accessToken, ultimaSyncEm, erros)
+      let r1 = { criados: 0, atualizados: 0, conflitos: 0 }
+      if (abaInformacoesReal) {
+        r1 = await sincronizarRifasTabela(infoParsed.linhas, infoParsed.colunas, rifas, abaInformacoesReal, spreadsheetId, accessToken, ultimaSyncEm, erros)
+      }
       criados += r1.criados; atualizados += r1.atualizados; conflitosDetectados += r1.conflitos
 
       const rifasAtualizadas = await fetchAll<Rifa>('rifas').catch(() => rifas)
 
-      const r2 = await sincronizarGanhadoresTabela(ganhParsed.linhas, ganhParsed.colunas, ganhadores, rifasAtualizadas, spreadsheetId, accessToken, ultimaSyncEm, erros)
+      let r2 = { criados: 0, atualizados: 0, conflitos: 0 }
+      if (abaGanhadoresReal) {
+        r2 = await sincronizarGanhadoresTabela(ganhParsed.linhas, ganhParsed.colunas, ganhadores, rifasAtualizadas, abaGanhadoresReal, spreadsheetId, accessToken, ultimaSyncEm, erros)
+      }
       criados += r2.criados; atualizados += r2.atualizados; conflitosDetectados += r2.conflitos
 
       const ganhadoresAtualizados = await fetchAll<RifaGanhador>('rifas_ganhadores').catch(() => ganhadores)
 
-      const r3 = await sincronizarComprasTabela(compParsed.linhas, compParsed.colunas, compras, ganhadoresAtualizados, spreadsheetId, accessToken, ultimaSyncEm, erros)
+      let r3 = { criados: 0, atualizados: 0, conflitos: 0 }
+      if (abaComprasReal) {
+        r3 = await sincronizarComprasTabela(compParsed.linhas, compParsed.colunas, compras, ganhadoresAtualizados, abaComprasReal, spreadsheetId, accessToken, ultimaSyncEm, erros)
+      }
       criados += r3.criados; atualizados += r3.atualizados; conflitosDetectados += r3.conflitos
 
       const { error: rpcError } = await supabase.rpc('rifas_recalcular_matches')
@@ -525,7 +543,10 @@ export function useRifas() {
   }
 
   async function resolverConflito(conflito: RifaSyncConflito, manter: 'alliance' | 'sheet', spreadsheetId: string, accessToken: string) {
-    const aba = ABA_POR_TABELA[conflito.tabela_origem]
+    const nomeEsperado = ABA_POR_TABELA[conflito.tabela_origem]
+    const todasAbas = await listarAbas(spreadsheetId, accessToken)
+    const aba = encontrarAbaReal(nomeEsperado, todasAbas)
+    if (!aba) throw new Error(`Aba "${nomeEsperado}" não encontrada na planilha. Abas disponíveis: ${todasAbas.join(', ')}`)
 
     const { data: registro, error: fetchError } = await supabase
       .from(conflito.tabela_origem).select('sheet_row_number').eq('id', conflito.registro_id).single()

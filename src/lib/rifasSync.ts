@@ -361,6 +361,29 @@ function erroToken(): Error {
   return err
 }
 
+// Lista os nomes reais das abas da planilha — usado para casar os nomes esperados
+// (ABA_INFORMACOES etc) com o título de verdade, já que acentuação/espaços podem não
+// bater byte a byte com o que foi hardcoded no código.
+export async function listarAbas(spreadsheetId: string, accessToken: string): Promise<string[]> {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties.title`
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
+  if (resp.status === 401) throw erroToken()
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({})) as { error?: { message?: string } }
+    throw new Error(body.error?.message ?? `Erro ao listar abas da planilha (HTTP ${resp.status})`)
+  }
+  const meta = await resp.json() as { sheets?: { properties: { title: string } }[] }
+  return (meta.sheets ?? []).map(s => s.properties.title)
+}
+
+// Acha, entre os títulos reais da planilha, o que corresponde ao nome esperado
+// (comparação tolerante a acento/maiúscula/espaço) — evita "Unable to parse range"
+// por causa de uma diferença sutil de grafia entre o que foi hardcoded e a aba real.
+export function encontrarAbaReal(nomeEsperado: string, abasReais: string[]): string | null {
+  const alvo = normalizarCabecalho(nomeEsperado)
+  return abasReais.find(a => normalizarCabecalho(a) === alvo) ?? null
+}
+
 export async function lerAba(spreadsheetId: string, aba: string, accessToken: string): Promise<unknown[][]> {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(aba)}?valueRenderOption=FORMATTED_VALUE`
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
