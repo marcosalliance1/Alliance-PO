@@ -42,6 +42,8 @@ import ContratosPage from './modules/alliance-comercial/pages/Contratos/Contrato
 import ComprasComercialPage from './modules/alliance-comercial/pages/ComprasComercial/ComprasComercialPage'
 import { Layout as AtendimentoLayout } from './modules/atendimento/components/Layout/Layout'
 import { RifasListPage } from './modules/atendimento/pages/RifasListPage'
+import { GanhadoresPage } from './modules/atendimento/pages/GanhadoresPage'
+import { ComprasPage } from './modules/atendimento/pages/ComprasPage'
 import { VinculosPendentesPage } from './modules/atendimento/pages/VinculosPendentesPage'
 import { ConflitosPage } from './modules/atendimento/pages/ConflitosPage'
 
@@ -348,6 +350,8 @@ function AppRoutes() {
       >
         <Route index element={<Navigate to="rifas" replace />} />
         <Route path="rifas" element={<RifasListPage />} />
+        <Route path="rifas/ganhadores" element={<GanhadoresPage />} />
+        <Route path="rifas/compras" element={<ComprasPage />} />
         <Route path="rifas/vinculos-pendentes" element={<VinculosPendentesPage />} />
         <Route path="rifas/conflitos" element={<ConflitosPage />} />
       </Route>

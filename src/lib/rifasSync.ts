@@ -102,11 +102,16 @@ function colIndexToLetter(idx: number): string {
 
 // ── Mapeamento de colunas por nome de cabeçalho ──────────────────────────────
 
+// Casa por igualdade exata primeiro (evita falso-positivo tipo "OBS" achar "OBSERVAÇÕES
+// GERAIS"); se nada bater exato, tenta por "contém" nos dois sentidos — cobre cabeçalhos
+// reais com qualificador extra (ex: "NOME DO GANHADOR(A)", "GANHADOR DA RIFA").
 function mapearColunas(headerRow: unknown[], candidatos: Record<string, string[]>): Record<string, number> {
   const headers = headerRow.map(normalizarCabecalho)
   const mapa: Record<string, number> = {}
   for (const [campo, opcoes] of Object.entries(candidatos)) {
-    const idx = headers.findIndex(h => opcoes.some(o => h === normalizarCabecalho(o)))
+    const opcoesNorm = opcoes.map(normalizarCabecalho)
+    let idx = headers.findIndex(h => h !== '' && opcoesNorm.some(o => h === o))
+    if (idx < 0) idx = headers.findIndex(h => h !== '' && opcoesNorm.some(o => h.includes(o) || o.includes(h)))
     if (idx >= 0) mapa[campo] = idx
   }
   return mapa
@@ -114,6 +119,17 @@ function mapearColunas(headerRow: unknown[], candidatos: Record<string, string[]
 
 function colunasFaltando(mapa: Record<string, number>, obrigatorias: string[]): string[] {
   return obrigatorias.filter(c => mapa[c] === undefined)
+}
+
+// A linha de cabeçalho real pode não ser a primeira (linha de título/resumo acima, como
+// acontece em INFORMAÇÕES com "Aderentes: 247") — procura, nas primeiras linhas, a que
+// tem uma célula reconhecível como "TURMA" (âncora comum às 3 abas).
+function encontrarLinhaCabecalho(values: unknown[][], maxLinhas = 5): number {
+  for (let i = 0; i < Math.min(values.length, maxLinhas); i++) {
+    const row = (values[i] as unknown[]) ?? []
+    if (row.some(c => normalizarCabecalho(c) === 'TURMA')) return i
+  }
+  return 0
 }
 
 // ── INFORMAÇÕES → rifas ──────────────────────────────────────────────────────
@@ -149,7 +165,8 @@ export function parseAbaInformacoes(values: unknown[][]): { linhas: RifaSheetRow
   const avisos: string[] = []
   if (values.length === 0) return { linhas: [], colunas: {}, avisos: [`Aba "${ABA_INFORMACOES}" vazia ou não encontrada.`] }
 
-  const header = values[0] as unknown[]
+  const headerRow = encontrarLinhaCabecalho(values)
+  const header = values[headerRow] as unknown[]
   const colunas = mapearColunas(header, COLS_INFORMACOES)
 
   // A coluna "Nº EDIÇÃO" não tem cabeçalho na planilha real (célula em branco entre
@@ -160,12 +177,12 @@ export function parseAbaInformacoes(values: unknown[][]): { linhas: RifaSheetRow
 
   const faltando = colunasFaltando(colunas, ['turma', 'situacao'])
   if (faltando.length > 0) {
-    avisos.push(`Aba "${ABA_INFORMACOES}": colunas obrigatórias não encontradas: ${faltando.join(', ')}.`)
+    avisos.push(`Aba "${ABA_INFORMACOES}": colunas obrigatórias não encontradas: ${faltando.join(', ')}. Cabeçalho lido (linha ${headerRow + 1}): ${header.map(c => String(c ?? '')).filter(Boolean).join(' | ')}`)
     return { linhas: [], colunas, avisos }
   }
 
   const linhas: RifaSheetRow[] = []
-  for (let i = 1; i < values.length; i++) {
+  for (let i = headerRow + 1; i < values.length; i++) {
     const row = (values[i] as unknown[]) ?? []
     const turma = celula(row, colunas.turma)
     if (!turma) continue // linha vazia/ruído (ex: resumo "Aderentes: 247")
@@ -233,16 +250,17 @@ export function parseAbaGanhadores(values: unknown[][]): { linhas: GanhadorSheet
   const avisos: string[] = []
   if (values.length === 0) return { linhas: [], colunas: {}, avisos: [`Aba "${ABA_GANHADORES}" vazia ou não encontrada.`] }
 
-  const header = values[0] as unknown[]
+  const headerRow = encontrarLinhaCabecalho(values)
+  const header = values[headerRow] as unknown[]
   const colunas = mapearColunas(header, COLS_GANHADORES)
   const faltando = colunasFaltando(colunas, ['turma', 'nome_ganhador'])
   if (faltando.length > 0) {
-    avisos.push(`Aba "${ABA_GANHADORES}": colunas obrigatórias não encontradas: ${faltando.join(', ')}.`)
+    avisos.push(`Aba "${ABA_GANHADORES}": colunas obrigatórias não encontradas: ${faltando.join(', ')}. Cabeçalho lido (linha ${headerRow + 1}): ${header.map(c => String(c ?? '')).filter(Boolean).join(' | ')}`)
     return { linhas: [], colunas, avisos }
   }
 
   const linhas: GanhadorSheetRow[] = []
-  for (let i = 1; i < values.length; i++) {
+  for (let i = headerRow + 1; i < values.length; i++) {
     const row = (values[i] as unknown[]) ?? []
     const turma = celula(row, colunas.turma)
     const nomeGanhador = celula(row, colunas.nome_ganhador)
@@ -310,16 +328,17 @@ export function parseAbaCompras(values: unknown[][]): { linhas: CompraSheetRow[]
   const avisos: string[] = []
   if (values.length === 0) return { linhas: [], colunas: {}, avisos: [`Aba "${ABA_COMPRAS}" vazia ou não encontrada.`] }
 
-  const header = values[0] as unknown[]
+  const headerRow = encontrarLinhaCabecalho(values)
+  const header = values[headerRow] as unknown[]
   const colunas = mapearColunas(header, COLS_COMPRAS)
   const faltando = colunasFaltando(colunas, ['turma', 'nome_ganhador'])
   if (faltando.length > 0) {
-    avisos.push(`Aba "${ABA_COMPRAS}": colunas obrigatórias não encontradas: ${faltando.join(', ')}.`)
+    avisos.push(`Aba "${ABA_COMPRAS}": colunas obrigatórias não encontradas: ${faltando.join(', ')}. Cabeçalho lido (linha ${headerRow + 1}): ${header.map(c => String(c ?? '')).filter(Boolean).join(' | ')}`)
     return { linhas: [], colunas, avisos }
   }
 
   const linhas: CompraSheetRow[] = []
-  for (let i = 1; i < values.length; i++) {
+  for (let i = headerRow + 1; i < values.length; i++) {
     const row = (values[i] as unknown[]) ?? []
     const turma = celula(row, colunas.turma)
     const nomeGanhador = celula(row, colunas.nome_ganhador)

@@ -67,7 +67,10 @@ export interface RifaGanhador {
 
 export interface RifaCompra {
   id: string
-  ganhador_id: string
+  ganhador_id: string | null
+  turma: string | null
+  premio_descricao: string | null
+  nome_ganhador: string | null
   endereco: string | null
   informacoes: string | null
   site: string | null
@@ -109,11 +112,18 @@ export interface RifaSyncLog {
   erro: string | null
 }
 
+export interface SincronizarResultTabela { criados: number; atualizados: number; conflitos: number }
+
 export interface SincronizarResult {
   criados: number
   atualizados: number
   conflitos: number
   erros: string[]
+  porTabela: {
+    rifas: SincronizarResultTabela
+    ganhadores: SincronizarResultTabela
+    compras: SincronizarResultTabela
+  }
 }
 
 // ── Motor de diff genérico (mesma lógica para as 3 tabelas) ──────────────────
@@ -366,11 +376,11 @@ async function sincronizarComprasTabela(
       const s = acao.sheetRow
       const ganhadorId = resolverGanhadorId(s, ganhadoresAtuais)
       if (!ganhadorId) {
-        erros.push(`Compra (linha ${s.linha}): nenhum ganhador encontrado para TURMA "${s.turma}" + PRÊMIO "${s.premio_descricao}" + NOME "${s.nome_ganhador}" — linha ignorada.`)
-        continue
+        erros.push(`Compra (linha ${s.linha}): sem vínculo automático com nenhum ganhador para TURMA "${s.turma}" + PRÊMIO "${s.premio_descricao}" + NOME "${s.nome_ganhador}" — criada mesmo assim, para revisão manual.`)
       }
       const { error } = await supabase.from('rifas_compras').insert({
-        ganhador_id: ganhadorId, endereco: s.endereco, informacoes: s.informacoes, site: s.site,
+        ganhador_id: ganhadorId, turma: s.turma, premio_descricao: s.premio_descricao, nome_ganhador: s.nome_ganhador,
+        endereco: s.endereco, informacoes: s.informacoes, site: s.site,
         valor: s.valor, status: s.status, data_compra: s.data_compra, data_entrega_raw: s.data_entrega_raw,
         nome_cartao: s.nome_cartao, preenchido_planilha: s.preenchido_planilha,
         sheet_row_number: s.linha, sheet_row_hash: s.hash,
@@ -379,7 +389,12 @@ async function sincronizarComprasTabela(
       else criados++
     } else if (acao.tipo === 'atualizar_db') {
       const s = acao.sheetRow
+      const ganhadorId = resolverGanhadorId(s, ganhadoresAtuais)
+      if (!ganhadorId && acao.dbRow.ganhador_id) {
+        erros.push(`Compra (linha ${s.linha}): vínculo com ganhador não recalculado (mantido o anterior).`)
+      }
       const { error } = await supabase.from('rifas_compras').update({
+        ganhador_id: ganhadorId ?? acao.dbRow.ganhador_id, turma: s.turma, premio_descricao: s.premio_descricao, nome_ganhador: s.nome_ganhador,
         endereco: s.endereco, informacoes: s.informacoes, site: s.site, valor: s.valor, status: s.status,
         data_compra: s.data_compra, data_entrega_raw: s.data_entrega_raw, nome_cartao: s.nome_cartao,
         preenchido_planilha: s.preenchido_planilha, sheet_row_hash: s.hash,
@@ -388,9 +403,8 @@ async function sincronizarComprasTabela(
       else atualizados++
     } else if (acao.tipo === 'atualizar_sheet' || acao.tipo === 'anexar') {
       const d = acao.dbRow
-      const ganhador = ganhadoresAtuais.find(g => g.id === d.ganhador_id)
       const valores: Record<string, unknown> = {
-        turma: ganhador?.turma ?? '', premio_descricao: ganhador?.premio_descricao ?? '', nome_ganhador: ganhador?.nome_ganhador ?? '',
+        turma: d.turma ?? '', premio_descricao: d.premio_descricao ?? '', nome_ganhador: d.nome_ganhador ?? '',
         endereco: d.endereco, informacoes: d.informacoes, site: d.site, valor: d.valor, status: d.status,
         data_compra: formatarDataBR(d.data_compra), data_entrega_raw: d.data_entrega_raw, nome_cartao: d.nome_cartao,
         preenchido_planilha: d.preenchido_planilha ? 'SIM' : 'NÃO',
@@ -521,7 +535,7 @@ export function useRifas() {
       })
 
       await carregar()
-      return { criados, atualizados, conflitos: conflitosDetectados, erros }
+      return { criados, atualizados, conflitos: conflitosDetectados, erros, porTabela: { rifas: r1, ganhadores: r2, compras: r3 } }
     } catch (e) {
       const msg = (e as Error).message
       await supabase.from('rifas_sync_log').insert({
