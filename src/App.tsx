@@ -40,6 +40,10 @@ import { Layout as ComercialLayout } from './modules/alliance-comercial/componen
 import { DashboardPage as ComercialDashboardPage } from './modules/alliance-comercial/pages/Dashboard/DashboardPage'
 import ContratosPage from './modules/alliance-comercial/pages/Contratos/ContratosPage'
 import ComprasComercialPage from './modules/alliance-comercial/pages/ComprasComercial/ComprasComercialPage'
+import { Layout as AtendimentoLayout } from './modules/atendimento/components/Layout/Layout'
+import { RifasListPage } from './modules/atendimento/pages/RifasListPage'
+import { VinculosPendentesPage } from './modules/atendimento/pages/VinculosPendentesPage'
+import { ConflitosPage } from './modules/atendimento/pages/ConflitosPage'
 
 // ── Spinner simples ──────────────────────────────────────────────────────────
 function Spinner() {
@@ -335,6 +339,17 @@ function AppRoutes() {
         <Route index element={<ComercialDashboardPage />} />
         <Route path="contratos" element={<ContratosPage />} />
         <Route path="compras" element={<ComprasComercialPage />} />
+      </Route>
+
+      {/* Módulo Atendimento */}
+      <Route
+        path="/atendimento/*"
+        element={<RequireAuth><AtendimentoLayout /></RequireAuth>}
+      >
+        <Route index element={<Navigate to="rifas" replace />} />
+        <Route path="rifas" element={<RifasListPage />} />
+        <Route path="rifas/vinculos-pendentes" element={<VinculosPendentesPage />} />
+        <Route path="rifas/conflitos" element={<ConflitosPage />} />
       </Route>
     </Routes>
   )

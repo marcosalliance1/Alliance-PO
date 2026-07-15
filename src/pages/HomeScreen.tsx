@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { ClipboardList, CalendarCheck, Clock, Users, Percent, Megaphone } from 'lucide-react'
+import { ClipboardList, CalendarCheck, Headphones, Users, Percent, Megaphone } from 'lucide-react'
 import allianceLogo from '../assets/alliance-logo.png'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -19,11 +19,11 @@ const MODULES = [
     disabled: false,
   },
   {
-    icon: Clock,
-    title: 'Follow-up',
-    description: 'Acompanhamento de propostas e clientes',
-    to: '/followup',
-    disabled: true,
+    icon: Headphones,
+    title: 'Atendimento',
+    description: 'Rifas, vouchers e sorteios das turmas',
+    to: '/atendimento',
+    disabled: false,
   },
   {
     icon: Percent,
