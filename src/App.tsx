@@ -15,6 +15,7 @@ import { BancoDeItens } from './pages/BancoDeItens'
 import { Verbas } from './pages/Verbas'
 import { Financeiro } from './pages/Financeiro'
 import { Marketing } from './pages/Marketing'
+import { MarketingDetalhe } from './pages/MarketingDetalhe'
 import { Configuracoes } from './pages/Configuracoes'
 import { LoginAdmin } from './pages/LoginAdmin'
 import { LoginViewer } from './pages/LoginViewer'
@@ -297,6 +298,7 @@ function AppRoutes() {
 
       {/* Módulo Marketing (página única, sem sidebar do P.O. Alliance) */}
       <Route path="/marketing" element={<RequireAuth><Marketing /></RequireAuth>} />
+      <Route path="/marketing/detalhe" element={<RequireAuth><MarketingDetalhe /></RequireAuth>} />
 
       {/* Módulo Pré-Eventos */}
       <Route

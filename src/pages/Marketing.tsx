@@ -177,6 +177,55 @@ export function Marketing() {
     return { serie, coberturaPct, totalDone: doneItems.length, comData: comData.length }
   }, [demandas])
 
+  // ── Tempo médio de execução (criação → data de fim, concluídos) ──
+  const tempoExecucao = useMemo(() => {
+    const diasEntre = (d: MarketingDemanda) => {
+      const criado = new Date(d.created_at!).getTime()
+      const fim = new Date(`${d.data_fim}T00:00:00Z`).getTime()
+      return Math.max(0, (fim - criado) / 86_400_000)
+    }
+    const doneTotal = demandas.filter(d => d.status_is_done).length
+    const doneComData = demandas.filter(d => d.status_is_done && d.data_fim && d.created_at)
+    const coberturaPct = doneTotal ? (doneComData.length / doneTotal) * 100 : 0
+    const media = (arr: number[]) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0)
+
+    const porPrioridade: Record<string, number[]> = { Urgente: [], 'Sem prioridade': [] }
+    for (const d of doneComData) {
+      porPrioridade[d.prioridade === 'Urgente' ? 'Urgente' : 'Sem prioridade'].push(diasEntre(d))
+    }
+    const porPrioridadeArr = Object.entries(porPrioridade)
+      .filter(([, arr]) => arr.length > 0)
+      .map(([nome, arr]) => ({ nome, mediaDias: media(arr), qtd: arr.length }))
+
+    const porGrupoMap: Record<string, number[]> = {}
+    for (const d of doneComData) {
+      const g = d.group_id ? grupoMap.get(d.group_id) : undefined
+      const nome = g?.nome ?? '(sem grupo)'
+      porGrupoMap[nome] ??= []
+      porGrupoMap[nome].push(diasEntre(d))
+    }
+    const porGrupoArr = Object.entries(porGrupoMap)
+      .map(([nome, arr]) => ({ nome, mediaDias: media(arr), qtd: arr.length }))
+      .sort((a, b) => b.mediaDias - a.mediaDias)
+      .slice(0, 10)
+
+    return { porPrioridadeArr, porGrupoArr, coberturaPct, doneComData: doneComData.length, doneTotal }
+  }, [demandas, grupoMap])
+
+  // ── Itens parados há mais tempo (em aberto, por data de criação) ─
+  const itensParados = useMemo(() => {
+    return demandas
+      .filter(d => !d.status_is_done && d.created_at)
+      .map(d => ({
+        ...d,
+        diasParado: Math.floor((Date.now() - new Date(d.created_at!).getTime()) / 86_400_000),
+        grupoNome: (d.group_id ? grupoMap.get(d.group_id)?.nome : null) ?? '(sem grupo)',
+        responsaveisNomes: respPorItem.get(d.id)?.join(', ') || '—',
+      }))
+      .sort((a, b) => a.created_at!.localeCompare(b.created_at!))
+      .slice(0, 30)
+  }, [demandas, grupoMap, respPorItem])
+
   // ── Qualidade de dados ───────────────────────────────────────────
   const qualidade = useMemo(() => {
     const total = demandas.length || 1
@@ -308,9 +357,9 @@ export function Marketing() {
                 <Tooltip content={<TTip />} />
                 <Legend wrapperStyle={{ fontSize: 12, color: '#8892b0' }} />
                 <Bar dataKey="concluidas" name="Concluídas" stackId="a" fill={C_SUCCESS} cursor="pointer"
-                  onClick={(data) => { const nome = data.payload.nome as string; setFiltro({ tipo: 'responsavel', valor: nome, label: `Responsável: ${nome}` }) }} />
+                  onClick={(data) => { const nome = data.payload.nome as string; navigate(`/marketing/detalhe?modo=responsavel&valor=${encodeURIComponent(nome)}`) }} />
                 <Bar dataKey="abertas" name="Abertas" stackId="a" fill={C_ABERTO} radius={[0, 4, 4, 0]} cursor="pointer"
-                  onClick={(data) => { const nome = data.payload.nome as string; setFiltro({ tipo: 'responsavel', valor: nome, label: `Responsável: ${nome}` }) }} />
+                  onClick={(data) => { const nome = data.payload.nome as string; navigate(`/marketing/detalhe?modo=responsavel&valor=${encodeURIComponent(nome)}`) }} />
               </BarChart>
             </ResponsiveContainer>
           ) : <EmptyChart />}
@@ -333,8 +382,19 @@ export function Marketing() {
                 const max = volumeCliente[0]?.qtd || 1
                 const pct = (c.qtd / max) * 100
                 const ativo = filtro?.tipo === 'clienteTurma' && filtro.valor === c.nome
+                const semMatchOficial = corteOficial && c.nome === 'Sem match oficial'
                 return (
-                  <button key={c.nome} onClick={() => setFiltro({ tipo: 'clienteTurma', valor: c.nome, label: `Cliente/Projeto: ${c.nome}` })} className="w-full text-left cursor-pointer">
+                  <button
+                    key={c.nome}
+                    onClick={() => {
+                      if (semMatchOficial) {
+                        setFiltro({ tipo: 'clienteTurma', valor: c.nome, label: `Cliente/Projeto: ${c.nome}` })
+                      } else {
+                        navigate(`/marketing/detalhe?modo=projeto&valor=${encodeURIComponent(c.nome)}&oficial=${corteOficial ? '1' : '0'}`)
+                      }
+                    }}
+                    className="w-full text-left cursor-pointer"
+                  >
                     <div className="flex justify-between mb-1">
                       <span className="text-xs text-text-muted truncate flex-1 pr-3">{idx + 1}. {c.nome}</span>
                       <span className="text-xs font-semibold text-text-main shrink-0">{c.qtd}</span>
@@ -419,6 +479,81 @@ export function Marketing() {
             </p>
           </>
         ) : <EmptyChart />}
+      </div>
+
+      {/* Tempo médio de execução */}
+      <div className="card">
+        <h3 className="text-text-main text-sm font-semibold mb-3">Tempo Médio de Execução <span className="text-xs text-text-muted font-normal">(criação → data de fim, concluídos)</span></h3>
+        {tempoExecucao.porPrioridadeArr.length > 0 ? (
+          <>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              {tempoExecucao.porPrioridadeArr.map(p => (
+                <div key={p.nome} className="text-center">
+                  <p className="text-2xl font-bold" style={{ color: p.nome === 'Urgente' ? C_PRIMARY : C_AZUL }}>{p.mediaDias.toFixed(1)}</p>
+                  <p className="text-xs text-text-muted mt-0.5">dias · {p.nome} ({p.qtd})</p>
+                </div>
+              ))}
+            </div>
+            {tempoExecucao.porGrupoArr.length > 0 && (
+              <ResponsiveContainer width="100%" height={Math.max(160, tempoExecucao.porGrupoArr.length * 32)}>
+                <BarChart data={tempoExecucao.porGrupoArr} layout="vertical" margin={{ left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                  <XAxis type="number" tick={{ fill: '#8892b0', fontSize: 10 }} axisLine={false} tickLine={false} unit="d" />
+                  <YAxis type="category" dataKey="nome" tick={{ fill: '#8892b0', fontSize: 11 }} axisLine={false} tickLine={false} width={150} />
+                  <Tooltip content={<TTip />} />
+                  <Bar dataKey="mediaDias" name="Dias (média)" radius={[0, 4, 4, 0]} fill={C_AZUL} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+            <p className="text-xs text-text-muted mt-2">
+              Cobertura: {tempoExecucao.coberturaPct.toFixed(1)}% dos concluídos têm data de fim preenchida ({tempoExecucao.doneComData} de {tempoExecucao.doneTotal}).
+            </p>
+          </>
+        ) : <EmptyChart />}
+      </div>
+
+      {/* Itens parados há mais tempo */}
+      <div className="card p-0 overflow-hidden">
+        <div className="px-5 py-3 border-b border-white/10 text-text-main text-sm font-semibold">
+          Itens Parados Há Mais Tempo <span className="text-xs text-text-muted font-normal">(em aberto, por data de criação — top 30 mais antigos)</span>
+        </div>
+        <div className="overflow-x-auto">
+          <div className="max-h-96 overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-white/5 sticky top-0">
+                <tr className="text-left text-text-muted uppercase tracking-wider text-[10px]">
+                  <th className="px-4 py-2 font-semibold">Demanda</th>
+                  <th className="px-4 py-2 font-semibold">Grupo</th>
+                  <th className="px-4 py-2 font-semibold">Status</th>
+                  <th className="px-4 py-2 font-semibold">Responsável</th>
+                  <th className="px-4 py-2 font-semibold">Criado em</th>
+                  <th className="px-4 py-2 font-semibold">Parado há</th>
+                  <th className="px-4 py-2 font-semibold">Data de fim</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itensParados.map(d => (
+                  <tr key={d.id} className="border-t border-white/5 hover:bg-white/5">
+                    <td className="px-4 py-2 text-text-main max-w-xs truncate" title={d.nome}>{d.nome}</td>
+                    <td className="px-4 py-2 text-text-muted whitespace-nowrap">{d.grupoNome}</td>
+                    <td className="px-4 py-2 text-text-muted whitespace-nowrap">{d.status}</td>
+                    <td className="px-4 py-2 text-text-muted whitespace-nowrap">{d.responsaveisNomes}</td>
+                    <td className="px-4 py-2 text-text-muted whitespace-nowrap">{d.created_at?.slice(0, 10)}</td>
+                    <td className="px-4 py-2 font-medium whitespace-nowrap" style={{ color: d.diasParado > 30 ? C_DANGER : d.diasParado > 14 ? C_ABERTO : undefined }}>
+                      {d.diasParado} dias
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      {d.data_fim ?? <span className="text-danger">sem data</span>}
+                    </td>
+                  </tr>
+                ))}
+                {itensParados.length === 0 && (
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-text-muted">Nada em aberto.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {/* Qualidade de dados */}

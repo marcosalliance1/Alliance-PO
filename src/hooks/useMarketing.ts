@@ -36,6 +36,7 @@ export interface MarketingDemanda {
   solicitante: string | null
   link_demandas_texto: string | null
   tem_arquivo: boolean
+  created_at: string | null
   monday_updated_at: string | null
   synced_at: string
   dimensao_nome_projeto: string | null

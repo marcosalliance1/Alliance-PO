@@ -37,6 +37,7 @@ interface MondaySubitem {
 interface MondayItem {
   id: string
   name: string
+  created_at: string | null
   updated_at: string | null
   group: MondayGroup
   column_values: MondayColumnValue[]
@@ -68,6 +69,7 @@ interface DemandaRow {
   solicitante: string | null
   link_demandas_texto: string | null
   tem_arquivo: boolean
+  created_at: string | null
   monday_updated_at: string | null
   synced_at: string
 }
@@ -76,6 +78,12 @@ interface ResponsavelRow {
   item_id: number
   person_id: number
   person_name: string
+}
+
+interface HistoricoRow {
+  item_id: number
+  status_anterior: string
+  status_novo: string
 }
 
 interface SubitemRow {
@@ -122,6 +130,7 @@ async function mondayRequest(token: string, query: string, variables?: Record<st
 const ITEM_FIELDS = `
   id
   name
+  created_at
   updated_at
   group { id title }
   column_values(ids: [
@@ -372,6 +381,7 @@ Deno.serve(async (req: Request) => {
     // ── Paginação dos itens ──────────────────────────────────────────────────
     let synced = 0
     let subitensSynced = 0
+    let historicoSynced = 0
     let page: ItemsPage = await fetchFirstPage(mondayToken)
 
     while (true) {
@@ -402,6 +412,7 @@ Deno.serve(async (req: Request) => {
             solicitante: parseSolicitante(item),
             link_demandas_texto: parseLinkDemandas(item),
             tem_arquivo: parseTemArquivo(item),
+            created_at: item.created_at,
             monday_updated_at: item.updated_at,
             synced_at: nowIso,
           })
@@ -433,6 +444,26 @@ Deno.serve(async (req: Request) => {
       }
 
       if (demandas.length > 0) {
+        const itemIds = demandas.map((d) => d.id)
+
+        // ── Histórico de status: compara o status já salvo com o que vem do monday ──
+        const { data: existentes, error: existErr } = await supabase
+          .from("marketing_demandas")
+          .select("id, status")
+          .in("id", itemIds)
+        if (existErr) errors.push(`Buscar status anterior (página): ${existErr.message}`)
+
+        const statusAnteriorMap = new Map<number, string>(
+          (existentes ?? []).map((e: { id: number; status: string }) => [e.id, e.status])
+        )
+        const historico: HistoricoRow[] = []
+        for (const d of demandas) {
+          const anterior = statusAnteriorMap.get(d.id)
+          if (anterior !== undefined && anterior !== d.status) {
+            historico.push({ item_id: d.id, status_anterior: anterior, status_novo: d.status })
+          }
+        }
+
         const { error: upsertErr } = await supabase
           .from("marketing_demandas")
           .upsert(demandas, { onConflict: "id" })
@@ -441,7 +472,13 @@ Deno.serve(async (req: Request) => {
         } else {
           synced += demandas.length
 
-          const itemIds = demandas.map((d) => d.id)
+          if (historico.length > 0) {
+            const { error: histErr } = await supabase
+              .from("marketing_status_historico")
+              .insert(historico)
+            if (histErr) errors.push(`Insert historico status (página): ${histErr.message}`)
+            else historicoSynced += historico.length
+          }
           const { error: delErr } = await supabase
             .from("marketing_demandas_responsaveis")
             .delete()
@@ -476,7 +513,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ synced, subitensSynced, groups: groups.length, errors }),
+      JSON.stringify({ synced, subitensSynced, historicoSynced, groups: groups.length, errors }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
   } catch (err) {
