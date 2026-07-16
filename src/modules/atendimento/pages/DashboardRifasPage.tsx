@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Gift, PhoneCall, ShoppingCart, DollarSign } from 'lucide-react'
 import { KPICard } from '../../../components/dashboard/KPICard'
@@ -6,6 +6,7 @@ import { useAtendimento } from '../contexts/AtendimentoContext'
 import { MesCalendario, type DiaEvento } from '../components/MesCalendario'
 import { calcularPipeline } from '../lib/rifaPipeline'
 import { formatarValor } from '../lib/formatadores'
+import type { Rifa, RifaGanhador } from '../../../hooks/useRifas'
 
 function diasEntre(dataISO: string): number {
   return Math.floor((Date.now() - new Date(dataISO).getTime()) / 86_400_000)
@@ -20,24 +21,54 @@ interface ItemAtencao {
 }
 
 export function DashboardRifasPage() {
-  const { rifas, ganhadores, compras } = useAtendimento()
+  const { rifas, ganhadores, compras, dimensaoProjetos } = useAtendimento()
   const navigate = useNavigate()
+  const [filtroEnsino, setFiltroEnsino] = useState('')
+  const [filtroInstituicao, setFiltroInstituicao] = useState('')
 
   const hojeISO = new Date().toISOString().slice(0, 10)
   const em7DiasISO = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
 
-  const rifasSorteadasAguardandoContato = ganhadores.filter(g => !g.contato_feito).length
+  const dimensaoPorId = useMemo(() => new Map(dimensaoProjetos.map(d => [d.id, d])), [dimensaoProjetos])
+  const ensinos = useMemo(() => Array.from(new Set(dimensaoProjetos.map(d => d.ensino))).sort(), [dimensaoProjetos])
+  const instituicoes = useMemo(() => {
+    const base = filtroEnsino ? dimensaoProjetos.filter(d => d.ensino === filtroEnsino) : dimensaoProjetos
+    return Array.from(new Set(base.map(d => d.instituicao))).sort()
+  }, [dimensaoProjetos, filtroEnsino])
 
-  const premiosAguardandoCompra = ganhadores.filter(g => {
+  const filtroAtivo = !!(filtroEnsino || filtroInstituicao)
+
+  function rifaPassaFiltro(r: Rifa): boolean {
+    if (!filtroAtivo) return true
+    const dim = r.dimensao_projeto_id ? dimensaoPorId.get(r.dimensao_projeto_id) : null
+    if (!dim) return false
+    if (filtroEnsino && dim.ensino !== filtroEnsino) return false
+    if (filtroInstituicao && dim.instituicao !== filtroInstituicao) return false
+    return true
+  }
+
+  const rifasFiltradas = useMemo(() => rifas.filter(rifaPassaFiltro), [rifas, filtroEnsino, filtroInstituicao, dimensaoPorId])
+  const rifasFiltradasIds = useMemo(() => new Set(rifasFiltradas.map(r => r.id)), [rifasFiltradas])
+
+  function ganhadorPassaFiltro(g: RifaGanhador): boolean {
+    if (!filtroAtivo) return true
+    return !!g.rifa_id && rifasFiltradasIds.has(g.rifa_id)
+  }
+
+  const ganhadoresFiltrados = useMemo(() => ganhadores.filter(ganhadorPassaFiltro), [ganhadores, filtroEnsino, filtroInstituicao, rifasFiltradasIds])
+
+  const rifasSorteadasAguardandoContato = ganhadoresFiltrados.filter(g => !g.contato_feito).length
+
+  const premiosAguardandoCompra = ganhadoresFiltrados.filter(g => {
     const compra = compras.find(c => c.ganhador_id === g.id)
     return !compra || compra.status !== 'Comprado'
   }).length
 
-  const sorteiosProximos7Dias = rifas.filter(
+  const sorteiosProximos7Dias = rifasFiltradas.filter(
     r => r.situacao === 'EM ANDAMENTO' && r.dia_vencimento && r.dia_vencimento >= hojeISO && r.dia_vencimento <= em7DiasISO,
   ).length
 
-  const valorPendenteCompra = rifas.reduce((soma, r) => {
+  const valorPendenteCompra = rifasFiltradas.reduce((soma, r) => {
     const ganhador = ganhadores.find(g => g.rifa_id === r.id) ?? null
     const compra = ganhador ? compras.find(c => c.ganhador_id === ganhador.id) ?? null : null
     const status = calcularPipeline(r, ganhador, compra)
@@ -51,7 +82,7 @@ export function DashboardRifasPage() {
   const itensAtencao = useMemo(() => {
     const itens: ItemAtencao[] = []
 
-    for (const r of rifas) {
+    for (const r of rifasFiltradas) {
       if (r.situacao !== 'EM ANDAMENTO' || !r.dia_vencimento) continue
       if (r.dia_vencimento < hojeISO) continue
       const diasAte = diasEntre(r.dia_vencimento) * -1
@@ -67,7 +98,7 @@ export function DashboardRifasPage() {
       })
     }
 
-    for (const g of ganhadores) {
+    for (const g of ganhadoresFiltrados) {
       if (g.contato_feito || !g.data_sorteio) continue
       const diasAtraso = diasEntre(g.data_sorteio)
       if (diasAtraso <= 5) continue
@@ -80,7 +111,7 @@ export function DashboardRifasPage() {
       })
     }
 
-    for (const g of ganhadores) {
+    for (const g of ganhadoresFiltrados) {
       if (!g.data_sorteio) continue
       const compra = compras.find(c => c.ganhador_id === g.id)
       if (compra?.status === 'Comprado') continue
@@ -96,22 +127,42 @@ export function DashboardRifasPage() {
     }
 
     return itens.sort((a, b) => b.urgencia - a.urgencia).slice(0, 10)
-  }, [rifas, ganhadores, compras, hojeISO])
+  }, [rifasFiltradas, ganhadoresFiltrados, compras, hojeISO])
 
   const eventosPorDia = useMemo(() => {
     const map: Record<string, DiaEvento[]> = {}
-    for (const r of rifas) {
+    for (const r of rifasFiltradas) {
       if (!r.dia_vencimento || (r.situacao !== 'EM ANDAMENTO' && r.situacao !== 'SORTEADA')) continue
       const cor = r.situacao === 'SORTEADA' ? 'bg-success' : 'bg-warning'
       if (!map[r.dia_vencimento]) map[r.dia_vencimento] = []
       map[r.dia_vencimento].push({ cor })
     }
     return map
-  }, [rifas])
+  }, [rifasFiltradas])
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-text-main mb-4">Dashboard</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h1 className="text-xl font-bold text-text-main">Dashboard</h1>
+        <div className="flex gap-3">
+          <select
+            value={filtroEnsino}
+            onChange={e => { setFiltroEnsino(e.target.value); setFiltroInstituicao('') }}
+            className="bg-surface border border-white/10 rounded-lg px-3 py-1.5 text-sm text-text-main"
+          >
+            <option value="">Todos os ensinos</option>
+            {ensinos.map(e => <option key={e} value={e}>{e}</option>)}
+          </select>
+          <select
+            value={filtroInstituicao}
+            onChange={e => setFiltroInstituicao(e.target.value)}
+            className="bg-surface border border-white/10 rounded-lg px-3 py-1.5 text-sm text-text-main"
+          >
+            <option value="">Todas as instituições</option>
+            {instituicoes.map(i => <option key={i} value={i}>{i}</option>)}
+          </select>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <KPICard title="Sorteadas aguardando contato" value={String(rifasSorteadasAguardandoContato)} icon={PhoneCall} color="#fdcb6e" />

@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import type { Rifa, RifaGanhador, RifaCompra } from '../../../hooks/useRifas'
 import { calcularPipeline } from '../lib/rifaPipeline'
 import { formatarData, formatarValor } from '../lib/formatadores'
+import { useAtendimento } from '../contexts/AtendimentoContext'
 import { PipelineDots } from './PipelineDots'
 import { ContatoBadges } from './ContatoBadges'
 
@@ -17,6 +18,8 @@ interface PipelineDrawerProps {
 // Painel lateral com o detalhe completo das 3 etapas de uma rifa (ou sorteio avulso) —
 // usado a partir do card do Kanban.
 export function PipelineDrawer({ aberto, onFechar, rifa, ganhador, compra }: PipelineDrawerProps) {
+  const { atualizarGanhador, marcarCompradoParaGanhador } = useAtendimento()
+
   useEffect(() => {
     if (!aberto) return
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onFechar() }
@@ -61,6 +64,14 @@ export function PipelineDrawer({ aberto, onFechar, rifa, ganhador, compra }: Pip
                 <ContatoBadges contato={ganhador.contato} />
                 <div>Contato feito: {ganhador.contato_feito ? 'sim' : 'não'}</div>
                 <div>Prêmio entregue: {ganhador.premio_entregue ?? '—'}</div>
+                <button
+                  onClick={() => atualizarGanhador(ganhador.id, { contato_feito: !ganhador.contato_feito })}
+                  className={`mt-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                    ganhador.contato_feito ? 'bg-white/5 text-text-muted hover:bg-white/10' : 'bg-primary/15 text-primary hover:bg-primary/25'
+                  }`}
+                >
+                  {ganhador.contato_feito ? 'Desfazer contato feito' : 'Marcar contato feito'}
+                </button>
               </div>
             ) : <div className="text-text-muted">Ainda não tem ganhador registrado.</div>}
           </div>
@@ -75,6 +86,14 @@ export function PipelineDrawer({ aberto, onFechar, rifa, ganhador, compra }: Pip
                 <div>Entrega: {compra.data_entrega_raw ?? '—'}</div>
               </div>
             ) : <div className="text-text-muted">Ainda sem compra registrada.</div>}
+            {ganhador && compra?.status !== 'Comprado' && (
+              <button
+                onClick={() => marcarCompradoParaGanhador(ganhador.id, { status: 'Comprado', data_compra: new Date().toISOString().slice(0, 10) })}
+                className="mt-2 px-2 py-1 rounded-md bg-success/15 text-success text-[11px] font-semibold hover:bg-success/25 transition-colors"
+              >
+                Marcar como comprado
+              </button>
+            )}
           </div>
         </div>
       </div>

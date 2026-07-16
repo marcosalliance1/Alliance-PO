@@ -9,9 +9,17 @@ import allianceLogo from '../../../../assets/alliance-logo.png'
 import { useAtendimento } from '../../contexts/AtendimentoContext'
 import { classificarPremioEntregue } from '../../lib/rifaPipeline'
 
+const linkClasse = ({ isActive }: { isActive: boolean }) =>
+  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+    isActive
+      ? 'bg-primary/15 text-primary font-semibold border border-primary/20'
+      : 'text-text-muted hover:text-text-main hover:bg-white/5'
+  }`
+
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate()
   const { rifas, ganhadores, compras, overrides, conflitos } = useAtendimento()
+  const [rifasAberta, setRifasAberta] = useState(true)
   const [configAberta, setConfigAberta] = useState(false)
 
   const turmasPendentes = new Set(
@@ -25,17 +33,17 @@ export const Sidebar: React.FC = () => {
   const totalConfigPendencias = turmasPendentes + conflitosPendentes
 
   const NAV_OPERACAO = [
-    { to: '/atendimento/rifas', icon: <LayoutDashboard className="w-5 h-5" />, label: 'Dashboard', fim: true },
-    { to: '/atendimento/rifas/kanban', icon: <Columns3 className="w-5 h-5" />, label: 'Kanban', fim: false },
-    { to: '/atendimento/rifas/calendario', icon: <CalendarDays className="w-5 h-5" />, label: 'Calendário', fim: false },
+    { to: '/atendimento/rifas', icon: <LayoutDashboard className="w-4 h-4" />, label: 'Dashboard', fim: true },
+    { to: '/atendimento/rifas/kanban', icon: <Columns3 className="w-4 h-4" />, label: 'Kanban', fim: false },
+    { to: '/atendimento/rifas/calendario', icon: <CalendarDays className="w-4 h-4" />, label: 'Calendário', fim: false },
   ]
 
   const NAV_CONFIG = [
-    { to: '/atendimento/rifas/todas', icon: <Gift className="w-5 h-5" />, label: 'Todas as Rifas', badge: null as number | null },
-    { to: '/atendimento/rifas/ganhadores', icon: <Users className="w-5 h-5" />, label: 'Ganhadores', badge: ganhadoresPendentes || null },
-    { to: '/atendimento/rifas/compras', icon: <ShoppingBag className="w-5 h-5" />, label: 'Acompanhamento de Compra', badge: comprasPendentes || null },
-    { to: '/atendimento/rifas/vinculos-pendentes', icon: <Link2 className="w-5 h-5" />, label: 'Vínculos Pendentes', badge: turmasPendentes || null },
-    { to: '/atendimento/rifas/conflitos', icon: <AlertTriangle className="w-5 h-5" />, label: 'Conflitos de Sync', badge: conflitosPendentes || null },
+    { to: '/atendimento/rifas/todas', icon: <Gift className="w-4 h-4" />, label: 'Todas as Rifas', badge: null as number | null },
+    { to: '/atendimento/rifas/ganhadores', icon: <Users className="w-4 h-4" />, label: 'Ganhadores', badge: ganhadoresPendentes || null },
+    { to: '/atendimento/rifas/compras', icon: <ShoppingBag className="w-4 h-4" />, label: 'Acompanhamento de Compra', badge: comprasPendentes || null },
+    { to: '/atendimento/rifas/vinculos-pendentes', icon: <Link2 className="w-4 h-4" />, label: 'Vínculos Pendentes', badge: turmasPendentes || null },
+    { to: '/atendimento/rifas/conflitos', icon: <AlertTriangle className="w-4 h-4" />, label: 'Conflitos de Sync', badge: conflitosPendentes || null },
   ]
 
   return (
@@ -44,58 +52,50 @@ export const Sidebar: React.FC = () => {
         <img src={allianceLogo} alt="Alliance" className="h-10 w-auto" style={{ mixBlendMode: 'screen' }} />
       </div>
 
-      <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
-        <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider px-3 mb-1">Rifas</div>
-        {NAV_OPERACAO.map(item => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.fim}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                isActive
-                  ? 'bg-primary/15 text-primary font-semibold border border-primary/20'
-                  : 'text-text-muted hover:text-text-main hover:bg-white/5'
-              }`
-            }
-          >
-            {item.icon}
-            <span className="flex-1">{item.label}</span>
-          </NavLink>
-        ))}
-
+      {/* "Rifas" é o item-mãe do submódulo — quando o Atendimento ganhar outros
+          submódulos, eles entram como irmãos deste no mesmo nível. */}
+      <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
         <button
-          onClick={() => setConfigAberta(a => !a)}
-          className="flex items-center gap-2 px-3 mt-4 mb-1 text-[10px] font-semibold text-text-muted uppercase tracking-wider hover:text-text-main transition-colors"
+          onClick={() => setRifasAberta(a => !a)}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-text-main hover:bg-white/5 transition-colors"
         >
-          {configAberta ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          Configurações
-          {totalConfigPendencias > 0 && (
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary">{totalConfigPendencias}</span>
-          )}
+          {rifasAberta ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <Gift className="w-4 h-4 text-primary" />
+          Rifas
         </button>
-        {configAberta && (
-          <div className="border-t border-white/5 pt-1">
-            {NAV_CONFIG.map(item => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                    isActive
-                      ? 'bg-primary/15 text-primary font-semibold border border-primary/20'
-                      : 'text-text-muted hover:text-text-main hover:bg-white/5'
-                  }`
-                }
-              >
+
+        {rifasAberta && (
+          <div className="pl-4 flex flex-col gap-0.5">
+            {NAV_OPERACAO.map(item => (
+              <NavLink key={item.to} to={item.to} end={item.fim} className={linkClasse}>
                 {item.icon}
                 <span className="flex-1">{item.label}</span>
-                {!!item.badge && (
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary">{item.badge}</span>
-                )}
               </NavLink>
             ))}
+
+            <button
+              onClick={() => setConfigAberta(a => !a)}
+              className="flex items-center gap-2 px-3 mt-3 mb-1 text-[10px] font-semibold text-text-muted uppercase tracking-wider hover:text-text-main transition-colors"
+            >
+              {configAberta ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              Configurações
+              {totalConfigPendencias > 0 && (
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary">{totalConfigPendencias}</span>
+              )}
+            </button>
+            {configAberta && (
+              <div className="border-t border-white/5 pt-1 flex flex-col gap-0.5">
+                {NAV_CONFIG.map(item => (
+                  <NavLink key={item.to} to={item.to} end className={linkClasse}>
+                    {item.icon}
+                    <span className="flex-1">{item.label}</span>
+                    {!!item.badge && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary">{item.badge}</span>
+                    )}
+                  </NavLink>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </nav>

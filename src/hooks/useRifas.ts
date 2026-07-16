@@ -583,9 +583,65 @@ export function useRifas() {
     await carregar()
   }
 
+  // Edições feitas aqui no Alliance não escrevem na planilha na hora — elas só
+  // atualizam `updated_at` (via trigger), e o motor de sync já existente detecta isso
+  // sozinho e empurra a mudança pra planilha na próxima vez que "Sincronizar" rodar
+  // (mesmo caminho usado hoje pra qualquer alteração feita no Alliance).
+  async function criarRifa(dados: {
+    turma: string
+    edicao?: string | null
+    formacao?: string | null
+    ano_formatura?: number | null
+    dia_vencimento?: string | null
+    premio_descricao?: string | null
+    valor_boleto?: number | null
+    situacao?: string | null
+  }) {
+    const { error } = await supabase.from('rifas').insert({ ...dados, sheet_row_number: null, sheet_row_hash: null })
+    if (error) throw new Error(error.message)
+    const { error: rpcError } = await supabase.rpc('rifas_recalcular_matches')
+    if (rpcError) throw new Error(rpcError.message)
+    await carregar()
+  }
+
+  async function atualizarGanhador(id: string, patch: Partial<Pick<RifaGanhador, 'contato_feito' | 'premio_entregue' | 'financeiro' | 'obs'>>) {
+    const { error } = await supabase.from('rifas_ganhadores').update(patch).eq('id', id)
+    if (error) throw new Error(error.message)
+    await carregar()
+  }
+
+  async function atualizarCompra(id: string, patch: Partial<Pick<RifaCompra, 'status' | 'valor' | 'data_compra' | 'site' | 'nome_cartao' | 'preenchido_planilha'>>) {
+    const { error } = await supabase.from('rifas_compras').update(patch).eq('id', id)
+    if (error) throw new Error(error.message)
+    await carregar()
+  }
+
+  // Ganhador ainda pode não ter nenhuma linha de compra (nunca veio da planilha) —
+  // cria na hora se preciso, em vez de exigir que a compra já exista.
+  async function marcarCompradoParaGanhador(ganhadorId: string, patch: Partial<Pick<RifaCompra, 'status' | 'valor' | 'data_compra'>>) {
+    const existente = compras.find(c => c.ganhador_id === ganhadorId)
+    if (existente) {
+      const { error } = await supabase.from('rifas_compras').update(patch).eq('id', existente.id)
+      if (error) throw new Error(error.message)
+    } else {
+      const ganhador = ganhadores.find(g => g.id === ganhadorId)
+      const { error } = await supabase.from('rifas_compras').insert({
+        ganhador_id: ganhadorId,
+        turma: ganhador?.turma ?? null,
+        premio_descricao: ganhador?.premio_descricao ?? null,
+        nome_ganhador: ganhador?.nome_ganhador ?? null,
+        status: 'Não comprado',
+        ...patch,
+      })
+      if (error) throw new Error(error.message)
+    }
+    await carregar()
+  }
+
   return {
     rifas, ganhadores, compras, overrides, conflitos, syncLogs,
     carregando, sincronizando, ultimoSync,
     sincronizar, salvarOverride, resolverConflito, recarregar: carregar,
+    criarRifa, atualizarGanhador, atualizarCompra, marcarCompradoParaGanhador,
   }
 }

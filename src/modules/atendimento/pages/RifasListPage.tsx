@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react'
-import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
+import { ChevronUp, ChevronDown, ChevronsUpDown, Search, Plus } from 'lucide-react'
 import { useAtendimento } from '../contexts/AtendimentoContext'
 import { SyncBar } from '../components/SyncBar'
 import { PipelineDots } from '../components/PipelineDots'
+import { PipelineLegenda } from '../components/PipelineLegenda'
+import { NovaRifaModal } from '../components/NovaRifaModal'
 import { calcularPipeline } from '../lib/rifaPipeline'
 import { formatarData, formatarValor } from '../lib/formatadores'
+import { normalizarChave } from '../../../lib/rifasSync'
 import type { Rifa } from '../../../hooks/useRifas'
 
 const SITUACAO_COR: Record<string, string> = {
@@ -34,6 +37,8 @@ export function RifasListPage() {
   const { rifas, ganhadores, compras, carregando } = useAtendimento()
   const [sort, setSort] = useState<{ coluna: Coluna; dir: 'asc' | 'desc' } | null>(null)
   const [situacaoModo, setSituacaoModo] = useState<'padrao' | 'alfabetica'>('padrao')
+  const [busca, setBusca] = useState('')
+  const [modalAberto, setModalAberto] = useState(false)
 
   function handleClickHeader(coluna: Coluna) {
     if (coluna === 'situacao') {
@@ -44,8 +49,14 @@ export function RifasListPage() {
     setSort(s => (s?.coluna === coluna ? { coluna, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { coluna, dir: 'asc' }))
   }
 
+  const rifasBuscadas = useMemo(() => {
+    if (!busca.trim()) return rifas
+    const chave = normalizarChave(busca)
+    return rifas.filter(r => normalizarChave(r.turma).includes(chave) || normalizarChave(r.premio_descricao ?? '').includes(chave))
+  }, [rifas, busca])
+
   const rifasOrdenadas = useMemo(() => {
-    const arr = [...rifas]
+    const arr = [...rifasBuscadas]
     if (sort) {
       arr.sort((a, b) => {
         const va = valorOrdenavel(a, sort.coluna)
@@ -66,7 +77,7 @@ export function RifasListPage() {
       return (a.dia_vencimento ?? '9999-99-99').localeCompare(b.dia_vencimento ?? '9999-99-99')
     })
     return arr
-  }, [rifas, sort, situacaoModo])
+  }, [rifasBuscadas, sort, situacaoModo])
 
   function IconeSort({ coluna }: { coluna: Coluna }) {
     if (coluna === 'situacao') return null
@@ -88,8 +99,29 @@ export function RifasListPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-text-main mb-4">Todas as Rifas</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-bold text-text-main">Todas as Rifas</h1>
+        <button
+          onClick={() => setModalAberto(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-colors"
+        >
+          <Plus size={14} /> Nova Rifa
+        </button>
+      </div>
       <SyncBar />
+
+      <div className="flex items-center justify-between mb-3">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar por turma ou prêmio..."
+            className="bg-surface border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-sm text-text-main w-64"
+          />
+        </div>
+        <PipelineLegenda compacta />
+      </div>
 
       <div className="card p-0 overflow-hidden">
         <div className="overflow-x-auto">
@@ -147,6 +179,8 @@ export function RifasListPage() {
           </table>
         </div>
       </div>
+
+      <NovaRifaModal open={modalAberto} onClose={() => setModalAberto(false)} />
     </div>
   )
 }
