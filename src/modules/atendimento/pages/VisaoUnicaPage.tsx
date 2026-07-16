@@ -17,8 +17,13 @@ const ETAPA_COR: Record<EtapaPipeline, string> = {
   nao_vai_ter: 'text-danger',
 }
 
-// Separador vertical no fim do último header/célula de cada bloco (Status | Rifa | Ganhador | Compra).
+// Separador vertical no fim do último header/célula de cada bloco (Status+Turma | Rifa | Ganhador | Compra).
 const SEPARADOR = 'border-r-2 border-white/10'
+// Duas primeiras colunas (Status + Turma) ficam congeladas na horizontal — largura fixa
+// pra dar pra calcular o "left" da segunda a partir da largura da primeira.
+const LARGURA_STATUS = 'w-40'
+const LARGURA_TURMA = 'w-32'
+const ALTURA_HEADER = 'h-9' // as duas linhas de cabeçalho têm a mesma altura fixa, pra alinhar certinho com "sticky top"
 
 export function VisaoUnicaPage() {
   const { rifas, ganhadores, compras, carregando } = useAtendimento()
@@ -57,35 +62,35 @@ export function VisaoUnicaPage() {
           <table className="w-full text-xs border-separate border-spacing-0">
             <thead>
               <tr>
-                <th rowSpan={2} className={`px-3 py-2 bg-surface text-left text-text-muted uppercase tracking-wider text-[10px] font-semibold align-bottom sticky left-0 top-0 z-20 ${SEPARADOR}`}>Status</th>
-                <th colSpan={8} className={`px-3 py-1.5 text-center text-[10px] font-bold uppercase tracking-wider sticky top-0 z-10 ${SEPARADOR}`} style={{ backgroundColor: 'rgba(120,170,255,0.18)', color: '#a8c8ff' }}>Rifa</th>
-                <th colSpan={9} className={`px-3 py-1.5 text-center text-[10px] font-bold uppercase tracking-wider sticky top-0 z-10 ${SEPARADOR}`} style={{ backgroundColor: 'rgba(120,220,140,0.18)', color: '#9fe8ae' }}>Ganhador</th>
-                <th colSpan={6} className="px-3 py-1.5 text-center text-[10px] font-bold uppercase tracking-wider sticky top-0 z-10" style={{ backgroundColor: 'rgba(255,220,120,0.18)', color: '#ffe9a8' }}>Compra</th>
+                <th rowSpan={2} className={`px-3 ${ALTURA_HEADER} ${LARGURA_STATUS} bg-surface text-left text-text-muted uppercase tracking-wider text-[10px] font-semibold align-middle sticky left-0 top-0 z-30 ${SEPARADOR}`}>Status</th>
+                <th rowSpan={2} className={`px-3 ${ALTURA_HEADER} ${LARGURA_TURMA} text-left text-[10px] font-bold uppercase tracking-wider align-middle sticky left-40 top-0 z-30`} style={{ backgroundColor: 'rgba(120,170,255,0.28)', color: '#a8c8ff' }}>Turma</th>
+                <th colSpan={7} className={`px-3 ${ALTURA_HEADER} text-center text-[10px] font-bold uppercase tracking-wider sticky top-0 z-10 ${SEPARADOR}`} style={{ backgroundColor: 'rgba(120,170,255,0.18)', color: '#a8c8ff' }}>Rifa</th>
+                <th colSpan={9} className={`px-3 ${ALTURA_HEADER} text-center text-[10px] font-bold uppercase tracking-wider sticky top-0 z-10 ${SEPARADOR}`} style={{ backgroundColor: 'rgba(120,220,140,0.18)', color: '#9fe8ae' }}>Ganhador</th>
+                <th colSpan={6} className={`px-3 ${ALTURA_HEADER} text-center text-[10px] font-bold uppercase tracking-wider sticky top-0 z-10`} style={{ backgroundColor: 'rgba(255,220,120,0.18)', color: '#ffe9a8' }}>Compra</th>
               </tr>
               <tr className="text-left text-text-muted uppercase tracking-wider text-[10px]">
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Turma</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Edição</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Formação</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Ano</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Vencimento</th>
-                <th className="px-3 py-2 font-semibold sticky top-8 z-10 bg-surface">Prêmio</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Valor</th>
-                <th className={`px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface ${SEPARADOR}`}>Situação</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Tipo</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Responsável</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Data Sorteio</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Ganhador</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Contato</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Contato Feito?</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Prêmio Entregue</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Financeiro</th>
-                <th className={`px-3 py-2 font-semibold sticky top-8 z-10 bg-surface ${SEPARADOR}`}>Obs</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Site</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Valor Compra</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Status Compra</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Data Compra</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Data Entrega</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap sticky top-8 z-10 bg-surface">Cartão</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Edição</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Formação</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Ano</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Vencimento</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold sticky top-9 z-10 bg-surface`}>Prêmio</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Valor</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface ${SEPARADOR}`}>Situação</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Tipo</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Responsável</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Data Sorteio</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Ganhador</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Contato</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Contato Feito?</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Prêmio Entregue</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Financeiro</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold sticky top-9 z-10 bg-surface ${SEPARADOR}`}>Obs</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Site</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Valor Compra</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Status Compra</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Data Compra</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Data Entrega</th>
+                <th className={`px-3 ${ALTURA_HEADER} font-semibold whitespace-nowrap sticky top-9 z-10 bg-surface`}>Cartão</th>
               </tr>
             </thead>
             <tbody>
@@ -97,10 +102,11 @@ export function VisaoUnicaPage() {
               )}
               {instanciasFiltradas.map((inst, i) => {
                 const { rifa: r, ganhador: g, compra: c, etapa } = inst
+                const turma = r?.turma ?? g?.turma ?? '—'
                 return (
                   <tr key={i} className="border-t border-white/5 hover:bg-white/5">
-                    <td className={`px-3 py-2 font-semibold whitespace-nowrap sticky left-0 bg-surface ${ETAPA_COR[etapa]} ${SEPARADOR}`}>{ETAPA_LABEL[etapa]}</td>
-                    <td className="px-3 py-2 text-text-main whitespace-nowrap">{r?.turma ?? '—'}</td>
+                    <td className={`px-3 py-2 font-semibold whitespace-nowrap sticky left-0 z-20 bg-surface ${ETAPA_COR[etapa]} ${SEPARADOR}`}>{ETAPA_LABEL[etapa]}</td>
+                    <td className={`px-3 py-2 text-text-main whitespace-nowrap truncate sticky left-40 z-20 bg-surface ${LARGURA_TURMA}`} title={turma}>{turma}</td>
                     <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r?.edicao ?? '—'}</td>
                     <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r?.formacao ?? '—'}</td>
                     <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r?.ano_formatura ?? '—'}</td>
