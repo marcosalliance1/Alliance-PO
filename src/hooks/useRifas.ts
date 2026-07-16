@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import {
-  ABA_INFORMACOES, ABA_GANHADORES, ABA_COMPRAS,
+  ABA_INFORMACOES, ABA_GANHADORES, ABA_COMPRAS, ABA_VISAO_UNICA,
   COLS_INFORMACOES, COLS_GANHADORES, COLS_COMPRAS,
   parseAbaInformacoes, parseAbaGanhadores, parseAbaCompras,
   lerAba, escreverLinha, escreverCelula, anexarLinha, listarAbas, encontrarAbaReal,
+  obterOuCriarAba, limparAba, escreverGradeCompleta, formatarAbaVisaoUnica,
   formatarDataBR, hashLinha, construirLinhaArray, normalizarChave, mapearColunas,
   type RifaSheetRow, type GanhadorSheetRow, type CompraSheetRow,
 } from '../lib/rifasSync'
+import { montarInstanciasPipeline, ETAPA_LABEL } from '../modules/atendimento/lib/rifaPipeline'
 
 async function fetchAll<T>(tabela: string): Promise<T[]> {
   const PAGE = 1000
@@ -430,6 +432,44 @@ async function sincronizarComprasTabela(
   return { criados, atualizados, conflitos }
 }
 
+// ── Aba "VISÃO ÚNICA" — join somente-leitura pra quem só quer consultar ─────
+// Nunca participa do diff/conflito das 3 abas originais: é gerada do zero e
+// sobrescrita inteira a cada sync.
+
+const TOTAL_COLS_RIFA = 8
+const TOTAL_COLS_GANHADOR = 9
+const TOTAL_COLS_COMPRA = 6
+
+const CABECALHO_VISAO_UNICA = [
+  'Status do Pipeline',
+  'Turma', 'Edição', 'Formação', 'Ano de Formatura', 'Dia do Vencimento', 'Prêmio', 'Valor do Boleto', 'Situação',
+  'Tipo', 'Responsável', 'Data do Sorteio', 'Nome do Ganhador', 'Contato', 'Contato Feito?', 'Prêmio Entregue', 'Financeiro', 'Obs',
+  'Site', 'Valor da Compra', 'Status da Compra', 'Data da Compra', 'Data Entrega', 'Nome do Cartão',
+]
+
+function construirLinhasVisaoUnica(rifasAtuais: Rifa[], ganhadoresAtuais: RifaGanhador[], comprasAtuais: RifaCompra[]): unknown[][] {
+  const instancias = montarInstanciasPipeline(rifasAtuais, ganhadoresAtuais, comprasAtuais)
+  const linhas = instancias.map(({ rifa: r, ganhador: g, compra: c, etapa }) => [
+    ETAPA_LABEL[etapa],
+    r?.turma ?? '', r?.edicao ?? '', r?.formacao ?? '', r?.ano_formatura ?? '', formatarDataBR(r?.dia_vencimento ?? null), r?.premio_descricao ?? '', r?.valor_boleto ?? '', r?.situacao ?? '',
+    g?.tipo ?? '', g?.responsavel ?? '', formatarDataBR(g?.data_sorteio ?? null), g?.nome_ganhador ?? '', g?.contato ?? '', g ? (g.contato_feito ? 'SIM' : 'NÃO') : '', g?.premio_entregue ?? '', g?.financeiro ?? '', g?.obs ?? '',
+    c?.site ?? '', c?.valor ?? '', c?.status ?? '', formatarDataBR(c?.data_compra ?? null), c?.data_entrega_raw ?? '', c?.nome_cartao ?? '',
+  ])
+  return [CABECALHO_VISAO_UNICA, ...linhas]
+}
+
+async function sincronizarVisaoUnica(spreadsheetId: string, accessToken: string): Promise<void> {
+  const [rifasFinal, ganhadoresFinal, comprasFinal] = await Promise.all([
+    fetchAll<Rifa>('rifas'),
+    fetchAll<RifaGanhador>('rifas_ganhadores'),
+    fetchAll<RifaCompra>('rifas_compras'),
+  ])
+  const sheetId = await obterOuCriarAba(spreadsheetId, ABA_VISAO_UNICA, accessToken)
+  await limparAba(spreadsheetId, ABA_VISAO_UNICA, accessToken)
+  await escreverGradeCompleta(spreadsheetId, ABA_VISAO_UNICA, construirLinhasVisaoUnica(rifasFinal, ganhadoresFinal, comprasFinal), accessToken)
+  await formatarAbaVisaoUnica(spreadsheetId, sheetId, TOTAL_COLS_RIFA, TOTAL_COLS_GANHADOR, TOTAL_COLS_COMPRA, accessToken)
+}
+
 // ── Resolução manual de conflitos ────────────────────────────────────────────
 
 const ABA_POR_TABELA: Record<RifaSyncConflito['tabela_origem'], string> = {
@@ -528,6 +568,14 @@ export function useRifas() {
 
       const { error: rpcError } = await supabase.rpc('rifas_recalcular_matches')
       if (rpcError) erros.push(`Recalcular matches: ${rpcError.message}`)
+
+      // Escrita da "VISÃO ÚNICA" é só saída (nunca lida de volta) — uma falha aqui não
+      // pode derrubar a sincronização das 3 abas originais, só vira um aviso.
+      try {
+        await sincronizarVisaoUnica(spreadsheetId, accessToken)
+      } catch (e) {
+        erros.push(`Atualizar aba "${ABA_VISAO_UNICA}": ${(e as Error).message}`)
+      }
 
       await supabase.from('rifas_sync_log').insert({
         registros_criados: criados, registros_atualizados: atualizados,

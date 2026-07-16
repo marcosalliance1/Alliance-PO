@@ -10,6 +10,7 @@
 const ABA_INFORMACOES = 'INFORMAÇÕES'
 const ABA_GANHADORES = 'GANHADORES'
 const ABA_COMPRAS = 'ACOMPANHAMENTO DE COMPRA'
+const ABA_VISAO_UNICA = 'VISÃO ÚNICA'
 
 const SITUACOES_VALIDAS = ['EM ANDAMENTO', 'SORTEADA', 'FECHADA', 'NÃO VAI TER']
 const STATUS_COMPRA_VALIDOS = ['Comprado', 'Não comprado']
@@ -528,4 +529,123 @@ export async function anexarLinha(
   return m ? parseInt(m[1], 10) : 0
 }
 
-export { ABA_INFORMACOES, ABA_GANHADORES, ABA_COMPRAS }
+// ── Aba "VISÃO ÚNICA" — somente escrita, sobrescrita inteira a cada sync ────────
+// Nunca é lida de volta pelo motor de sincronização das 3 abas originais; é só uma
+// leitura consolidada (join de rifas+ganhadores+compras) pra quem só quer consultar.
+
+async function batchUpdate(spreadsheetId: string, accessToken: string, requests: unknown[]): Promise<Record<string, unknown>> {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}:batchUpdate`
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests }),
+  })
+  if (resp.status === 401) throw erroToken()
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({})) as { error?: { message?: string } }
+    throw new Error(body.error?.message ?? `Erro ao atualizar planilha (HTTP ${resp.status})`)
+  }
+  return resp.json()
+}
+
+// Retorna o sheetId numérico da aba (precisa pra formatação/congelamento via batchUpdate)
+// — cria a aba na planilha se ela ainda não existir.
+export async function obterOuCriarAba(spreadsheetId: string, aba: string, accessToken: string): Promise<number> {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties`
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
+  if (resp.status === 401) throw erroToken()
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({})) as { error?: { message?: string } }
+    throw new Error(body.error?.message ?? `Erro ao consultar abas da planilha (HTTP ${resp.status})`)
+  }
+  const meta = await resp.json() as { sheets?: { properties: { sheetId: number; title: string } }[] }
+  const existente = meta.sheets?.find(s => s.properties.title === aba)
+  if (existente) return existente.properties.sheetId
+
+  const data = await batchUpdate(spreadsheetId, accessToken, [{ addSheet: { properties: { title: aba } } }])
+  const replies = data.replies as { addSheet: { properties: { sheetId: number } } }[]
+  return replies[0].addSheet.properties.sheetId
+}
+
+// Apaga todo o conteúdo atual da aba antes de escrever a versão nova (o número de
+// linhas muda a cada sync, então só sobrescrever não seria suficiente pra remover
+// linhas antigas que sobraram do fim).
+export async function limparAba(spreadsheetId: string, aba: string, accessToken: string): Promise<void> {
+  const range = `'${aba}'!A1:Z20000`
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}:clear`
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+  if (resp.status === 401) throw erroToken()
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({})) as { error?: { message?: string } }
+    throw new Error(body.error?.message ?? `Erro ao limpar aba "${aba}" (HTTP ${resp.status})`)
+  }
+}
+
+// Escreve a grade inteira (cabeçalho + linhas) a partir de A1.
+export async function escreverGradeCompleta(spreadsheetId: string, aba: string, valores: unknown[][], accessToken: string): Promise<void> {
+  const range = `'${aba}'!A1`
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`
+  const resp = await fetch(url, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ range, values: valores }),
+  })
+  if (resp.status === 401) throw erroToken()
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({})) as { error?: { message?: string } }
+    throw new Error(body.error?.message ?? `Erro ao escrever aba "${aba}" (HTTP ${resp.status})`)
+  }
+}
+
+const COR_BLOCO_RIFA = { red: 0.85, green: 0.92, blue: 1 } // azul claro
+const COR_BLOCO_GANHADOR = { red: 0.85, green: 0.95, blue: 0.85 } // verde claro
+const COR_BLOCO_COMPRA = { red: 1, green: 0.97, blue: 0.8 } // amarelo claro
+
+// Cor do cabeçalho por bloco + congelamento das 2 primeiras colunas (Status do Pipeline
+// + Turma) e da primeira linha + nota de aviso na célula A1 — tudo num só batchUpdate.
+export async function formatarAbaVisaoUnica(
+  spreadsheetId: string,
+  sheetId: number,
+  totalColunasRifa: number,
+  totalColunasGanhador: number,
+  totalColunasCompra: number,
+  accessToken: string,
+): Promise<void> {
+  const inicioRifa = 1 // coluna 0 = Status do Pipeline
+  const inicioGanhador = inicioRifa + totalColunasRifa
+  const inicioCompra = inicioGanhador + totalColunasGanhador
+  const fimCompra = inicioCompra + totalColunasCompra
+
+  const bandaCor = (startCol: number, endCol: number, cor: { red: number; green: number; blue: number }) => ({
+    repeatCell: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: startCol, endColumnIndex: endCol },
+      cell: { userEnteredFormat: { backgroundColor: cor, textFormat: { bold: true } } },
+      fields: 'userEnteredFormat.backgroundColor,userEnteredFormat.textFormat.bold',
+    },
+  })
+
+  await batchUpdate(spreadsheetId, accessToken, [
+    {
+      updateSheetProperties: {
+        properties: { sheetId, gridProperties: { frozenRowCount: 1, frozenColumnCount: 2 } },
+        fields: 'gridProperties.frozenRowCount,gridProperties.frozenColumnCount',
+      },
+    },
+    bandaCor(inicioRifa, inicioGanhador, COR_BLOCO_RIFA),
+    bandaCor(inicioGanhador, inicioCompra, COR_BLOCO_GANHADOR),
+    bandaCor(inicioCompra, fimCompra, COR_BLOCO_COMPRA),
+    {
+      updateCells: {
+        range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 1 },
+        rows: [{ values: [{ note: 'Esta aba é gerada automaticamente e sobrescrita a cada sincronização — não editar aqui. Para editar, use as abas Informações, Ganhadores ou Acompanhamento de Compra.' }] }],
+        fields: 'note',
+      },
+    },
+  ])
+}
+
+export { ABA_INFORMACOES, ABA_GANHADORES, ABA_COMPRAS, ABA_VISAO_UNICA }

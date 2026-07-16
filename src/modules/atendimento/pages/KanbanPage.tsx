@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import { useAtendimento } from '../contexts/AtendimentoContext'
-import { isRifaPipelineCompleto } from '../lib/rifaPipeline'
+import { etapaPipeline, type EtapaPipeline } from '../lib/rifaPipeline'
 import { formatarValor } from '../lib/formatadores'
 import { PipelineDrawer } from '../components/PipelineDrawer'
 import { PipelineLegenda } from '../components/PipelineLegenda'
@@ -37,12 +37,16 @@ function diasParadoNaColuna(coluna: number, rifa: Rifa, ganhador: RifaGanhador |
   return Math.floor((Date.now() - new Date(dataRef).getTime()) / 86_400_000)
 }
 
+const ETAPA_PARA_COLUNA: Record<EtapaPipeline, number> = {
+  aguardando_sorteio: 0,
+  sorteada_sem_contato: 1,
+  contatado_sem_compra: 2,
+  concluido: 3,
+  nao_vai_ter: -1, // fora do quadro operacional
+}
+
 function colunaDoCard(rifa: Rifa, ganhador: RifaGanhador | null, compra: RifaCompra | null): number {
-  if (isRifaPipelineCompleto(rifa, ganhador, compra)) return 3
-  if (ganhador?.contato_feito) return 2
-  if (rifa.situacao === 'SORTEADA') return 1
-  if (rifa.situacao === 'EM ANDAMENTO') return 0
-  return -1 // ex: "NÃO VAI TER" — fora do quadro operacional
+  return ETAPA_PARA_COLUNA[etapaPipeline(rifa, ganhador, compra)]
 }
 
 export function KanbanPage() {
