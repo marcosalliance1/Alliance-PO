@@ -44,6 +44,7 @@ import { Layout as AtendimentoLayout } from './modules/atendimento/components/La
 import { DashboardRifasPage } from './modules/atendimento/pages/DashboardRifasPage'
 import { KanbanPage } from './modules/atendimento/pages/KanbanPage'
 import { CalendarioPage } from './modules/atendimento/pages/CalendarioPage'
+import { VisaoUnicaPage } from './modules/atendimento/pages/VisaoUnicaPage'
 import { RifasListPage } from './modules/atendimento/pages/RifasListPage'
 import { GanhadoresPage } from './modules/atendimento/pages/GanhadoresPage'
 import { ComprasPage } from './modules/atendimento/pages/ComprasPage'
@@ -355,6 +356,7 @@ function AppRoutes() {
         <Route path="rifas" element={<DashboardRifasPage />} />
         <Route path="rifas/kanban" element={<KanbanPage />} />
         <Route path="rifas/calendario" element={<CalendarioPage />} />
+        <Route path="rifas/visao-unica" element={<VisaoUnicaPage />} />
         <Route path="rifas/todas" element={<RifasListPage />} />
         <Route path="rifas/ganhadores" element={<GanhadoresPage />} />
         <Route path="rifas/compras" element={<ComprasPage />} />

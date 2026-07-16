@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, Columns3, CalendarDays,
+  LayoutDashboard, Columns3, CalendarDays, Layers,
   Gift, Users, ShoppingBag, Link2, AlertTriangle,
   ArrowLeft, ChevronDown, ChevronRight,
 } from 'lucide-react'
@@ -36,6 +36,7 @@ export const Sidebar: React.FC = () => {
     { to: '/atendimento/rifas', icon: <LayoutDashboard className="w-4 h-4" />, label: 'Dashboard', fim: true },
     { to: '/atendimento/rifas/kanban', icon: <Columns3 className="w-4 h-4" />, label: 'Kanban', fim: false },
     { to: '/atendimento/rifas/calendario', icon: <CalendarDays className="w-4 h-4" />, label: 'Calendário', fim: false },
+    { to: '/atendimento/rifas/visao-unica', icon: <Layers className="w-4 h-4" />, label: 'Visão Única', fim: false },
   ]
 
   const NAV_CONFIG = [
