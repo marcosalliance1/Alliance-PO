@@ -294,12 +294,30 @@ const CAMPOS_GANHADORES: DiffCampo<GanhadorSheetRow, RifaGanhador>[] = [
   { campo: 'obs', doSheet: s => s.obs, doDb: d => d.obs },
 ]
 
-function resolverRifaId(s: GanhadorSheetRow, rifasAtuais: Rifa[]): string | null {
-  if (normalizarChave(s.tipo) !== normalizarChave('Rifas do Projeto')) return null
-  const turmaChave = normalizarChave(s.turma)
-  const premioChave = normalizarChave(s.premio_descricao)
-  const r = rifasAtuais.find(r => normalizarChave(r.turma) === turmaChave && normalizarChave(r.premio_descricao) === premioChave)
-  return r?.id ?? null
+interface GanhadorParaVincular { turma: string; tipo: string | null; data_sorteio: string | null }
+
+// Vincula por TURMA (chave confiável) — o texto do PRÊMIO quase nunca é digitado igual
+// nas duas abas ("PIX de R$500,00" vs "PIX R$500,00" já quebra um match exato), então
+// não pode ser exigido. Quando a mesma turma tem várias edições/anos, desempata pela
+// data de vencimento mais próxima da data do sorteio, que é bem mais confiável.
+function resolverRifaId(g: GanhadorParaVincular, rifasAtuais: Rifa[]): string | null {
+  if (normalizarChave(g.tipo) !== normalizarChave('Rifas do Projeto')) return null
+  const turmaChave = normalizarChave(g.turma)
+  const candidatas = rifasAtuais.filter(r => normalizarChave(r.turma) === turmaChave)
+  if (candidatas.length === 0) return null
+  if (candidatas.length === 1) return candidatas[0].id
+
+  const dataSorteio = g.data_sorteio ? new Date(g.data_sorteio).getTime() : null
+  if (dataSorteio === null) return candidatas[0].id
+
+  let melhor = candidatas[0]
+  let menorDistancia = Infinity
+  for (const r of candidatas) {
+    if (!r.dia_vencimento) continue
+    const distancia = Math.abs(new Date(r.dia_vencimento).getTime() - dataSorteio)
+    if (distancia < menorDistancia) { menorDistancia = distancia; melhor = r }
+  }
+  return melhor.id
 }
 
 async function sincronizarGanhadoresTabela(
@@ -376,6 +394,18 @@ async function sincronizarGanhadoresTabela(
     }
   }
 
+  // Religa retroativamente ganhadores já sincronizados que ficaram sem rifa_id (ex:
+  // por causa do texto do prêmio não bater entre as abas, antes desse fix) — não espera
+  // a linha do sheet mudar de novo pra tentar de novo.
+  for (const g of atuais) {
+    if (g.rifa_id) continue
+    const novoRifaId = resolverRifaId(g, rifasAtuais)
+    if (novoRifaId) {
+      const { error } = await supabase.from('rifas_ganhadores').update({ rifa_id: novoRifaId }).eq('id', g.id)
+      if (!error) atualizados++
+    }
+  }
+
   return { criados, atualizados, conflitos }
 }
 
@@ -393,16 +423,21 @@ const CAMPOS_COMPRAS: DiffCampo<CompraSheetRow, RifaCompra>[] = [
   { campo: 'preenchido_planilha', doSheet: s => s.preenchido_planilha, doDb: d => d.preenchido_planilha },
 ]
 
-function resolverGanhadorId(s: CompraSheetRow, ganhadoresAtuais: RifaGanhador[]): string | null {
+interface CompraParaVincular { turma: string; nome_ganhador: string | null; premio_descricao: string | null }
+
+// TURMA + NOME DO GANHADOR são as chaves confiáveis (o texto do PRÊMIO varia entre
+// abas, igual no caso de resolverRifaId). Só usa o prêmio como desempate se, por algum
+// motivo raro, mais de um ganhador tiver a mesma turma+nome.
+function resolverGanhadorId(s: CompraParaVincular, ganhadoresAtuais: RifaGanhador[]): string | null {
   const turmaChave = normalizarChave(s.turma)
-  const premioChave = normalizarChave(s.premio_descricao)
   const nomeChave = normalizarChave(s.nome_ganhador)
-  const g = ganhadoresAtuais.find(g =>
-    normalizarChave(g.turma) === turmaChave &&
-    normalizarChave(g.premio_descricao) === premioChave &&
-    normalizarChave(g.nome_ganhador) === nomeChave,
-  )
-  return g?.id ?? null
+  const candidatos = ganhadoresAtuais.filter(g => normalizarChave(g.turma) === turmaChave && normalizarChave(g.nome_ganhador) === nomeChave)
+  if (candidatos.length === 0) return null
+  if (candidatos.length === 1) return candidatos[0].id
+
+  const premioChave = normalizarChave(s.premio_descricao)
+  const exato = candidatos.find(g => normalizarChave(g.premio_descricao) === premioChave)
+  return (exato ?? candidatos[0]).id
 }
 
 async function sincronizarComprasTabela(
@@ -484,6 +519,16 @@ async function sincronizarComprasTabela(
       atualizados += paraAnexar.length
     } catch (e) {
       erros.push(`Adicionar ${paraAnexar.length} compra(s) nova(s) na planilha: ${(e as Error).message}`)
+    }
+  }
+
+  // Mesma religada retroativa, agora pras compras já sincronizadas sem ganhador_id.
+  for (const c of atuais) {
+    if (c.ganhador_id) continue
+    const novoGanhadorId = resolverGanhadorId({ turma: c.turma ?? '', nome_ganhador: c.nome_ganhador, premio_descricao: c.premio_descricao }, ganhadoresAtuais)
+    if (novoGanhadorId) {
+      const { error } = await supabase.from('rifas_compras').update({ ganhador_id: novoGanhadorId }).eq('id', c.id)
+      if (!error) atualizados++
     }
   }
 
