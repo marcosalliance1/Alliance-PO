@@ -529,6 +529,70 @@ export async function anexarLinha(
   return m ? parseInt(m[1], 10) : 0
 }
 
+// A API do Sheets limita requisições de escrita por minuto (padrão: 60/usuário). Uma
+// sincronização que reescreve dezenas de linhas usando escreverLinha()/anexarLinha() em
+// loop (uma requisição HTTP por linha) estoura essa cota fácil. As duas funções abaixo
+// juntam várias linhas numa única chamada — values:batchUpdate pra atualizar linhas já
+// existentes, values:append (que já aceita múltiplas linhas de uma vez) pra anexar novas.
+
+export interface AtualizacaoLinha { linha: number; colunas: Record<string, number>; valoresPorCampo: Record<string, unknown> }
+
+function montarRangeEValores(aba: string, linha: number, colunas: Record<string, number>, valoresPorCampo: Record<string, unknown>): { range: string; values: unknown[][]; linhaArray: unknown[] } {
+  const linhaArray = construirLinhaArray(colunas, valoresPorCampo)
+  const ultimaCol = Math.max(0, linhaArray.length - 1)
+  const range = `'${aba}'!A${linha}:${colIndexToLetter(ultimaCol)}${linha}`
+  return { range, values: [linhaArray], linhaArray }
+}
+
+// Retorna o hash de cada linha (na mesma ordem de entrada) pra quem chamou já poder
+// atualizar sheet_row_hash no Supabase sem precisar recalcular.
+export async function escreverLinhasEmLote(spreadsheetId: string, aba: string, atualizacoes: AtualizacaoLinha[], accessToken: string): Promise<string[]> {
+  if (atualizacoes.length === 0) return []
+  const partes = atualizacoes.map(a => montarRangeEValores(aba, a.linha, a.colunas, a.valoresPorCampo))
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values:batchUpdate`
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: partes.map(p => ({ range: p.range, values: p.values })) }),
+  })
+  if (resp.status === 401) throw erroToken()
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({})) as { error?: { message?: string } }
+    throw new Error(body.error?.message ?? `Erro ao escrever ${atualizacoes.length} linha(s) em lote na aba "${aba}" (HTTP ${resp.status})`)
+  }
+  return partes.map(p => hashLinha(p.linhaArray))
+}
+
+// Anexa várias linhas novas de uma vez (o append do Sheets já aceita N linhas por
+// chamada) — retorna o número de linha (1-based) atribuído a cada uma, na mesma ordem.
+export async function anexarLinhasEmLote(
+  spreadsheetId: string,
+  aba: string,
+  colunas: Record<string, number>,
+  linhasValoresPorCampo: Record<string, unknown>[],
+  accessToken: string,
+): Promise<{ linha: number; hash: string }[]> {
+  if (linhasValoresPorCampo.length === 0) return []
+  const linhasArray = linhasValoresPorCampo.map(v => construirLinhaArray(colunas, v))
+  const range = `'${aba}'!A1`
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values: linhasArray }),
+  })
+  if (resp.status === 401) throw erroToken()
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({})) as { error?: { message?: string } }
+    throw new Error(body.error?.message ?? `Erro ao adicionar ${linhasValoresPorCampo.length} linha(s) em lote na aba "${aba}" (HTTP ${resp.status})`)
+  }
+  const data = await resp.json() as { updates?: { updatedRange?: string } }
+  const range2 = data.updates?.updatedRange ?? ''
+  const m = range2.match(/![A-Z]+(\d+)/)
+  const linhaInicial = m ? parseInt(m[1], 10) : 0
+  return linhasArray.map((linhaArray, i) => ({ linha: linhaInicial + i, hash: hashLinha(linhaArray) }))
+}
+
 // ── Aba "VISÃO ÚNICA" — somente escrita, sobrescrita inteira a cada sync ────────
 // Nunca é lida de volta pelo motor de sincronização das 3 abas originais; é só uma
 // leitura consolidada (join de rifas+ganhadores+compras) pra quem só quer consultar.

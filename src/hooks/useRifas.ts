@@ -4,9 +4,9 @@ import {
   ABA_INFORMACOES, ABA_GANHADORES, ABA_COMPRAS, ABA_VISAO_UNICA,
   COLS_INFORMACOES, COLS_GANHADORES, COLS_COMPRAS,
   parseAbaInformacoes, parseAbaGanhadores, parseAbaCompras,
-  lerAba, escreverLinha, escreverCelula, anexarLinha, listarAbas, encontrarAbaReal,
+  lerAba, escreverCelula, escreverLinhasEmLote, anexarLinhasEmLote, listarAbas, encontrarAbaReal,
   obterOuCriarAba, limparAba, escreverGradeCompleta, formatarAbaVisaoUnica,
-  formatarDataBR, hashLinha, construirLinhaArray, normalizarChave, mapearColunas,
+  formatarDataBR, normalizarChave, mapearColunas,
   type RifaSheetRow, type GanhadorSheetRow, type CompraSheetRow,
 } from '../lib/rifasSync'
 import { montarInstanciasPipeline, ETAPA_LABEL } from '../modules/atendimento/lib/rifaPipeline'
@@ -210,6 +210,19 @@ async function sincronizarRifasTabela(
   let criados = 0, atualizados = 0, conflitos = 0
   const acoes = diffTabela(linhas, atuais, CAMPOS_RIFAS, ultimaSyncEm)
 
+  const paraAtualizarNoSheet: { id: string; linha: number; valores: Record<string, unknown> }[] = []
+  const paraAnexar: { id: string; valores: Record<string, unknown> }[] = []
+
+  function valoresDoSheet(d: Rifa): Record<string, unknown> {
+    const valores: Record<string, unknown> = {
+      turma: d.turma, formacao: d.formacao, ano_formatura: d.ano_formatura, atribuido_raw: d.atribuido_raw,
+      dia_vencimento: formatarDataBR(d.dia_vencimento), premio_descricao: d.premio_descricao,
+      valor_boleto: d.valor_boleto, situacao: d.situacao,
+    }
+    if (colunas.edicao !== undefined) valores.edicao = d.edicao
+    return valores
+  }
+
   for (const acao of acoes) {
     if (acao.tipo === 'inserir') {
       const s = acao.sheetRow
@@ -229,29 +242,36 @@ async function sincronizarRifasTabela(
       }).eq('id', acao.dbRow.id)
       if (error) erros.push(`Atualizar rifa ${acao.dbRow.id}: ${error.message}`)
       else atualizados++
-    } else if (acao.tipo === 'atualizar_sheet' || acao.tipo === 'anexar') {
-      const d = acao.dbRow
-      const valores: Record<string, unknown> = {
-        turma: d.turma, formacao: d.formacao, ano_formatura: d.ano_formatura, atribuido_raw: d.atribuido_raw,
-        dia_vencimento: formatarDataBR(d.dia_vencimento), premio_descricao: d.premio_descricao,
-        valor_boleto: d.valor_boleto, situacao: d.situacao,
-      }
-      if (colunas.edicao !== undefined) valores.edicao = d.edicao
-      try {
-        const novoHash = hashLinha(construirLinhaArray(colunas, valores))
-        if (acao.tipo === 'atualizar_sheet') {
-          await escreverLinha(spreadsheetId, abaReal, d.sheet_row_number!, colunas, valores, accessToken)
-          await supabase.from('rifas').update({ sheet_row_hash: novoHash }).eq('id', d.id)
-        } else {
-          const novaLinha = await anexarLinha(spreadsheetId, abaReal, colunas, valores, accessToken)
-          await supabase.from('rifas').update({ sheet_row_number: novaLinha, sheet_row_hash: novoHash }).eq('id', d.id)
-        }
-        atualizados++
-      } catch (e) {
-        erros.push(`Escrever rifa ${d.id} na planilha: ${(e as Error).message}`)
-      }
+    } else if (acao.tipo === 'atualizar_sheet') {
+      paraAtualizarNoSheet.push({ id: acao.dbRow.id, linha: acao.dbRow.sheet_row_number!, valores: valoresDoSheet(acao.dbRow) })
+    } else if (acao.tipo === 'anexar') {
+      paraAnexar.push({ id: acao.dbRow.id, valores: valoresDoSheet(acao.dbRow) })
     } else if (acao.tipo === 'conflito') {
       conflitos += await registrarConflitos('rifas', acao.dbRow.id, acao.campos)
+    }
+  }
+
+  if (paraAtualizarNoSheet.length > 0) {
+    try {
+      const hashes = await escreverLinhasEmLote(spreadsheetId, abaReal, paraAtualizarNoSheet.map(p => ({ linha: p.linha, colunas, valoresPorCampo: p.valores })), accessToken)
+      for (let i = 0; i < paraAtualizarNoSheet.length; i++) {
+        await supabase.from('rifas').update({ sheet_row_hash: hashes[i] }).eq('id', paraAtualizarNoSheet[i].id)
+      }
+      atualizados += paraAtualizarNoSheet.length
+    } catch (e) {
+      erros.push(`Escrever ${paraAtualizarNoSheet.length} rifa(s) na planilha: ${(e as Error).message}`)
+    }
+  }
+
+  if (paraAnexar.length > 0) {
+    try {
+      const resultados = await anexarLinhasEmLote(spreadsheetId, abaReal, colunas, paraAnexar.map(p => p.valores), accessToken)
+      for (let i = 0; i < paraAnexar.length; i++) {
+        await supabase.from('rifas').update({ sheet_row_number: resultados[i].linha, sheet_row_hash: resultados[i].hash }).eq('id', paraAnexar[i].id)
+      }
+      atualizados += paraAnexar.length
+    } catch (e) {
+      erros.push(`Adicionar ${paraAnexar.length} rifa(s) nova(s) na planilha: ${(e as Error).message}`)
     }
   }
 
@@ -289,6 +309,18 @@ async function sincronizarGanhadoresTabela(
   let criados = 0, atualizados = 0, conflitos = 0
   const acoes = diffTabela(linhas, atuais, CAMPOS_GANHADORES, ultimaSyncEm)
 
+  const paraAtualizarNoSheet: { id: string; linha: number; valores: Record<string, unknown> }[] = []
+  const paraAnexar: { id: string; valores: Record<string, unknown> }[] = []
+
+  function valoresDoSheet(d: RifaGanhador): Record<string, unknown> {
+    return {
+      turma: d.turma, responsavel: d.responsavel, tipo: d.tipo, premio_descricao: d.premio_descricao,
+      data_sorteio: formatarDataBR(d.data_sorteio), sorteado: d.sorteado ? 'SIM' : 'NÃO',
+      nome_ganhador: d.nome_ganhador, contato: d.contato, contato_feito: d.contato_feito ? 'SIM' : 'NÃO',
+      premio_entregue: d.premio_entregue, financeiro: d.financeiro, obs: d.obs,
+    }
+  }
+
   for (const acao of acoes) {
     if (acao.tipo === 'inserir') {
       const s = acao.sheetRow
@@ -311,29 +343,36 @@ async function sincronizarGanhadoresTabela(
       }).eq('id', acao.dbRow.id)
       if (error) erros.push(`Atualizar ganhador ${acao.dbRow.id}: ${error.message}`)
       else atualizados++
-    } else if (acao.tipo === 'atualizar_sheet' || acao.tipo === 'anexar') {
-      const d = acao.dbRow
-      const valores: Record<string, unknown> = {
-        turma: d.turma, responsavel: d.responsavel, tipo: d.tipo, premio_descricao: d.premio_descricao,
-        data_sorteio: formatarDataBR(d.data_sorteio), sorteado: d.sorteado ? 'SIM' : 'NÃO',
-        nome_ganhador: d.nome_ganhador, contato: d.contato, contato_feito: d.contato_feito ? 'SIM' : 'NÃO',
-        premio_entregue: d.premio_entregue, financeiro: d.financeiro, obs: d.obs,
-      }
-      try {
-        const novoHash = hashLinha(construirLinhaArray(colunas, valores))
-        if (acao.tipo === 'atualizar_sheet') {
-          await escreverLinha(spreadsheetId, abaReal, d.sheet_row_number!, colunas, valores, accessToken)
-          await supabase.from('rifas_ganhadores').update({ sheet_row_hash: novoHash }).eq('id', d.id)
-        } else {
-          const novaLinha = await anexarLinha(spreadsheetId, abaReal, colunas, valores, accessToken)
-          await supabase.from('rifas_ganhadores').update({ sheet_row_number: novaLinha, sheet_row_hash: novoHash }).eq('id', d.id)
-        }
-        atualizados++
-      } catch (e) {
-        erros.push(`Escrever ganhador ${d.id} na planilha: ${(e as Error).message}`)
-      }
+    } else if (acao.tipo === 'atualizar_sheet') {
+      paraAtualizarNoSheet.push({ id: acao.dbRow.id, linha: acao.dbRow.sheet_row_number!, valores: valoresDoSheet(acao.dbRow) })
+    } else if (acao.tipo === 'anexar') {
+      paraAnexar.push({ id: acao.dbRow.id, valores: valoresDoSheet(acao.dbRow) })
     } else if (acao.tipo === 'conflito') {
       conflitos += await registrarConflitos('rifas_ganhadores', acao.dbRow.id, acao.campos)
+    }
+  }
+
+  if (paraAtualizarNoSheet.length > 0) {
+    try {
+      const hashes = await escreverLinhasEmLote(spreadsheetId, abaReal, paraAtualizarNoSheet.map(p => ({ linha: p.linha, colunas, valoresPorCampo: p.valores })), accessToken)
+      for (let i = 0; i < paraAtualizarNoSheet.length; i++) {
+        await supabase.from('rifas_ganhadores').update({ sheet_row_hash: hashes[i] }).eq('id', paraAtualizarNoSheet[i].id)
+      }
+      atualizados += paraAtualizarNoSheet.length
+    } catch (e) {
+      erros.push(`Escrever ${paraAtualizarNoSheet.length} ganhador(es) na planilha: ${(e as Error).message}`)
+    }
+  }
+
+  if (paraAnexar.length > 0) {
+    try {
+      const resultados = await anexarLinhasEmLote(spreadsheetId, abaReal, colunas, paraAnexar.map(p => p.valores), accessToken)
+      for (let i = 0; i < paraAnexar.length; i++) {
+        await supabase.from('rifas_ganhadores').update({ sheet_row_number: resultados[i].linha, sheet_row_hash: resultados[i].hash }).eq('id', paraAnexar[i].id)
+      }
+      atualizados += paraAnexar.length
+    } catch (e) {
+      erros.push(`Adicionar ${paraAnexar.length} ganhador(es) novo(s) na planilha: ${(e as Error).message}`)
     }
   }
 
@@ -373,6 +412,18 @@ async function sincronizarComprasTabela(
   let criados = 0, atualizados = 0, conflitos = 0
   const acoes = diffTabela(linhas, atuais, CAMPOS_COMPRAS, ultimaSyncEm)
 
+  const paraAtualizarNoSheet: { id: string; linha: number; valores: Record<string, unknown> }[] = []
+  const paraAnexar: { id: string; valores: Record<string, unknown> }[] = []
+
+  function valoresDoSheet(d: RifaCompra): Record<string, unknown> {
+    return {
+      turma: d.turma ?? '', premio_descricao: d.premio_descricao ?? '', nome_ganhador: d.nome_ganhador ?? '',
+      endereco: d.endereco, informacoes: d.informacoes, site: d.site, valor: d.valor, status: d.status,
+      data_compra: formatarDataBR(d.data_compra), data_entrega_raw: d.data_entrega_raw, nome_cartao: d.nome_cartao,
+      preenchido_planilha: d.preenchido_planilha ? 'SIM' : 'NÃO',
+    }
+  }
+
   for (const acao of acoes) {
     if (acao.tipo === 'inserir') {
       const s = acao.sheetRow
@@ -403,29 +454,36 @@ async function sincronizarComprasTabela(
       }).eq('id', acao.dbRow.id)
       if (error) erros.push(`Atualizar compra ${acao.dbRow.id}: ${error.message}`)
       else atualizados++
-    } else if (acao.tipo === 'atualizar_sheet' || acao.tipo === 'anexar') {
-      const d = acao.dbRow
-      const valores: Record<string, unknown> = {
-        turma: d.turma ?? '', premio_descricao: d.premio_descricao ?? '', nome_ganhador: d.nome_ganhador ?? '',
-        endereco: d.endereco, informacoes: d.informacoes, site: d.site, valor: d.valor, status: d.status,
-        data_compra: formatarDataBR(d.data_compra), data_entrega_raw: d.data_entrega_raw, nome_cartao: d.nome_cartao,
-        preenchido_planilha: d.preenchido_planilha ? 'SIM' : 'NÃO',
-      }
-      try {
-        const novoHash = hashLinha(construirLinhaArray(colunas, valores))
-        if (acao.tipo === 'atualizar_sheet') {
-          await escreverLinha(spreadsheetId, abaReal, d.sheet_row_number!, colunas, valores, accessToken)
-          await supabase.from('rifas_compras').update({ sheet_row_hash: novoHash }).eq('id', d.id)
-        } else {
-          const novaLinha = await anexarLinha(spreadsheetId, abaReal, colunas, valores, accessToken)
-          await supabase.from('rifas_compras').update({ sheet_row_number: novaLinha, sheet_row_hash: novoHash }).eq('id', d.id)
-        }
-        atualizados++
-      } catch (e) {
-        erros.push(`Escrever compra ${d.id} na planilha: ${(e as Error).message}`)
-      }
+    } else if (acao.tipo === 'atualizar_sheet') {
+      paraAtualizarNoSheet.push({ id: acao.dbRow.id, linha: acao.dbRow.sheet_row_number!, valores: valoresDoSheet(acao.dbRow) })
+    } else if (acao.tipo === 'anexar') {
+      paraAnexar.push({ id: acao.dbRow.id, valores: valoresDoSheet(acao.dbRow) })
     } else if (acao.tipo === 'conflito') {
       conflitos += await registrarConflitos('rifas_compras', acao.dbRow.id, acao.campos)
+    }
+  }
+
+  if (paraAtualizarNoSheet.length > 0) {
+    try {
+      const hashes = await escreverLinhasEmLote(spreadsheetId, abaReal, paraAtualizarNoSheet.map(p => ({ linha: p.linha, colunas, valoresPorCampo: p.valores })), accessToken)
+      for (let i = 0; i < paraAtualizarNoSheet.length; i++) {
+        await supabase.from('rifas_compras').update({ sheet_row_hash: hashes[i] }).eq('id', paraAtualizarNoSheet[i].id)
+      }
+      atualizados += paraAtualizarNoSheet.length
+    } catch (e) {
+      erros.push(`Escrever ${paraAtualizarNoSheet.length} compra(s) na planilha: ${(e as Error).message}`)
+    }
+  }
+
+  if (paraAnexar.length > 0) {
+    try {
+      const resultados = await anexarLinhasEmLote(spreadsheetId, abaReal, colunas, paraAnexar.map(p => p.valores), accessToken)
+      for (let i = 0; i < paraAnexar.length; i++) {
+        await supabase.from('rifas_compras').update({ sheet_row_number: resultados[i].linha, sheet_row_hash: resultados[i].hash }).eq('id', paraAnexar[i].id)
+      }
+      atualizados += paraAnexar.length
+    } catch (e) {
+      erros.push(`Adicionar ${paraAnexar.length} compra(s) nova(s) na planilha: ${(e as Error).message}`)
     }
   }
 
