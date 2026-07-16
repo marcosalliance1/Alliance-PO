@@ -1,8 +1,8 @@
 // Legenda de apoio pra quem não lembra o que cada bolinha do Pipeline significa.
 export function PipelineLegenda({ compacta }: { compacta?: boolean }) {
   const itens = [
-    { label: 'Sorteada', cor: 'bg-success' },
-    { label: 'Ganhador contatado', cor: 'bg-success' },
+    { label: 'Sorteada', cor: 'bg-primary' },
+    { label: 'Ganhador contatado', cor: 'bg-warning' },
     { label: 'Prêmio comprado', cor: 'bg-success' },
   ]
   return (
