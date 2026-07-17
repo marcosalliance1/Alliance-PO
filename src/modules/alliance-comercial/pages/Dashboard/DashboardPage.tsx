@@ -13,9 +13,9 @@ function tituloProjeto(p: Projeto): string {
   return p.tap.turma || `${p.tap.instituicao} ${p.tap.curso}`.trim() || `Projeto #${p.id.slice(0, 6)}`
 }
 
-function mediaFee(itens: { fee?: LinhaResumoComercial }[]): { media: number; count: number } {
-  const comFee = itens.filter((i) => i.fee)
-  const media = comFee.length > 0 ? comFee.reduce((s, i) => s + (i.fee?.percentual ?? 0), 0) / comFee.length : 0
+function mediaFeeTotal(itens: { feeTotal?: LinhaResumoComercial }[]): { media: number; count: number } {
+  const comFee = itens.filter((i) => i.feeTotal)
+  const media = comFee.length > 0 ? comFee.reduce((s, i) => s + (i.feeTotal?.percentual ?? 0), 0) / comFee.length : 0
   return { media, count: comFee.length }
 }
 
@@ -33,13 +33,26 @@ export const DashboardPage: React.FC = () => {
   const [gruposAbertos, setGruposAbertos] = useState<Record<string, boolean>>({})
 
   const linhas = useMemo(() =>
-    projetos.map((p) => ({
-      projeto: p,
-      fee: (p.resumoComercial ?? []).find((l) => l.descricao.toLowerCase().includes('fee alliance')),
-    })),
+    projetos.map((p) => {
+      const resumo = p.resumoComercial ?? []
+      return {
+        projeto: p,
+        feeAlliance: resumo.find((l) => l.descricao.toLowerCase().includes('fee alliance')),
+        impostoFee: resumo.find((l) => l.descricao.toLowerCase().includes('imposto fee')),
+        feeTotal: resumo.find((l) => l.descricao.toLowerCase().includes('custo cerimonial')),
+      }
+    }),
   [projetos])
 
-  const { media: mediaGeral, count: countGeral } = mediaFee(linhas)
+  const statsPorEnsino = useMemo(() => {
+    const map = new Map<TipoEscola, typeof linhas>()
+    for (const l of linhas) {
+      const tipo = l.projeto.tap.tipoEscola ?? 'MEDIO'
+      if (!map.has(tipo)) map.set(tipo, [])
+      map.get(tipo)!.push(l)
+    }
+    return ENSINO_ORDEM.map((tipo) => ({ tipo, ...mediaFeeTotal(map.get(tipo) ?? []) }))
+  }, [linhas])
 
   const porAno = useMemo(() => {
     const map = new Map<number, typeof linhas>()
@@ -61,9 +74,9 @@ export const DashboardPage: React.FC = () => {
           .filter((t) => porEnsino.has(t))
           .map((tipo) => {
             const itensGrupo = porEnsino.get(tipo)!
-            return { tipo, itens: itensGrupo, ...mediaFee(itensGrupo) }
+            return { tipo, itens: itensGrupo, ...mediaFeeTotal(itensGrupo) }
           })
-        return { ano, itens, grupos, ...mediaFee(itens) }
+        return { ano, itens, grupos, ...mediaFeeTotal(itens) }
       })
   }, [linhas])
 
@@ -79,16 +92,18 @@ export const DashboardPage: React.FC = () => {
       <div>
         <h1 className="text-text-main font-bold text-xl">Controle de FEE</h1>
         <p className="text-text-muted text-sm mt-1">
-          % de FEE Alliance por projeto, agrupado por ano e tipo de ensino.
+          FEE Alliance, Imposto FEE e FEE Total por projeto, agrupado por ano e tipo de ensino.
         </p>
       </div>
 
-      {countGeral > 0 && (
-        <div className="bg-surface rounded-xl px-4 py-4 border border-white/10 inline-block">
-          <p className="text-text-muted text-xs mb-1">FEE Médio Geral ({countGeral} projeto{countGeral !== 1 ? 's' : ''})</p>
-          <p className="text-primary text-2xl font-bold">{fmtPct(mediaGeral)}</p>
-        </div>
-      )}
+      <div className="flex flex-wrap gap-3">
+        {statsPorEnsino.map(({ tipo, media, count }) => (
+          <div key={tipo} className="bg-surface rounded-xl px-4 py-4 border border-white/10 flex-1 min-w-[220px]">
+            <p className="text-text-muted text-xs mb-1">FEE Médio {ENSINO_LABEL[tipo]} ({count} projeto{count !== 1 ? 's' : ''})</p>
+            <p className="text-primary text-2xl font-bold">{count > 0 ? fmtPct(media) : '—'}</p>
+          </div>
+        ))}
+      </div>
 
       <div className="space-y-3">
         {porAno.map(({ ano, itens, grupos, media: mediaAno, count: countAno }) => {
@@ -128,19 +143,37 @@ export const DashboardPage: React.FC = () => {
 
                         {grupoOpen && (
                           <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-black/10">
+                                <th className="text-left px-4 pl-16 py-2 text-text-muted font-medium text-xs">Projeto</th>
+                                <th className="text-right px-4 py-2 text-text-muted font-medium text-xs w-48">FEE Alliance</th>
+                                <th className="text-right px-4 py-2 text-text-muted font-medium text-xs w-48">Imposto FEE</th>
+                                <th className="text-right px-4 py-2 text-text-muted font-medium text-xs w-24">FEE Total</th>
+                              </tr>
+                            </thead>
                             <tbody>
-                              {itensGrupo.map(({ projeto, fee }) => (
+                              {itensGrupo.map(({ projeto, feeAlliance, impostoFee, feeTotal }) => (
                                 <tr
                                   key={projeto.id}
                                   className="border-t border-white/5 hover:bg-white/3 cursor-pointer transition-colors"
                                   onClick={() => navigate(`/projetos/${projeto.id}`)}
                                 >
                                   <td className="px-4 pl-16 py-2.5 text-text-main">{tituloProjeto(projeto)}</td>
-                                  {fee ? (
+                                  {feeAlliance || impostoFee || feeTotal ? (
                                     <>
-                                      <td className="px-4 py-2.5 text-right text-primary font-semibold w-24">{fmtPct(fee.percentual)}</td>
-                                      <td className="px-4 py-2.5 text-right text-text-main w-44">{formatBRL(fee.valorComercial)}</td>
-                                      <td className="px-4 py-2.5 text-right text-text-main w-44">{formatBRL(fee.valorReal)}</td>
+                                      <td className="px-4 py-2.5 text-right text-text-main w-48">
+                                        {feeAlliance ? (
+                                          <>{formatBRL(feeAlliance.valorComercial)} <span className="text-primary font-semibold">({fmtPct(feeAlliance.percentual)})</span></>
+                                        ) : '—'}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-right text-text-main w-48">
+                                        {impostoFee ? (
+                                          <>{formatBRL(impostoFee.valorComercial)} <span className="text-primary font-semibold">({fmtPct(impostoFee.percentual)})</span></>
+                                        ) : '—'}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-right text-primary font-semibold w-24">
+                                        {feeTotal ? fmtPct(feeTotal.percentual) : '—'}
+                                      </td>
                                     </>
                                   ) : (
                                     <td colSpan={3} className="px-4 py-2.5 text-right">
