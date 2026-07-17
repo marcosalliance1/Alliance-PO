@@ -2,10 +2,12 @@ import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceArea,
 } from 'recharts'
 import { useComercialContext } from '../../contexts/ComercialContext'
 import { formatBRL } from '../../../../utils/formatters'
+import { calcResumoProjeto } from '../../../../utils/calculos'
+import { getMetaFee, statusMetaFee, FAIXA_SUPERIOR_ENVELOPE, type StatusMetaFee } from '../../../../lib/metasFee'
 import { ENSINO_LABEL, ENSINO_ORDEM, ENSINO_COLOR } from '../../constants/ensino'
 import type { Projeto, LinhaResumoComercial, TipoEscola } from '../../../../types'
 
@@ -25,6 +27,28 @@ function mediaFeeTotal(itens: { feeTotal?: LinhaResumoComercial }[]): { media: n
 
 const COR_FINANCEIRO = '#c98500'
 
+const META_FEE_LABEL: Record<StatusMetaFee, string> = {
+  dentro: 'Dentro da meta',
+  abaixo: 'Abaixo da meta',
+  acima: 'Acima da meta',
+}
+const META_FEE_CLASS: Record<StatusMetaFee, string> = {
+  dentro: 'bg-success/15 text-success',
+  abaixo: 'bg-warning/15 text-warning',
+  acima: 'bg-danger/15 text-danger',
+}
+
+function BadgeMetaFee({ status, min, max }: { status: StatusMetaFee; min: number; max: number }) {
+  return (
+    <span
+      className={`text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap ${META_FEE_CLASS[status]}`}
+      title={`Meta: ${min}%–${max}%`}
+    >
+      {META_FEE_LABEL[status]}
+    </span>
+  )
+}
+
 export const DashboardPage: React.FC = () => {
   const { projetos } = useComercialContext()
   const navigate = useNavigate()
@@ -34,11 +58,20 @@ export const DashboardPage: React.FC = () => {
   const linhas = useMemo(() =>
     projetos.map((p) => {
       const resumo = p.resumoComercial ?? []
+      const feeTotal = resumo.find((l) => l.descricao.toLowerCase().includes('custo cerimonial'))
+      const tipo = p.tap.tipoEscola ?? 'MEDIO'
+      // Faturamento só importa pro Superior (faixa varia por receita) — evita
+      // calcular o resumo financeiro inteiro do projeto à toa pros outros segmentos.
+      const faturamento = tipo === 'SUPERIOR' ? calcResumoProjeto(p).receitaBaile.orcado : 0
+      const faixaMeta = getMetaFee(tipo, faturamento)
+      const statusMeta = feeTotal ? statusMetaFee(feeTotal.percentual, faixaMeta) : null
       return {
         projeto: p,
         feeAlliance: resumo.find((l) => l.descricao.toLowerCase().includes('fee alliance')),
         impostoFee: resumo.find((l) => l.descricao.toLowerCase().includes('imposto fee')),
-        feeTotal: resumo.find((l) => l.descricao.toLowerCase().includes('custo cerimonial')),
+        feeTotal,
+        faixaMeta,
+        statusMeta,
       }
     }),
   [projetos])
@@ -50,7 +83,11 @@ export const DashboardPage: React.FC = () => {
       if (!map.has(tipo)) map.set(tipo, [])
       map.get(tipo)!.push(l)
     }
-    return ENSINO_ORDEM.map((tipo) => ({ tipo, ...mediaFeeTotal(map.get(tipo) ?? []) }))
+    return ENSINO_ORDEM.map((tipo) => {
+      const itens = map.get(tipo) ?? []
+      const dentro = itens.filter((i) => i.statusMeta === 'dentro').length
+      return { tipo, dentro, ...mediaFeeTotal(itens) }
+    })
   }, [linhas])
 
   const { soma: somaFinanceira, count: countFinanceiro } = useMemo(() => {
@@ -121,7 +158,7 @@ export const DashboardPage: React.FC = () => {
           <p className="text-text-muted text-xs mb-1">Somatório Financeiro dos Fees ({countFinanceiro} projeto{countFinanceiro !== 1 ? 's' : ''})</p>
           <p className="text-2xl font-bold" style={{ color: COR_FINANCEIRO }}>{formatBRL(somaFinanceira)}</p>
         </div>
-        {statsPorEnsino.map(({ tipo, media, count }) => (
+        {statsPorEnsino.map(({ tipo, media, count, dentro }) => (
           <div
             key={tipo}
             className="bg-surface rounded-xl px-4 py-4 border-l-4 border border-white/10 flex-1 min-w-[220px]"
@@ -129,6 +166,9 @@ export const DashboardPage: React.FC = () => {
           >
             <p className="text-text-muted text-xs mb-1">FEE Médio {ENSINO_LABEL[tipo]} ({count} projeto{count !== 1 ? 's' : ''})</p>
             <p className="text-2xl font-bold" style={{ color: ENSINO_COLOR[tipo] }}>{count > 0 ? fmtPct(media) : '—'}</p>
+            {count > 0 && (
+              <p className="text-text-muted text-[11px] mt-1">{dentro} de {count} projeto{count !== 1 ? 's' : ''} dentro da meta</p>
+            )}
           </div>
         ))}
       </div>
@@ -148,6 +188,22 @@ export const DashboardPage: React.FC = () => {
                 itemStyle={{ color: '#8892b0' }}
               />
               <Legend wrapperStyle={{ fontSize: 12, color: '#8892b0' }} />
+              {ENSINO_ORDEM.map((tipo) => {
+                const faixa = tipo === 'SUPERIOR' ? FAIXA_SUPERIOR_ENVELOPE : getMetaFee(tipo)
+                return (
+                  <ReferenceArea
+                    key={`meta-${tipo}`}
+                    y1={faixa.min}
+                    y2={faixa.max}
+                    ifOverflow="extendDomain"
+                    stroke={ENSINO_COLOR[tipo]}
+                    strokeDasharray="4 4"
+                    strokeOpacity={0.6}
+                    fill={ENSINO_COLOR[tipo]}
+                    fillOpacity={0.06}
+                  />
+                )
+              })}
               {ENSINO_ORDEM.map((tipo) => (
                 <Line
                   key={tipo}
@@ -162,6 +218,9 @@ export const DashboardPage: React.FC = () => {
               ))}
             </LineChart>
           </ResponsiveContainer>
+          <p className="text-text-muted text-[11px] mt-2">
+            Faixas tracejadas = meta de FEE Total por segmento. A faixa do Superior ({fmtPct(FAIXA_SUPERIOR_ENVELOPE.min)}–{fmtPct(FAIXA_SUPERIOR_ENVELOPE.max)}) é ampla porque varia por faturamento do projeto — veja o badge "Meta FEE" na tabela abaixo para o alvo específico de cada projeto.
+          </p>
         </div>
       )}
 
@@ -209,10 +268,11 @@ export const DashboardPage: React.FC = () => {
                                 <th className="text-right px-4 py-2 text-text-muted font-medium text-xs w-48">FEE Alliance</th>
                                 <th className="text-right px-4 py-2 text-text-muted font-medium text-xs w-48">Imposto FEE</th>
                                 <th className="text-right px-4 py-2 text-text-muted font-medium text-xs w-24">FEE Total</th>
+                                <th className="text-right px-4 py-2 text-text-muted font-medium text-xs w-36">Meta FEE</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {itensGrupo.map(({ projeto, feeAlliance, impostoFee, feeTotal }) => (
+                              {itensGrupo.map(({ projeto, feeAlliance, impostoFee, feeTotal, faixaMeta, statusMeta }) => (
                                 <tr
                                   key={projeto.id}
                                   className="border-t border-white/5 hover:bg-white/3 cursor-pointer transition-colors"
@@ -234,9 +294,14 @@ export const DashboardPage: React.FC = () => {
                                       <td className="px-4 py-2.5 text-right text-primary font-semibold w-24">
                                         {feeTotal ? fmtPct(feeTotal.percentual) : '—'}
                                       </td>
+                                      <td className="px-4 py-2.5 text-right w-36">
+                                        {statusMeta ? (
+                                          <BadgeMetaFee status={statusMeta} min={faixaMeta.min} max={faixaMeta.max} />
+                                        ) : '—'}
+                                      </td>
                                     </>
                                   ) : (
-                                    <td colSpan={3} className="px-4 py-2.5 text-right">
+                                    <td colSpan={4} className="px-4 py-2.5 text-right">
                                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-text-muted">Não importado</span>
                                     </td>
                                   )}
