@@ -1,6 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronRight } from 'lucide-react'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
 import { useComercialContext } from '../../contexts/ComercialContext'
 import { formatBRL } from '../../../../utils/formatters'
 import type { Projeto, LinhaResumoComercial, TipoEscola } from '../../../../types'
@@ -25,6 +28,14 @@ const ENSINO_LABEL: Record<TipoEscola, string> = {
   FUNDAMENTAL: 'Fundamental',
 }
 const ENSINO_ORDEM: TipoEscola[] = ['SUPERIOR', 'MEDIO', 'FUNDAMENTAL']
+// Paleta categórica validada para o fundo escuro do app (dataviz skill: blue/green/magenta,
+// ordem fixa — a ordem é o que garante a separação em daltonismo, não é só estética).
+const ENSINO_COLOR: Record<TipoEscola, string> = {
+  SUPERIOR: '#3987e5',
+  MEDIO: '#008300',
+  FUNDAMENTAL: '#d55181',
+}
+const COR_FINANCEIRO = '#c98500'
 
 export const DashboardPage: React.FC = () => {
   const { projetos } = useComercialContext()
@@ -54,6 +65,12 @@ export const DashboardPage: React.FC = () => {
     return ENSINO_ORDEM.map((tipo) => ({ tipo, ...mediaFeeTotal(map.get(tipo) ?? []) }))
   }, [linhas])
 
+  const { soma: somaFinanceira, count: countFinanceiro } = useMemo(() => {
+    const comFee = linhas.filter((l) => l.feeAlliance || l.impostoFee)
+    const soma = comFee.reduce((s, l) => s + (l.feeAlliance?.valorComercial ?? 0) + (l.impostoFee?.valorComercial ?? 0), 0)
+    return { soma, count: comFee.length }
+  }, [linhas])
+
   const porAno = useMemo(() => {
     const map = new Map<number, typeof linhas>()
     for (const l of linhas) {
@@ -80,6 +97,18 @@ export const DashboardPage: React.FC = () => {
       })
   }, [linhas])
 
+  const chartData = useMemo(() =>
+    [...porAno]
+      .sort((a, b) => a.ano - b.ano)
+      .map(({ ano, grupos }) => {
+        const row: Record<string, number | string> = { ano: ano || 'Sem ano' }
+        for (const g of grupos) {
+          if (g.count > 0) row[g.tipo] = Number(g.media.toFixed(2))
+        }
+        return row
+      }),
+  [porAno])
+
   function toggleAno(ano: number) {
     setAnosAbertos((p) => ({ ...p, [ano]: !p[ano] }))
   }
@@ -97,13 +126,56 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       <div className="flex flex-wrap gap-3">
+        <div
+          className="bg-surface rounded-xl px-4 py-4 border-l-4 border border-white/10 flex-1 min-w-[220px]"
+          style={{ borderLeftColor: COR_FINANCEIRO }}
+        >
+          <p className="text-text-muted text-xs mb-1">Somatório Financeiro dos Fees ({countFinanceiro} projeto{countFinanceiro !== 1 ? 's' : ''})</p>
+          <p className="text-2xl font-bold" style={{ color: COR_FINANCEIRO }}>{formatBRL(somaFinanceira)}</p>
+        </div>
         {statsPorEnsino.map(({ tipo, media, count }) => (
-          <div key={tipo} className="bg-surface rounded-xl px-4 py-4 border border-white/10 flex-1 min-w-[220px]">
+          <div
+            key={tipo}
+            className="bg-surface rounded-xl px-4 py-4 border-l-4 border border-white/10 flex-1 min-w-[220px]"
+            style={{ borderLeftColor: ENSINO_COLOR[tipo] }}
+          >
             <p className="text-text-muted text-xs mb-1">FEE Médio {ENSINO_LABEL[tipo]} ({count} projeto{count !== 1 ? 's' : ''})</p>
-            <p className="text-primary text-2xl font-bold">{count > 0 ? fmtPct(media) : '—'}</p>
+            <p className="text-2xl font-bold" style={{ color: ENSINO_COLOR[tipo] }}>{count > 0 ? fmtPct(media) : '—'}</p>
           </div>
         ))}
       </div>
+
+      {chartData.length > 0 && (
+        <div className="bg-surface rounded-xl border border-white/10 px-4 py-4">
+          <p className="text-text-main font-semibold text-sm mb-3">Evolução do FEE Total médio por ano</p>
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="ano" tick={{ fill: '#8892b0', fontSize: 11 }} />
+              <YAxis tick={{ fill: '#8892b0', fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
+              <Tooltip
+                formatter={(v) => `${v}%`}
+                contentStyle={{ background: '#1a1a2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+                labelStyle={{ color: '#f0f0f0' }}
+                itemStyle={{ color: '#8892b0' }}
+              />
+              <Legend wrapperStyle={{ fontSize: 12, color: '#8892b0' }} />
+              {ENSINO_ORDEM.map((tipo) => (
+                <Line
+                  key={tipo}
+                  type="monotone"
+                  dataKey={tipo}
+                  name={ENSINO_LABEL[tipo]}
+                  stroke={ENSINO_COLOR[tipo]}
+                  strokeWidth={2}
+                  dot={{ fill: ENSINO_COLOR[tipo] }}
+                  connectNulls={false}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       <div className="space-y-3">
         {porAno.map(({ ano, itens, grupos, media: mediaAno, count: countAno }) => {
