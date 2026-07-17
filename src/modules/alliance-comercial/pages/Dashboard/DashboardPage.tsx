@@ -72,6 +72,7 @@ export const DashboardPage: React.FC = () => {
         feeTotal,
         faixaMeta,
         statusMeta,
+        faturamento,
       }
     }),
   [projetos])
@@ -86,7 +87,26 @@ export const DashboardPage: React.FC = () => {
     return ENSINO_ORDEM.map((tipo) => {
       const itens = map.get(tipo) ?? []
       const dentro = itens.filter((i) => i.statusMeta === 'dentro').length
-      return { tipo, dentro, ...mediaFeeTotal(itens) }
+      const { media, count } = mediaFeeTotal(itens)
+
+      // Projeção "próximo projeto": assume só mais 1 projeto fechando no segmento,
+      // com o porte médio (faturamento e base de receita) dos já sincronizados —
+      // não é o número real de projetos restantes no ano, é uma estimativa simples.
+      const avgFaturamento = itens.length > 0 ? itens.reduce((s, i) => s + i.faturamento, 0) / itens.length : 0
+      const faixa = getMetaFee(tipo, avgFaturamento)
+      const feeNecessario = Math.max(0, faixa.min * (count + 1) - media * count)
+      const comFeeTotal = itens.filter((i) => i.feeTotal && i.feeTotal.percentual > 0)
+      const avgBaseReceita = comFeeTotal.length > 0
+        ? comFeeTotal.reduce((s, i) => s + i.feeTotal!.valorComercial / (i.feeTotal!.percentual / 100), 0) / comFeeTotal.length
+        : 0
+      const valorNecessario = (feeNecessario / 100) * avgBaseReceita
+      const jaDentroDaMeta = count > 0 && media >= faixa.min
+      const impossivel = feeNecessario > 100
+
+      return {
+        tipo, dentro, media, count, faixa, feeNecessario, valorNecessario, jaDentroDaMeta, impossivel,
+        temHistoricoValor: avgBaseReceita > 0,
+      }
     })
   }, [linhas])
 
@@ -171,6 +191,40 @@ export const DashboardPage: React.FC = () => {
             )}
           </div>
         ))}
+      </div>
+
+      <div>
+        <p className="text-text-main font-semibold text-sm mb-1">Meta do Próximo Projeto</p>
+        <p className="text-text-muted text-[11px] mb-3">
+          Estimativa considerando só mais 1 projeto fechando no segmento, com o porte médio dos projetos já sincronizados — não é a contagem real de projetos restantes no ano.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {statsPorEnsino.map(({ tipo, faixa, feeNecessario, valorNecessario, jaDentroDaMeta, impossivel, temHistoricoValor }) => (
+            <div
+              key={tipo}
+              className="bg-surface rounded-xl px-4 py-4 border-l-4 border border-white/10 flex-1 min-w-[240px]"
+              style={{ borderLeftColor: ENSINO_COLOR[tipo] }}
+            >
+              <p className="text-text-main font-semibold text-sm mb-2">{ENSINO_LABEL[tipo]}</p>
+              {jaDentroDaMeta ? (
+                <p className="text-success text-sm font-semibold">Média já dentro da meta — qualquer FEE mantém a faixa.</p>
+              ) : (
+                <>
+                  <p className={`text-2xl font-bold ${impossivel ? 'text-danger' : ''}`} style={impossivel ? undefined : { color: ENSINO_COLOR[tipo] }}>
+                    FEE ≥ {fmtPct(feeNecessario)}
+                  </p>
+                  <p className="text-text-muted text-xs mt-1">
+                    {temHistoricoValor ? `≈ ${formatBRL(valorNecessario)} em FEE` : 'Sem histórico de valor pra estimar R$'}
+                  </p>
+                  {impossivel && (
+                    <p className="text-danger text-[11px] mt-1">Meta não alcançável com só +1 projeto — precisa de mais volume.</p>
+                  )}
+                </>
+              )}
+              <p className="text-text-muted text-[10px] mt-2">Meta do segmento: {fmtPct(faixa.min)}–{fmtPct(faixa.max)}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {chartData.length > 0 && (
