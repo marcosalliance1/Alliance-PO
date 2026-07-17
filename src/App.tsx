@@ -40,6 +40,7 @@ import { Layout as ComercialLayout } from './modules/alliance-comercial/componen
 import { DashboardPage as ComercialDashboardPage } from './modules/alliance-comercial/pages/Dashboard/DashboardPage'
 import ContratosPage from './modules/alliance-comercial/pages/Contratos/ContratosPage'
 import ComprasComercialPage from './modules/alliance-comercial/pages/ComprasComercial/ComprasComercialPage'
+import { AcompanhamentoPage } from './modules/alliance-comercial/pages/Acompanhamento/AcompanhamentoPage'
 import { Layout as AtendimentoLayout } from './modules/atendimento/components/Layout/Layout'
 import { DashboardRifasPage } from './modules/atendimento/pages/DashboardRifasPage'
 import { KanbanPage } from './modules/atendimento/pages/KanbanPage'
@@ -345,6 +346,7 @@ function AppRoutes() {
         <Route index element={<ComercialDashboardPage />} />
         <Route path="contratos" element={<ContratosPage />} />
         <Route path="compras" element={<ComprasComercialPage />} />
+        <Route path="acompanhamento" element={<AcompanhamentoPage />} />
       </Route>
 
       {/* Módulo Atendimento */}

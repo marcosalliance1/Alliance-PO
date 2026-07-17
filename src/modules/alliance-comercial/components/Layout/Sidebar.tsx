@@ -1,10 +1,11 @@
 import React from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, FileText, ShoppingCart, ArrowLeft } from 'lucide-react'
+import { LayoutDashboard, FileText, ShoppingCart, TrendingUp, ArrowLeft } from 'lucide-react'
 import allianceLogo from '../../../../assets/alliance-logo.png'
 
 const NAV = [
   { to: '/comercial', icon: <LayoutDashboard className="w-5 h-5" />, label: 'Controle FEE' },
+  { to: '/comercial/acompanhamento', icon: <TrendingUp className="w-5 h-5" />, label: 'Acompanhamento' },
   { to: '/comercial/contratos', icon: <FileText className="w-5 h-5" />, label: 'Contratos' },
   { to: '/comercial/compras', icon: <ShoppingCart className="w-5 h-5" />, label: 'Compras Comercial' },
 ]
