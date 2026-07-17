@@ -74,15 +74,6 @@ function CardMetaTotal({ titulo, dados }: { titulo: string; dados: MetaTotal }) 
   )
 }
 
-function CardComissao({ label, valor }: { label: string; valor: number }) {
-  return (
-    <div className="bg-surface rounded-xl border border-white/10 px-4 py-4 flex-1 min-w-[180px]">
-      <p className="text-text-muted text-xs mb-1">{label}</p>
-      <p className="text-primary text-xl font-bold">{formatBRL(valor)}</p>
-    </div>
-  )
-}
-
 function CardSegmento({ tipo, dados }: { tipo: TipoEscola; dados: MetaSegmento }) {
   const cor = ENSINO_COLOR[tipo]
   const pct = pctReal(dados.captado, dados.meta)
@@ -275,13 +266,6 @@ export const AcompanhamentoPage: React.FC = () => {
           <div className="flex flex-wrap gap-3">
             <CardMetaTotal titulo="Meta do Ano" dados={dados.metaAno} />
             <CardMetaTotal titulo="Super Meta do Ano" dados={dados.superMetaAno} />
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <CardComissao label="Comissão Potencial 100%" valor={dados.comissao.potencial100} />
-            <CardComissao label="Comissão com Meta Batida" valor={dados.comissao.comMetaBatida} />
-            <CardComissao label="Comissão Total no Ano" valor={dados.comissao.totalNoAno} />
-            <CardComissao label="Média de Comissão/Mês" valor={dados.comissao.mediaMes} />
           </div>
 
           <div className="flex flex-wrap gap-3">
