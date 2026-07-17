@@ -28,6 +28,18 @@ function corMeta(pct: number) {
   return pct >= 100 ? COR_POSITIVO : COR_NEGATIVO
 }
 
+// A API do Google Sheets só lê planilhas nativas — um .xlsx aberto/editado via Drive
+// (mas nunca convertido) devolve esse erro genérico em inglês. Troca por uma
+// explicação acionável em vez do texto cru da API.
+function mensagemErroAmigavel(e: Error): string {
+  if (e.message.includes('must not be an Office file')) {
+    return 'Essa planilha é um arquivo Excel (.xlsx) salvo no Drive, não uma Planilha Google nativa — '
+      + 'a API não consegue ler nesse formato. Abra o arquivo, vá em Arquivo → Salvar como Planilhas Google, '
+      + 'e cole aqui o link da cópia convertida.'
+  }
+  return e.message
+}
+
 function LinhaPendente({ pendente }: { pendente: number }) {
   if (pendente < 0) {
     return <p className="text-xs mt-2 font-semibold" style={{ color: COR_POSITIVO }}>Meta superada em {formatBRL(Math.abs(pendente))}</p>
@@ -194,7 +206,7 @@ export const AcompanhamentoPage: React.FC = () => {
         invalidarToken()
         setErroSync('Sessão do Google expirada. Clique em "Conectar Google" e sincronize novamente.')
       } else {
-        setErroSync((e as Error).message)
+        setErroSync(mensagemErroAmigavel(e as Error))
       }
     }
   }
