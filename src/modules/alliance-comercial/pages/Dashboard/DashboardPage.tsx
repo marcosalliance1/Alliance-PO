@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import {
@@ -54,6 +54,19 @@ export const DashboardPage: React.FC = () => {
   const navigate = useNavigate()
   const [anosAbertos, setAnosAbertos] = useState<Record<string, boolean>>({})
   const [gruposAbertos, setGruposAbertos] = useState<Record<string, boolean>>({})
+  const [filtroProjetos, setFiltroProjetos] = useState<Set<string>>(new Set())
+  const [showProjetoDropdown, setShowProjetoDropdown] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowProjetoDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   const linhas = useMemo(() =>
     projetos.map((p) => {
@@ -77,9 +90,13 @@ export const DashboardPage: React.FC = () => {
     }),
   [projetos])
 
+  const linhasFiltradas = useMemo(() =>
+    filtroProjetos.size > 0 ? linhas.filter((l) => filtroProjetos.has(l.projeto.id)) : linhas,
+  [linhas, filtroProjetos])
+
   const statsPorEnsino = useMemo(() => {
     const map = new Map<TipoEscola, typeof linhas>()
-    for (const l of linhas) {
+    for (const l of linhasFiltradas) {
       const tipo = l.projeto.tap.tipoEscola ?? 'MEDIO'
       if (!map.has(tipo)) map.set(tipo, [])
       map.get(tipo)!.push(l)
@@ -108,17 +125,17 @@ export const DashboardPage: React.FC = () => {
         temHistoricoValor: avgBaseReceita > 0,
       }
     })
-  }, [linhas])
+  }, [linhasFiltradas])
 
   const { soma: somaFinanceira, count: countFinanceiro } = useMemo(() => {
-    const comFee = linhas.filter((l) => l.feeAlliance || l.impostoFee)
+    const comFee = linhasFiltradas.filter((l) => l.feeAlliance || l.impostoFee)
     const soma = comFee.reduce((s, l) => s + (l.feeAlliance?.valorComercial ?? 0) + (l.impostoFee?.valorComercial ?? 0), 0)
     return { soma, count: comFee.length }
-  }, [linhas])
+  }, [linhasFiltradas])
 
   const porAno = useMemo(() => {
     const map = new Map<number, typeof linhas>()
-    for (const l of linhas) {
+    for (const l of linhasFiltradas) {
       const ano = l.projeto.tap.anoRealizacao || 0
       if (!map.has(ano)) map.set(ano, [])
       map.get(ano)!.push(l)
@@ -140,7 +157,11 @@ export const DashboardPage: React.FC = () => {
           })
         return { ano, itens, grupos, ...mediaFeeTotal(itens) }
       })
-  }, [linhas])
+  }, [linhasFiltradas])
+
+  const projetosOrdenados = useMemo(() =>
+    [...projetos].sort((a, b) => tituloProjeto(a).localeCompare(tituloProjeto(b))),
+  [projetos])
 
   const chartData = useMemo(() =>
     [...porAno]
@@ -163,11 +184,58 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-text-main font-bold text-xl">Controle de FEE</h1>
-        <p className="text-text-muted text-sm mt-1">
-          FEE Alliance, Imposto FEE e FEE Total por projeto, agrupado por ano e tipo de ensino.
-        </p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-text-main font-bold text-xl">Controle de FEE</h1>
+          <p className="text-text-muted text-sm mt-1">
+            FEE Alliance, Imposto FEE e FEE Total por projeto, agrupado por ano e tipo de ensino.
+          </p>
+        </div>
+
+        <div className="relative" ref={dropdownRef}>
+          <button
+            onClick={() => setShowProjetoDropdown((v) => !v)}
+            className="bg-surface-2 border border-white/10 rounded-lg px-3 py-1.5 text-sm flex items-center gap-2 min-w-[200px]"
+          >
+            {filtroProjetos.size === 0
+              ? <span className="text-text-muted">Todos os projetos</span>
+              : <span className="text-text-main">{filtroProjetos.size} projeto{filtroProjetos.size !== 1 ? 's' : ''} selecionado{filtroProjetos.size !== 1 ? 's' : ''}</span>}
+            <ChevronDown size={13} className="ml-auto text-text-muted shrink-0" />
+          </button>
+          {showProjetoDropdown && (
+            <div
+              className="absolute top-full right-0 mt-1 z-50 min-w-[280px] max-h-80 overflow-y-auto rounded-lg border border-white/10 shadow-xl bg-surface"
+            >
+              <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between sticky top-0 bg-surface">
+                <span className="text-xs text-text-muted font-medium">Filtrar projetos</span>
+                {filtroProjetos.size > 0 && (
+                  <button
+                    onClick={() => setFiltroProjetos(new Set())}
+                    className="text-[11px] text-text-muted hover:text-text-main"
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
+              {projetosOrdenados.map((p) => (
+                <label key={p.id} className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-white/5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filtroProjetos.has(p.id)}
+                    onChange={() => setFiltroProjetos((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(p.id)) next.delete(p.id); else next.add(p.id)
+                      return next
+                    })}
+                    className="accent-primary shrink-0"
+                  />
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: ENSINO_COLOR[p.tap.tipoEscola ?? 'MEDIO'] }} />
+                  <span className="text-sm text-text-main truncate">{tituloProjeto(p)}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
