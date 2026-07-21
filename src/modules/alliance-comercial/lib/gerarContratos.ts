@@ -45,6 +45,11 @@ function valOrBracket(v: string | null | undefined, rotulo: string): string {
   return v && v.trim() ? v : `[${rotulo}]`
 }
 
+// valor monetário (R$) com fallback em colchetes quando ausente
+function valorMonetario(n: number | null, rotulo: string): string {
+  return n != null ? n.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : `[${rotulo}]`
+}
+
 // soma N meses a uma data 'YYYY-MM-DD' (aritmética em UTC p/ evitar problema de fuso)
 function adicionarMeses(iso: string, meses: number): string {
   const [y, m, d] = iso.split('-').map(Number)
@@ -151,7 +156,6 @@ export interface ProjetoData {
   fee_acrescimo_percentual_extenso: string | null
   formandos_minimo: number | null
   local_data_extenso: string | null
-  vigencia_meses: number | null
   vigencia_meses_extenso: string | null
   retencao_faixa1_percentual: number | null
   retencao_faixa2_percentual: number | null
@@ -162,6 +166,21 @@ export interface ProjetoData {
   valor_gatilho_irregularidade: number | null
   valor_gatilho_irregularidade_extenso: string | null
   data_assinatura: string | null
+  verba_cerimonia: number | null
+  verba_colacao: number | null
+  preevento1_nome: string | null
+  preevento1_verba_pa: number | null
+  preevento1_verba_meta: number | null
+  preevento2_nome: string | null
+  preevento2_verba_pa: number | null
+  preevento2_verba_meta: number | null
+  preevento3_nome: string | null
+  preevento3_verba_pa: number | null
+  preevento3_verba_meta: number | null
+  preevento4_nome: string | null
+  preevento4_verba_pa: number | null
+  preevento4_verba_meta: number | null
+  preevento5_nome: string | null
 }
 
 export interface PacoteData {
@@ -199,7 +218,7 @@ export async function gerarTermoAdesao(
       const parcelas = p.qtd_parcelas ? ` (${p.qtd_parcelas}x)` : ''
       return `${p.nome} — R$ ${valor}${parcelas}`
     })
-    .join('\n')
+    .join('\n\n')
 
   const escala = calcularEscalaRetencao()
 
@@ -247,10 +266,12 @@ export async function gerarTermoAdesao(
     // arrependimento = hoje + 90 dias; as 6 faixas de retenção são blocos de
     // 12 meses corridos a partir do fim do arrependimento. Os percentuais de
     // cada faixa continuam vindo do cadastro do projeto (editáveis).
+    // A vigência do contrato é sempre igual ao nº de Parcelas de Adesão
+    // (fee_parcelas) — não é mais um campo cadastrado à parte.
     'projeto.prazo.arrependimento': dataBR(escala.prazoArrependimento),
-    'contrato.vigencia.meses': `${str(projeto.vigencia_meses)} (${projeto.vigencia_meses_extenso ?? ''})`,
-    'contrato.vigencia.fator': projeto.vigencia_meses
-      ? pct(100 / projeto.vigencia_meses, 4)
+    'contrato.vigencia.meses': `${str(projeto.fee_parcelas)} (${projeto.vigencia_meses_extenso ?? ''})`,
+    'contrato.vigencia.fator': projeto.fee_parcelas
+      ? pct(100 / projeto.fee_parcelas, 4)
       : '',
     'retencao.faixa1.inicio':     dataBR(escala.faixas[0].inicio),
     'retencao.faixa1.fim':        dataBR(escala.faixas[0].fim),
@@ -290,9 +311,12 @@ export async function gerarTermoAdesao(
     'arrecadacao.valor':  '[VALOR DE CADA ARRECADAÇÃO]',
     'arrecadacao.total':  '[VALOR TOTAL DE ARRECADAÇÃO]',
 
-    // ── Anexo-Orçamentário (verbas dos eventos) — sem fonte de dado ainda ──
-    'verba.cerimonia':      '[VERBA CERIMÔNIA RELIGIOSA]',
-    'verba.colacao':        '[VERBA COLAÇÃO DE GRAU]',
+    // ── Anexo-Orçamentário (verbas dos eventos) ──
+    // verba.cerimonia e verba.colacao vêm do "Custo por formando" da aba
+    // RESUMO COMISSÃO da planilha P.O. (ou preenchimento manual). As demais
+    // ainda não têm fonte de dado mapeada.
+    'verba.cerimonia':      valorMonetario(projeto.verba_cerimonia, 'VERBA CERIMÔNIA RELIGIOSA'),
+    'verba.colacao':        valorMonetario(projeto.verba_colacao, 'VERBA COLAÇÃO DE GRAU'),
     'colacao.convites':     '[QTD CONVITES COLAÇÃO]',
     'colacao.convites.pf':  '[CONVITES POR FORMANDO — COLAÇÃO]',
     'jantar.horas':         '[HORAS DE EVENTO — JANTAR]',
@@ -310,20 +334,23 @@ export async function gerarTermoAdesao(
     'verba.bebidas.pc':     '[VERBA BEBIDAS P/ CONVIDADO — BAILE]',
     'posbaile.choperia':    '[CHOPERIA — PÓS-BAILE]',
 
-    // ── Bolsa Folia / Pré-Eventos (até 5 itens) — sem fonte de dado ainda ──
-    'preevento1.nome':       '[NOME PRÉ-EVENTO 1]',
-    'preevento1.verba.pa':   '[VERBA POR ADESÃO — PRÉ-EVENTO 1]',
-    'preevento1.verba.meta': '[VERBA TOTAL NA META — PRÉ-EVENTO 1]',
-    'preevento2.nome':       '[NOME PRÉ-EVENTO 2]',
-    'preevento2.verba.pa':   '[VERBA POR ADESÃO — PRÉ-EVENTO 2]',
-    'preevento2.verba.meta': '[VERBA TOTAL NA META — PRÉ-EVENTO 2]',
-    'preevento3.nome':       '[NOME PRÉ-EVENTO 3]',
-    'preevento3.verba.pa':   '[VERBA POR ADESÃO — PRÉ-EVENTO 3]',
-    'preevento3.verba.meta': '[VERBA TOTAL NA META — PRÉ-EVENTO 3]',
-    'preevento4.nome':       '[NOME PRÉ-EVENTO 4]',
-    'preevento4.verba.pa':   '[VERBA POR ADESÃO — PRÉ-EVENTO 4]',
-    'preevento4.verba.meta': '[VERBA TOTAL NA META — PRÉ-EVENTO 4]',
-    'preevento5.nome':       '[NOME PRÉ-EVENTO 5]',
+    // ── Bolsa Folia / Pré-Eventos (até 5 itens) ──
+    // Vêm da seção "PRÉ EVENTOS" da aba REALIZAÇÃO ALLIANCE da planilha P.O.
+    // (ou preenchimento manual). Pré-evento 5 é sempre cortesia Alliance —
+    // sem verba.
+    'preevento1.nome':       valOrBracket(projeto.preevento1_nome, 'NOME PRÉ-EVENTO 1'),
+    'preevento1.verba.pa':   valorMonetario(projeto.preevento1_verba_pa, 'VERBA POR ADESÃO — PRÉ-EVENTO 1'),
+    'preevento1.verba.meta': valorMonetario(projeto.preevento1_verba_meta, 'VERBA TOTAL NA META — PRÉ-EVENTO 1'),
+    'preevento2.nome':       valOrBracket(projeto.preevento2_nome, 'NOME PRÉ-EVENTO 2'),
+    'preevento2.verba.pa':   valorMonetario(projeto.preevento2_verba_pa, 'VERBA POR ADESÃO — PRÉ-EVENTO 2'),
+    'preevento2.verba.meta': valorMonetario(projeto.preevento2_verba_meta, 'VERBA TOTAL NA META — PRÉ-EVENTO 2'),
+    'preevento3.nome':       valOrBracket(projeto.preevento3_nome, 'NOME PRÉ-EVENTO 3'),
+    'preevento3.verba.pa':   valorMonetario(projeto.preevento3_verba_pa, 'VERBA POR ADESÃO — PRÉ-EVENTO 3'),
+    'preevento3.verba.meta': valorMonetario(projeto.preevento3_verba_meta, 'VERBA TOTAL NA META — PRÉ-EVENTO 3'),
+    'preevento4.nome':       valOrBracket(projeto.preevento4_nome, 'NOME PRÉ-EVENTO 4'),
+    'preevento4.verba.pa':   valorMonetario(projeto.preevento4_verba_pa, 'VERBA POR ADESÃO — PRÉ-EVENTO 4'),
+    'preevento4.verba.meta': valorMonetario(projeto.preevento4_verba_meta, 'VERBA TOTAL NA META — PRÉ-EVENTO 4'),
+    'preevento5.nome':       valOrBracket(projeto.preevento5_nome, 'NOME PRÉ-EVENTO 5'),
   }
 
   return gerarDocumentoDocx('/templates/Termo_Adesao_Assessoria_TEMPLATE.docx', dados)

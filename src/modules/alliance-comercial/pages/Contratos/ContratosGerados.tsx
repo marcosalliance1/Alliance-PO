@@ -36,7 +36,13 @@ export default function ContratosGerados() {
           retencao_faixa1_percentual, retencao_faixa2_percentual, retencao_faixa3_percentual,
           retencao_faixa4_percentual, retencao_faixa5_percentual, retencao_faixa6_percentual,
           valor_gatilho_irregularidade, valor_gatilho_irregularidade_extenso,
-          data_assinatura
+          data_assinatura,
+          verba_cerimonia, verba_colacao,
+          preevento1_nome, preevento1_verba_pa, preevento1_verba_meta,
+          preevento2_nome, preevento2_verba_pa, preevento2_verba_meta,
+          preevento3_nome, preevento3_verba_pa, preevento3_verba_meta,
+          preevento4_nome, preevento4_verba_pa, preevento4_verba_meta,
+          preevento5_nome
         )
       `)
       .order('gerado_em', { ascending: false })

@@ -10,7 +10,15 @@ export interface DadosTAP {
   fee_parcelas: string | null         // = "Parcelas de Adesão" do aluno
   fee_valor_parcela: string | null    // = "Valor de Cada Adesão"
   formandos_minimo: string | null     // = "ADESÕES PREVISTAS"
+  verba_cerimonia: string | null      // vem de 'RESUMO COMISSÃO', custo por formando
+  verba_colacao: string | null        // vem de 'RESUMO COMISSÃO', custo por formando
   camposNaoEncontrados: string[]
+}
+
+export interface PreEventoImportado {
+  nome: string
+  verba_pa: string | null
+  verba_meta: string | null
 }
 
 export interface PacoteImportado {
@@ -31,6 +39,7 @@ export interface PacoteImportado {
 export interface ResultadoImportacao {
   dados: DadosTAP
   pacotes: PacoteImportado[]
+  preeventos: PreEventoImportado[]
 }
 
 // ─── Utilitários internos ──────────────────────────────────────────────────
@@ -51,6 +60,79 @@ function normalizarTipoContrato(raw: string): string {
   if (v.includes('producao') || v.includes('producão')) return 'producao'
   if (v.includes('assessoria')) return 'assessoria'
   return raw.toLowerCase()
+}
+
+function normalizarTexto(s: string): string {
+  return s.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+}
+
+// Procura, na aba RESUMO COMISSÃO, a linha "Custo por formando" logo abaixo
+// da categoria de evento indicada (ex: "CERIMÔNIA", "COLAÇÃO") e retorna o
+// valor mais à direita da linha (coluna com FEE/impostos já embutidos). Para
+// depois de MAX_LINHAS linhas sem achar, evitando pegar a de outra categoria.
+function buscarCustoPorFormando(rows: string[][], categoria: string): string | null {
+  const catNorm = normalizarTexto(categoria)
+  const MAX_LINHAS = 40
+  let dentroCategoria = false
+  let linhasLidas = 0
+  for (const row of rows) {
+    const linhaNorm = normalizarTexto(row.filter(c => c?.trim()).join(' '))
+    if (!dentroCategoria) {
+      if (linhaNorm.includes(catNorm)) dentroCategoria = true
+      continue
+    }
+    linhasLidas++
+    if (linhaNorm.includes('CUSTO POR FORMANDO')) {
+      for (let c = row.length - 1; c >= 0; c--) {
+        const v = row[c]?.trim()
+        if (v) return normalizarMoeda(v)
+      }
+      return null
+    }
+    if (linhasLidas > MAX_LINHAS) break
+  }
+  return null
+}
+
+// Procura, na aba REALIZAÇÃO ALLIANCE, a seção "PRÉ EVENTOS" e extrai até 5
+// itens (nome + $ unitário atual + Total Projetado) para a Bolsa Folia.
+function encontrarPreEventos(rows: string[][]): PreEventoImportado[] {
+  let headerIdx = -1
+  let colArea = -1, colUnitario = -1, colTotalProjetado = -1
+
+  for (let r = 0; r < rows.length; r++) {
+    const cells = rows[r].map(c => normalizarTexto(c ?? ''))
+    const iArea = cells.findIndex(c => c === 'AREA')
+    const iUnit = cells.findIndex(c => c.includes('UNITARIO') && c.includes('ATUAL'))
+    const iTotalProj = cells.findIndex(c => c.includes('TOTAL PROJETADO'))
+    if (iArea !== -1 && iUnit !== -1 && iTotalProj !== -1) {
+      headerIdx = r; colArea = iArea; colUnitario = iUnit; colTotalProjetado = iTotalProj
+      break
+    }
+  }
+  if (headerIdx === -1) return []
+
+  let inicioSecao = -1
+  for (let r = headerIdx + 1; r < rows.length; r++) {
+    const primeira = normalizarTexto(rows[r].find(c => c?.trim()) ?? '')
+    if (primeira.includes('PRE EVENTO')) { inicioSecao = r; break }
+  }
+  if (inicioSecao === -1) return []
+
+  const result: PreEventoImportado[] = []
+  for (let r = inicioSecao + 1; r < rows.length && result.length < 5; r++) {
+    const row = rows[r]
+    const nome = row[colArea]?.trim()
+    if (!nome) break
+    const unitario = row[colUnitario]?.trim()
+    const totalProjetado = row[colTotalProjetado]?.trim()
+    result.push({
+      nome,
+      verba_pa:   unitario && !unitario.startsWith('#') ? normalizarMoeda(unitario) : null,
+      verba_meta: totalProjetado && !totalProjetado.startsWith('#') ? normalizarMoeda(totalProjetado) : null,
+    })
+  }
+  return result
 }
 
 function buscarValorPorRotulo(
@@ -163,7 +245,9 @@ function parsearTAP(rows: string[][]): Omit<ResultadoImportacao, never> {
     instituicao: null, curso: null, turma: null, semestre: null,
     tipo_contrato: null, fee_percentual: null,
     fee_parcelas: null, fee_valor_parcela: null,
-    formandos_minimo: null, camposNaoEncontrados: [],
+    formandos_minimo: null,
+    verba_cerimonia: null, verba_colacao: null,
+    camposNaoEncontrados: [],
   }
 
   dados.instituicao = buscarValorPorRotulo(rows, exato('INSTITUIÇÃO DE ENSINO'))
@@ -189,7 +273,7 @@ function parsearTAP(rows: string[][]): Omit<ResultadoImportacao, never> {
     dados.semestre = anoOrcamento
   }
 
-  return { dados, pacotes: encontrarPacotes(rows) }
+  return { dados, pacotes: encontrarPacotes(rows), preeventos: [] }
 }
 
 // ─── HTTP helper ──────────────────────────────────────────────────────────
@@ -218,6 +302,10 @@ export function extrairSheetId(link: string): string | null {
   const match = link.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)
   return match?.[1] ?? null
 }
+
+// Alliance-PO usa @react-oauth/google (useGoogleLogin) para o token OAuth,
+// implementado localmente em NovoContrato.tsx — não usa window.google direto
+// como o repo standalone, então não há obterAccessToken() aqui.
 
 export async function importarDadosTAP(
   sheetId: string,
@@ -263,7 +351,27 @@ export async function importarDadosTAP(
     }
   }
 
-  // ── 3. Calcula campos não encontrados ──────────────────────────────────
+  // ── 3. Lê verba.cerimonia / verba.colacao de 'RESUMO COMISSÃO' ─────────
+  // ("Custo por formando" logo abaixo de cada categoria de evento)
+  const { rows: comissaoRows, status: comissaoStatus } = await fetchSheetRange(
+    sheetId, accessToken, "'RESUMO COMISSÃO'!A1:L400"
+  )
+  if (comissaoStatus === 401) throw new Error('TOKEN_EXPIRADO')
+  if (comissaoRows) {
+    resultado.dados.verba_cerimonia = buscarCustoPorFormando(comissaoRows, 'CERIMÔNIA')
+    resultado.dados.verba_colacao   = buscarCustoPorFormando(comissaoRows, 'COLAÇÃO')
+  }
+
+  // ── 4. Lê Bolsa Folia/Pré-Eventos de 'REALIZAÇÃO ALLIANCE' ─────────────
+  const { rows: realizacaoRows, status: realizacaoStatus } = await fetchSheetRange(
+    sheetId, accessToken, "'REALIZAÇÃO ALLIANCE'!A1:P400"
+  )
+  if (realizacaoStatus === 401) throw new Error('TOKEN_EXPIRADO')
+  if (realizacaoRows) {
+    resultado.preeventos = encontrarPreEventos(realizacaoRows)
+  }
+
+  // ── 5. Calcula campos não encontrados ──────────────────────────────────
   const d = resultado.dados
   const ausentes: Array<[string | null, string]> = [
     [d.instituicao,       'Instituição de Ensino'],
@@ -273,8 +381,13 @@ export async function importarDadosTAP(
     [d.fee_percentual,    'FEE % (RESUMO CUSTOS F29)'],
     [d.fee_parcelas,      'Quantidade de Parcelas'],
     [d.fee_valor_parcela, 'Valor de Cada Adesão'],
+    [d.verba_cerimonia,   'Verba Cerimônia Religiosa (RESUMO COMISSÃO)'],
+    [d.verba_colacao,     'Verba Colação de Grau (RESUMO COMISSÃO)'],
   ]
   d.camposNaoEncontrados = ausentes.filter(([v]) => !v).map(([, label]) => label)
+  if (resultado.preeventos.length === 0) {
+    d.camposNaoEncontrados.push('Pré-Eventos / Bolsa Folia (REALIZAÇÃO ALLIANCE)')
+  }
 
   return resultado
 }

@@ -20,7 +20,7 @@ interface ProjetoForm {
   fee_acrescimo_percentual: string; fee_acrescimo_percentual_extenso: string
   formandos_minimo: string
   local_data_extenso: string
-  vigencia_meses: string; vigencia_meses_extenso: string
+  vigencia_meses_extenso: string
   retencao_faixa1_percentual: string
   retencao_faixa2_percentual: string
   retencao_faixa3_percentual: string
@@ -30,6 +30,13 @@ interface ProjetoForm {
   valor_gatilho_irregularidade: string
   valor_gatilho_irregularidade_extenso: string
   data_assinatura: string
+  verba_cerimonia: string
+  verba_colacao: string
+  preevento1_nome: string; preevento1_verba_pa: string; preevento1_verba_meta: string
+  preevento2_nome: string; preevento2_verba_pa: string; preevento2_verba_meta: string
+  preevento3_nome: string; preevento3_verba_pa: string; preevento3_verba_meta: string
+  preevento4_nome: string; preevento4_verba_pa: string; preevento4_verba_meta: string
+  preevento5_nome: string
 }
 
 interface LinhaPacote {
@@ -56,7 +63,7 @@ const projetoInicial: ProjetoForm = {
   fee_valor_minimo_extenso: '', fee_parcelas: '', fee_valor_parcela: '',
   fee_valor_parcela_extenso: '', fee_acrescimo_percentual: '', fee_acrescimo_percentual_extenso: '',
   formandos_minimo: '', local_data_extenso: '',
-  vigencia_meses: '64', vigencia_meses_extenso: 'sessenta e quatro',
+  vigencia_meses_extenso: 'sessenta e quatro',
   retencao_faixa1_percentual: '0.95',
   retencao_faixa2_percentual: '1.10',
   retencao_faixa3_percentual: '1.20',
@@ -65,6 +72,12 @@ const projetoInicial: ProjetoForm = {
   retencao_faixa6_percentual: '1.50',
   valor_gatilho_irregularidade: '30000',
   valor_gatilho_irregularidade_extenso: 'trinta mil reais', data_assinatura: '',
+  verba_cerimonia: '', verba_colacao: '',
+  preevento1_nome: '', preevento1_verba_pa: '', preevento1_verba_meta: '',
+  preevento2_nome: '', preevento2_verba_pa: '', preevento2_verba_meta: '',
+  preevento3_nome: '', preevento3_verba_pa: '', preevento3_verba_meta: '',
+  preevento4_nome: '', preevento4_verba_pa: '', preevento4_verba_meta: '',
+  preevento5_nome: '',
 }
 
 const linhaVazia: LinhaPacote = {
@@ -115,7 +128,6 @@ function formToProjetoData(id: string, f: ProjetoForm): ProjetoData {
     fee_acrescimo_percentual_extenso: f.fee_acrescimo_percentual_extenso.trim() || null,
     formandos_minimo: int(f.formandos_minimo),
     local_data_extenso: f.local_data_extenso.trim() || null,
-    vigencia_meses: int(f.vigencia_meses),
     vigencia_meses_extenso: f.vigencia_meses_extenso.trim() || null,
     retencao_faixa1_percentual: num(f.retencao_faixa1_percentual),
     retencao_faixa2_percentual: num(f.retencao_faixa2_percentual),
@@ -126,6 +138,21 @@ function formToProjetoData(id: string, f: ProjetoForm): ProjetoData {
     valor_gatilho_irregularidade: num(f.valor_gatilho_irregularidade),
     valor_gatilho_irregularidade_extenso: f.valor_gatilho_irregularidade_extenso.trim() || null,
     data_assinatura: data(f.data_assinatura),
+    verba_cerimonia: num(f.verba_cerimonia),
+    verba_colacao: num(f.verba_colacao),
+    preevento1_nome: f.preevento1_nome.trim() || null,
+    preevento1_verba_pa: num(f.preevento1_verba_pa),
+    preevento1_verba_meta: num(f.preevento1_verba_meta),
+    preevento2_nome: f.preevento2_nome.trim() || null,
+    preevento2_verba_pa: num(f.preevento2_verba_pa),
+    preevento2_verba_meta: num(f.preevento2_verba_meta),
+    preevento3_nome: f.preevento3_nome.trim() || null,
+    preevento3_verba_pa: num(f.preevento3_verba_pa),
+    preevento3_verba_meta: num(f.preevento3_verba_meta),
+    preevento4_nome: f.preevento4_nome.trim() || null,
+    preevento4_verba_pa: num(f.preevento4_verba_pa),
+    preevento4_verba_meta: num(f.preevento4_verba_meta),
+    preevento5_nome: f.preevento5_nome.trim() || null,
   }
 }
 
@@ -207,7 +234,21 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
         ...(d.fee_parcelas      ? { fee_parcelas:      d.fee_parcelas      } : {}),
         ...(d.fee_valor_parcela ? { fee_valor_parcela: d.fee_valor_parcela } : {}),
         ...(d.formandos_minimo  ? { formandos_minimo:  d.formandos_minimo  } : {}),
+        ...(d.verba_cerimonia   ? { verba_cerimonia:   d.verba_cerimonia   } : {}),
+        ...(d.verba_colacao     ? { verba_colacao:     d.verba_colacao     } : {}),
       }))
+
+      if (resultado.preeventos.length > 0) {
+        const [pe1, pe2, pe3, pe4, pe5] = resultado.preeventos
+        setProjeto(p => ({
+          ...p,
+          ...(pe1 ? { preevento1_nome: pe1.nome, preevento1_verba_pa: pe1.verba_pa ?? '', preevento1_verba_meta: pe1.verba_meta ?? '' } : {}),
+          ...(pe2 ? { preevento2_nome: pe2.nome, preevento2_verba_pa: pe2.verba_pa ?? '', preevento2_verba_meta: pe2.verba_meta ?? '' } : {}),
+          ...(pe3 ? { preevento3_nome: pe3.nome, preevento3_verba_pa: pe3.verba_pa ?? '', preevento3_verba_meta: pe3.verba_meta ?? '' } : {}),
+          ...(pe4 ? { preevento4_nome: pe4.nome, preevento4_verba_pa: pe4.verba_pa ?? '', preevento4_verba_meta: pe4.verba_meta ?? '' } : {}),
+          ...(pe5 ? { preevento5_nome: pe5.nome } : {}),
+        }))
+      }
 
       if (resultado.pacotes.length > 0) {
         setLinhas(resultado.pacotes.map(p => ({
@@ -277,7 +318,6 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
         fee_acrescimo_percentual_extenso: projeto.fee_acrescimo_percentual_extenso.trim() || null,
         formandos_minimo:          int(projeto.formandos_minimo),
         local_data_extenso:        projeto.local_data_extenso.trim() || null,
-        vigencia_meses:            int(projeto.vigencia_meses),
         vigencia_meses_extenso:    projeto.vigencia_meses_extenso.trim() || null,
         retencao_faixa1_percentual:  num(projeto.retencao_faixa1_percentual),
         retencao_faixa2_percentual:  num(projeto.retencao_faixa2_percentual),
@@ -288,6 +328,21 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
         valor_gatilho_irregularidade: num(projeto.valor_gatilho_irregularidade),
         valor_gatilho_irregularidade_extenso: projeto.valor_gatilho_irregularidade_extenso.trim() || null,
         data_assinatura:              data_(projeto.data_assinatura),
+        verba_cerimonia:              num(projeto.verba_cerimonia),
+        verba_colacao:                num(projeto.verba_colacao),
+        preevento1_nome:              projeto.preevento1_nome.trim() || null,
+        preevento1_verba_pa:          num(projeto.preevento1_verba_pa),
+        preevento1_verba_meta:        num(projeto.preevento1_verba_meta),
+        preevento2_nome:              projeto.preevento2_nome.trim() || null,
+        preevento2_verba_pa:          num(projeto.preevento2_verba_pa),
+        preevento2_verba_meta:        num(projeto.preevento2_verba_meta),
+        preevento3_nome:              projeto.preevento3_nome.trim() || null,
+        preevento3_verba_pa:          num(projeto.preevento3_verba_pa),
+        preevento3_verba_meta:        num(projeto.preevento3_verba_meta),
+        preevento4_nome:              projeto.preevento4_nome.trim() || null,
+        preevento4_verba_pa:          num(projeto.preevento4_verba_pa),
+        preevento4_verba_meta:        num(projeto.preevento4_verba_meta),
+        preevento5_nome:              projeto.preevento5_nome.trim() || null,
       })
       .select('id')
       .single()
@@ -571,13 +626,11 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
             O prazo de arrependimento (90 dias) e as datas de início/fim de cada faixa de
             retenção são calculados automaticamente no momento de gerar o documento: o prazo
             começa na data de hoje, e cada faixa é um bloco de 12 meses corridos a partir do
-            fim do prazo de arrependimento. Só os percentuais abaixo são editáveis.
+            fim do prazo de arrependimento. Só os percentuais abaixo são editáveis. A
+            vigência do contrato é sempre igual ao "Parcelas de Adesão" definido em
+            Condições do FEE — só informe abaixo como esse número é escrito por extenso.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Campo label="Vigência do contrato (meses)">
-              <input type="number" min="1" className={base} value={projeto.vigencia_meses}
-                onChange={e => setProjeto(p => ({ ...p, vigencia_meses: e.target.value }))} />
-            </Campo>
             <Campo label="Vigência por extenso">
               <input className={base} value={projeto.vigencia_meses_extenso}
                 onChange={e => setProjeto(p => ({ ...p, vigencia_meses_extenso: e.target.value }))}
@@ -632,6 +685,73 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
               <input type="date" className={base} value={projeto.data_assinatura}
                 onChange={e => setProjeto(p => ({ ...p, data_assinatura: e.target.value }))} />
             </Campo>
+          </div>
+
+          {/* Anexo-Orçamentário: Verbas e Bolsa Folia */}
+          <p className={secTitle}>Anexo-Orçamentário — Verbas e Bolsa Folia (Termo de Adesão)</p>
+          <p className="text-xs text-text-muted -mt-3">
+            Preenchidos automaticamente ao importar a planilha P.O. (verbas vêm de "Custo por
+            formando" na aba RESUMO COMISSÃO; Bolsa Folia vem da seção PRÉ EVENTOS na aba
+            REALIZAÇÃO ALLIANCE) — também editáveis manualmente.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Campo label="Verba Cerimônia Religiosa (R$)">
+              <input type="number" step="0.01" min="0" className={base}
+                value={projeto.verba_cerimonia}
+                onChange={e => setProjeto(p => ({ ...p, verba_cerimonia: e.target.value }))} />
+            </Campo>
+            <Campo label="Verba Colação de Grau (R$)">
+              <input type="number" step="0.01" min="0" className={base}
+                value={projeto.verba_colacao}
+                onChange={e => setProjeto(p => ({ ...p, verba_colacao: e.target.value }))} />
+            </Campo>
+          </div>
+
+          <div className="overflow-x-auto rounded-lg border border-white/10">
+            <table className="min-w-full border-collapse text-xs">
+              <thead>
+                <tr>
+                  <th className={thLeft} style={{ minWidth: 90 }}>Pré-Evento</th>
+                  <th className={thLeft} style={{ minWidth: 160 }}>Nome</th>
+                  <th className={th} style={{ minWidth: 110 }}>Verba p/ Adesão</th>
+                  <th className={th} style={{ minWidth: 110 }}>Verba Total na Meta</th>
+                </tr>
+              </thead>
+              <tbody>
+                {([1, 2, 3, 4] as const).map(n => {
+                  const kNome = `preevento${n}_nome` as const
+                  const kPa   = `preevento${n}_verba_pa` as const
+                  const kMeta = `preevento${n}_verba_meta` as const
+                  return (
+                    <tr key={n} className={n % 2 === 0 ? 'bg-white/[0.02]' : ''}>
+                      <td className={td}>Pré-Evento {n}</td>
+                      <td className={td}>
+                        <input className={cellInput} value={projeto[kNome]}
+                          onChange={e => setProjeto(p => ({ ...p, [kNome]: e.target.value }))}
+                          placeholder={`Nome do pré-evento ${n}`} />
+                      </td>
+                      <td className={td}>
+                        <input type="number" step="0.01" min="0" className={cellInput} value={projeto[kPa]}
+                          onChange={e => setProjeto(p => ({ ...p, [kPa]: e.target.value }))} />
+                      </td>
+                      <td className={td}>
+                        <input type="number" step="0.01" min="0" className={cellInput} value={projeto[kMeta]}
+                          onChange={e => setProjeto(p => ({ ...p, [kMeta]: e.target.value }))} />
+                      </td>
+                    </tr>
+                  )
+                })}
+                <tr className="bg-white/[0.02]">
+                  <td className={td}>Pré-Evento 5</td>
+                  <td className={td}>
+                    <input className={cellInput} value={projeto.preevento5_nome}
+                      onChange={e => setProjeto(p => ({ ...p, preevento5_nome: e.target.value }))}
+                      placeholder="Nome do pré-evento 5" />
+                  </td>
+                  <td className={td + ' text-text-muted'} colSpan={2}>cortesia Alliance</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           <button type="submit" disabled={loading} className={btnPrimary}>
