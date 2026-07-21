@@ -63,6 +63,53 @@ function listaExtenso(itens: string[]): string {
   return `${itens.slice(0, -1).join(', ')} e ${itens[itens.length - 1]}`
 }
 
+// data de hoje em 'YYYY-MM-DD' (fuso local)
+function hojeISO(): string {
+  const d = new Date()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
+}
+
+// soma N dias a uma data 'YYYY-MM-DD' (aritmética em UTC p/ evitar problema de fuso)
+function adicionarDias(iso: string, dias: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() + dias)
+  const yy = dt.getUTCFullYear()
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getUTCDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+interface Faixa {
+  inicio: string
+  fim: string
+}
+
+interface EscalaRetencao {
+  prazoArrependimento: string
+  faixas: Faixa[]
+  faixaFinalInicio: string
+}
+
+// calcula o prazo de arrependimento (hoje + 90 dias) e as 6 faixas de
+// retenção como blocos de 12 meses corridos a partir do fim do arrependimento.
+// Os percentuais de cada faixa continuam vindo do cadastro do projeto
+// (editáveis manualmente); apenas as datas são calculadas.
+function calcularEscalaRetencao(): EscalaRetencao {
+  const prazoArrependimento = adicionarDias(hojeISO(), 90)
+  const faixas: Faixa[] = []
+  let cursor = adicionarDias(prazoArrependimento, 1)
+  for (let i = 0; i < 6; i++) {
+    const inicio = cursor
+    const fim = adicionarDias(adicionarMeses(inicio, 12), -1)
+    faixas.push({ inicio, fim })
+    cursor = adicionarDias(fim, 1)
+  }
+  return { prazoArrependimento, faixas, faixaFinalInicio: cursor }
+}
+
 // calcula as datas de vencimento das parcelas semestrais do Piso Fixo: a
 // primeira é a própria data de assinatura do contrato, as seguintes a cada
 // 6 meses, até completar o total de parcelas.
@@ -104,28 +151,14 @@ export interface ProjetoData {
   fee_acrescimo_percentual_extenso: string | null
   formandos_minimo: number | null
   local_data_extenso: string | null
-  prazo_arrependimento: string | null
   vigencia_meses: number | null
   vigencia_meses_extenso: string | null
-  retencao_faixa1_inicio: string | null
-  retencao_faixa1_fim: string | null
   retencao_faixa1_percentual: number | null
-  retencao_faixa2_inicio: string | null
-  retencao_faixa2_fim: string | null
   retencao_faixa2_percentual: number | null
-  retencao_faixa3_inicio: string | null
-  retencao_faixa3_fim: string | null
   retencao_faixa3_percentual: number | null
-  retencao_faixa4_inicio: string | null
-  retencao_faixa4_fim: string | null
   retencao_faixa4_percentual: number | null
-  retencao_faixa5_inicio: string | null
-  retencao_faixa5_fim: string | null
   retencao_faixa5_percentual: number | null
-  retencao_faixa6_inicio: string | null
-  retencao_faixa6_fim: string | null
   retencao_faixa6_percentual: number | null
-  retencao_faixa_final_inicio: string | null
   valor_gatilho_irregularidade: number | null
   valor_gatilho_irregularidade_extenso: string | null
   data_assinatura: string | null
@@ -168,6 +201,8 @@ export async function gerarTermoAdesao(
     })
     .join('\n')
 
+  const escala = calcularEscalaRetencao()
+
   const dados: Record<string, string> = {
     // ── Cliente/formando — sem cadastro individual no sistema, preenchimento manual ──
     'cliente.nome':                      '[NOME DO FORMANDO]',
@@ -208,30 +243,34 @@ export async function gerarTermoAdesao(
     'empresa.logo.assinatura': EMPRESA.logoAssinatura,
 
     // ── Prazo de arrependimento / vigência / escala de retenção (Cláusula 10) ──
-    'projeto.prazo.arrependimento': dataBR(projeto.prazo_arrependimento),
+    // Calculados em tempo real a partir da data de hoje (momento da geração):
+    // arrependimento = hoje + 90 dias; as 6 faixas de retenção são blocos de
+    // 12 meses corridos a partir do fim do arrependimento. Os percentuais de
+    // cada faixa continuam vindo do cadastro do projeto (editáveis).
+    'projeto.prazo.arrependimento': dataBR(escala.prazoArrependimento),
     'contrato.vigencia.meses': `${str(projeto.vigencia_meses)} (${projeto.vigencia_meses_extenso ?? ''})`,
     'contrato.vigencia.fator': projeto.vigencia_meses
       ? pct(100 / projeto.vigencia_meses, 4)
       : '',
-    'retencao.faixa1.inicio':     dataBR(projeto.retencao_faixa1_inicio),
-    'retencao.faixa1.fim':        dataBR(projeto.retencao_faixa1_fim),
+    'retencao.faixa1.inicio':     dataBR(escala.faixas[0].inicio),
+    'retencao.faixa1.fim':        dataBR(escala.faixas[0].fim),
     'retencao.faixa1.percentual': pct(projeto.retencao_faixa1_percentual, 2),
-    'retencao.faixa2.inicio':     dataBR(projeto.retencao_faixa2_inicio),
-    'retencao.faixa2.fim':        dataBR(projeto.retencao_faixa2_fim),
+    'retencao.faixa2.inicio':     dataBR(escala.faixas[1].inicio),
+    'retencao.faixa2.fim':        dataBR(escala.faixas[1].fim),
     'retencao.faixa2.percentual': pct(projeto.retencao_faixa2_percentual, 2),
-    'retencao.faixa3.inicio':     dataBR(projeto.retencao_faixa3_inicio),
-    'retencao.faixa3.fim':        dataBR(projeto.retencao_faixa3_fim),
+    'retencao.faixa3.inicio':     dataBR(escala.faixas[2].inicio),
+    'retencao.faixa3.fim':        dataBR(escala.faixas[2].fim),
     'retencao.faixa3.percentual': pct(projeto.retencao_faixa3_percentual, 2),
-    'retencao.faixa4.inicio':     dataBR(projeto.retencao_faixa4_inicio),
-    'retencao.faixa4.fim':        dataBR(projeto.retencao_faixa4_fim),
+    'retencao.faixa4.inicio':     dataBR(escala.faixas[3].inicio),
+    'retencao.faixa4.fim':        dataBR(escala.faixas[3].fim),
     'retencao.faixa4.percentual': pct(projeto.retencao_faixa4_percentual, 2),
-    'retencao.faixa5.inicio':     dataBR(projeto.retencao_faixa5_inicio),
-    'retencao.faixa5.fim':        dataBR(projeto.retencao_faixa5_fim),
+    'retencao.faixa5.inicio':     dataBR(escala.faixas[4].inicio),
+    'retencao.faixa5.fim':        dataBR(escala.faixas[4].fim),
     'retencao.faixa5.percentual': pct(projeto.retencao_faixa5_percentual, 2),
-    'retencao.faixa6.inicio':     dataBR(projeto.retencao_faixa6_inicio),
-    'retencao.faixa6.fim':        dataBR(projeto.retencao_faixa6_fim),
+    'retencao.faixa6.inicio':     dataBR(escala.faixas[5].inicio),
+    'retencao.faixa6.fim':        dataBR(escala.faixas[5].fim),
     'retencao.faixa6.percentual': pct(projeto.retencao_faixa6_percentual, 2),
-    'retencao.faixaFinal.inicio': dataBR(projeto.retencao_faixa_final_inicio),
+    'retencao.faixaFinal.inicio': dataBR(escala.faixaFinalInicio),
 
     // ── Pacotes/parcelamento por nº de convites, arrecadação e adesão social ──
     // Sem fonte de dado ainda (não há cadastro por nº de convites/arrecadação/social) —

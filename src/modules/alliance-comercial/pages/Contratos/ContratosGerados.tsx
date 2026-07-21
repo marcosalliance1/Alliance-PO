@@ -32,14 +32,9 @@ export default function ContratosGerados() {
           fee_percentual, fee_percentual_extenso, fee_valor_minimo, fee_valor_minimo_extenso,
           fee_parcelas, fee_valor_parcela, fee_valor_parcela_extenso,
           fee_acrescimo_percentual, fee_acrescimo_percentual_extenso, formandos_minimo, local_data_extenso,
-          prazo_arrependimento, vigencia_meses, vigencia_meses_extenso,
-          retencao_faixa1_inicio, retencao_faixa1_fim, retencao_faixa1_percentual,
-          retencao_faixa2_inicio, retencao_faixa2_fim, retencao_faixa2_percentual,
-          retencao_faixa3_inicio, retencao_faixa3_fim, retencao_faixa3_percentual,
-          retencao_faixa4_inicio, retencao_faixa4_fim, retencao_faixa4_percentual,
-          retencao_faixa5_inicio, retencao_faixa5_fim, retencao_faixa5_percentual,
-          retencao_faixa6_inicio, retencao_faixa6_fim, retencao_faixa6_percentual,
-          retencao_faixa_final_inicio,
+          vigencia_meses, vigencia_meses_extenso,
+          retencao_faixa1_percentual, retencao_faixa2_percentual, retencao_faixa3_percentual,
+          retencao_faixa4_percentual, retencao_faixa5_percentual, retencao_faixa6_percentual,
           valor_gatilho_irregularidade, valor_gatilho_irregularidade_extenso,
           data_assinatura
         )

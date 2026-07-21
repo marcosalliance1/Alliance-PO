@@ -20,15 +20,13 @@ interface ProjetoForm {
   fee_acrescimo_percentual: string; fee_acrescimo_percentual_extenso: string
   formandos_minimo: string
   local_data_extenso: string
-  prazo_arrependimento: string
   vigencia_meses: string; vigencia_meses_extenso: string
-  retencao_faixa1_inicio: string; retencao_faixa1_fim: string; retencao_faixa1_percentual: string
-  retencao_faixa2_inicio: string; retencao_faixa2_fim: string; retencao_faixa2_percentual: string
-  retencao_faixa3_inicio: string; retencao_faixa3_fim: string; retencao_faixa3_percentual: string
-  retencao_faixa4_inicio: string; retencao_faixa4_fim: string; retencao_faixa4_percentual: string
-  retencao_faixa5_inicio: string; retencao_faixa5_fim: string; retencao_faixa5_percentual: string
-  retencao_faixa6_inicio: string; retencao_faixa6_fim: string; retencao_faixa6_percentual: string
-  retencao_faixa_final_inicio: string
+  retencao_faixa1_percentual: string
+  retencao_faixa2_percentual: string
+  retencao_faixa3_percentual: string
+  retencao_faixa4_percentual: string
+  retencao_faixa5_percentual: string
+  retencao_faixa6_percentual: string
   valor_gatilho_irregularidade: string
   valor_gatilho_irregularidade_extenso: string
   data_assinatura: string
@@ -58,15 +56,13 @@ const projetoInicial: ProjetoForm = {
   fee_valor_minimo_extenso: '', fee_parcelas: '', fee_valor_parcela: '',
   fee_valor_parcela_extenso: '', fee_acrescimo_percentual: '', fee_acrescimo_percentual_extenso: '',
   formandos_minimo: '', local_data_extenso: '',
-  prazo_arrependimento: '2026-01-31',
   vigencia_meses: '64', vigencia_meses_extenso: 'sessenta e quatro',
-  retencao_faixa1_inicio: '2026-02-01', retencao_faixa1_fim: '2026-12-31', retencao_faixa1_percentual: '0.95',
-  retencao_faixa2_inicio: '2027-01-01', retencao_faixa2_fim: '2027-12-31', retencao_faixa2_percentual: '1.10',
-  retencao_faixa3_inicio: '2028-01-01', retencao_faixa3_fim: '2028-12-31', retencao_faixa3_percentual: '1.20',
-  retencao_faixa4_inicio: '2029-01-01', retencao_faixa4_fim: '2029-12-31', retencao_faixa4_percentual: '1.30',
-  retencao_faixa5_inicio: '2030-01-01', retencao_faixa5_fim: '2030-07-31', retencao_faixa5_percentual: '1.40',
-  retencao_faixa6_inicio: '2030-08-01', retencao_faixa6_fim: '2030-11-30', retencao_faixa6_percentual: '1.50',
-  retencao_faixa_final_inicio: '2030-12-01',
+  retencao_faixa1_percentual: '0.95',
+  retencao_faixa2_percentual: '1.10',
+  retencao_faixa3_percentual: '1.20',
+  retencao_faixa4_percentual: '1.30',
+  retencao_faixa5_percentual: '1.40',
+  retencao_faixa6_percentual: '1.50',
   valor_gatilho_irregularidade: '30000',
   valor_gatilho_irregularidade_extenso: 'trinta mil reais', data_assinatura: '',
 }
@@ -119,28 +115,14 @@ function formToProjetoData(id: string, f: ProjetoForm): ProjetoData {
     fee_acrescimo_percentual_extenso: f.fee_acrescimo_percentual_extenso.trim() || null,
     formandos_minimo: int(f.formandos_minimo),
     local_data_extenso: f.local_data_extenso.trim() || null,
-    prazo_arrependimento: data(f.prazo_arrependimento),
     vigencia_meses: int(f.vigencia_meses),
     vigencia_meses_extenso: f.vigencia_meses_extenso.trim() || null,
-    retencao_faixa1_inicio: data(f.retencao_faixa1_inicio),
-    retencao_faixa1_fim: data(f.retencao_faixa1_fim),
     retencao_faixa1_percentual: num(f.retencao_faixa1_percentual),
-    retencao_faixa2_inicio: data(f.retencao_faixa2_inicio),
-    retencao_faixa2_fim: data(f.retencao_faixa2_fim),
     retencao_faixa2_percentual: num(f.retencao_faixa2_percentual),
-    retencao_faixa3_inicio: data(f.retencao_faixa3_inicio),
-    retencao_faixa3_fim: data(f.retencao_faixa3_fim),
     retencao_faixa3_percentual: num(f.retencao_faixa3_percentual),
-    retencao_faixa4_inicio: data(f.retencao_faixa4_inicio),
-    retencao_faixa4_fim: data(f.retencao_faixa4_fim),
     retencao_faixa4_percentual: num(f.retencao_faixa4_percentual),
-    retencao_faixa5_inicio: data(f.retencao_faixa5_inicio),
-    retencao_faixa5_fim: data(f.retencao_faixa5_fim),
     retencao_faixa5_percentual: num(f.retencao_faixa5_percentual),
-    retencao_faixa6_inicio: data(f.retencao_faixa6_inicio),
-    retencao_faixa6_fim: data(f.retencao_faixa6_fim),
     retencao_faixa6_percentual: num(f.retencao_faixa6_percentual),
-    retencao_faixa_final_inicio: data(f.retencao_faixa_final_inicio),
     valor_gatilho_irregularidade: num(f.valor_gatilho_irregularidade),
     valor_gatilho_irregularidade_extenso: f.valor_gatilho_irregularidade_extenso.trim() || null,
     data_assinatura: data(f.data_assinatura),
@@ -295,28 +277,14 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
         fee_acrescimo_percentual_extenso: projeto.fee_acrescimo_percentual_extenso.trim() || null,
         formandos_minimo:          int(projeto.formandos_minimo),
         local_data_extenso:        projeto.local_data_extenso.trim() || null,
-        prazo_arrependimento:      data_(projeto.prazo_arrependimento),
         vigencia_meses:            int(projeto.vigencia_meses),
         vigencia_meses_extenso:    projeto.vigencia_meses_extenso.trim() || null,
-        retencao_faixa1_inicio:      data_(projeto.retencao_faixa1_inicio),
-        retencao_faixa1_fim:         data_(projeto.retencao_faixa1_fim),
         retencao_faixa1_percentual:  num(projeto.retencao_faixa1_percentual),
-        retencao_faixa2_inicio:      data_(projeto.retencao_faixa2_inicio),
-        retencao_faixa2_fim:         data_(projeto.retencao_faixa2_fim),
         retencao_faixa2_percentual:  num(projeto.retencao_faixa2_percentual),
-        retencao_faixa3_inicio:      data_(projeto.retencao_faixa3_inicio),
-        retencao_faixa3_fim:         data_(projeto.retencao_faixa3_fim),
         retencao_faixa3_percentual:  num(projeto.retencao_faixa3_percentual),
-        retencao_faixa4_inicio:      data_(projeto.retencao_faixa4_inicio),
-        retencao_faixa4_fim:         data_(projeto.retencao_faixa4_fim),
         retencao_faixa4_percentual:  num(projeto.retencao_faixa4_percentual),
-        retencao_faixa5_inicio:      data_(projeto.retencao_faixa5_inicio),
-        retencao_faixa5_fim:         data_(projeto.retencao_faixa5_fim),
         retencao_faixa5_percentual:  num(projeto.retencao_faixa5_percentual),
-        retencao_faixa6_inicio:      data_(projeto.retencao_faixa6_inicio),
-        retencao_faixa6_fim:         data_(projeto.retencao_faixa6_fim),
         retencao_faixa6_percentual:  num(projeto.retencao_faixa6_percentual),
-        retencao_faixa_final_inicio: data_(projeto.retencao_faixa_final_inicio),
         valor_gatilho_irregularidade: num(projeto.valor_gatilho_irregularidade),
         valor_gatilho_irregularidade_extenso: projeto.valor_gatilho_irregularidade_extenso.trim() || null,
         data_assinatura:              data_(projeto.data_assinatura),
@@ -599,11 +567,13 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
 
           {/* Vigência e Retenção */}
           <p className={secTitle}>Vigência e Escala de Retenção (Cláusula 10 do Termo de Adesão)</p>
+          <p className="text-xs text-text-muted -mt-3">
+            O prazo de arrependimento (90 dias) e as datas de início/fim de cada faixa de
+            retenção são calculados automaticamente no momento de gerar o documento: o prazo
+            começa na data de hoje, e cada faixa é um bloco de 12 meses corridos a partir do
+            fim do prazo de arrependimento. Só os percentuais abaixo são editáveis.
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Campo label="Prazo de arrependimento (adesões iniciais)">
-              <input type="date" className={base} value={projeto.prazo_arrependimento}
-                onChange={e => setProjeto(p => ({ ...p, prazo_arrependimento: e.target.value }))} />
-            </Campo>
             <Campo label="Vigência do contrato (meses)">
               <input type="number" min="1" className={base} value={projeto.vigencia_meses}
                 onChange={e => setProjeto(p => ({ ...p, vigencia_meses: e.target.value }))} />
@@ -620,27 +590,15 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
               <thead>
                 <tr>
                   <th className={thLeft} style={{ minWidth: 90 }}>Faixa</th>
-                  <th className={thLeft} style={{ minWidth: 140 }}>Início</th>
-                  <th className={thLeft} style={{ minWidth: 140 }}>Fim</th>
                   <th className={th} style={{ minWidth: 90 }}>% Retenção</th>
                 </tr>
               </thead>
               <tbody>
                 {([1, 2, 3, 4, 5, 6] as const).map(n => {
-                  const kIni = `retencao_faixa${n}_inicio` as const
-                  const kFim = `retencao_faixa${n}_fim` as const
                   const kPct = `retencao_faixa${n}_percentual` as const
                   return (
                     <tr key={n} className={n % 2 === 0 ? 'bg-white/[0.02]' : ''}>
                       <td className={td}>Faixa {n}</td>
-                      <td className={td}>
-                        <input type="date" className={cellInput} value={projeto[kIni]}
-                          onChange={e => setProjeto(p => ({ ...p, [kIni]: e.target.value }))} />
-                      </td>
-                      <td className={td}>
-                        <input type="date" className={cellInput} value={projeto[kFim]}
-                          onChange={e => setProjeto(p => ({ ...p, [kFim]: e.target.value }))} />
-                      </td>
                       <td className={td}>
                         <input type="number" step="0.01" min="0" className={cellInput} value={projeto[kPct]}
                           onChange={e => setProjeto(p => ({ ...p, [kPct]: e.target.value }))} />
@@ -648,15 +606,6 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
                     </tr>
                   )
                 })}
-                <tr className="bg-white/[0.02]">
-                  <td className={td}>Faixa final</td>
-                  <td className={td}>
-                    <input type="date" className={cellInput} value={projeto.retencao_faixa_final_inicio}
-                      onChange={e => setProjeto(p => ({ ...p, retencao_faixa_final_inicio: e.target.value }))} />
-                  </td>
-                  <td className={td + ' text-text-muted'}>até as solenidades</td>
-                  <td className={td + ' text-text-muted'}>= vigência</td>
-                </tr>
               </tbody>
             </table>
           </div>
