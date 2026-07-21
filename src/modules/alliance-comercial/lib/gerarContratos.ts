@@ -33,6 +33,18 @@ function dataBR(iso: string | null): string {
   return `${d}/${m}/${y}`
 }
 
+// converte 'YYYY-MM-DD' para "DD de mês de YYYY"
+function dataExtenso(iso: string | null): string {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-')
+  return `${parseInt(d, 10)} de ${MESES[parseInt(m, 10) - 1]} de ${y}`
+}
+
+// valor com fallback em colchetes quando ausente
+function valOrBracket(v: string | null | undefined, rotulo: string): string {
+  return v && v.trim() ? v : `[${rotulo}]`
+}
+
 // formata número decimal como percentual pt-BR, ex: 0.95 → "0,95%"
 function pct(n: number | null, casas: number): string {
   if (n == null) return ''
@@ -50,12 +62,14 @@ export interface ProjetoData {
   turma: string | null
   semestre: string | null
   fee_percentual: number | null
+  fee_percentual_extenso: string | null
   fee_valor_minimo: number | null
   fee_valor_minimo_extenso: string | null
   fee_parcelas: number | null
   fee_valor_parcela: number | null
   fee_valor_parcela_extenso: string | null
   fee_acrescimo_percentual: number | null
+  fee_acrescimo_percentual_extenso: string | null
   formandos_minimo: number | null
   local_data_extenso: string | null
   prazo_arrependimento: string | null
@@ -82,6 +96,7 @@ export interface ProjetoData {
   retencao_faixa_final_inicio: string | null
   datas_vencimento_parcelas: string | null
   valor_gatilho_irregularidade: number | null
+  valor_gatilho_irregularidade_extenso: string | null
   data_assinatura: string | null
 }
 
@@ -245,37 +260,43 @@ export async function gerarTermoAdesao(
 }
 
 // ─── Geração do Contrato Comissão ─────────────────────────────────────────
+// Contrato Alliance × Comissão de Formatura (modelo Produção). Mesmo
+// mecanismo do Termo de Adesão — merge de placeholders via docxtemplater,
+// sem chamada a API externa. Percentuais e valores em R$ que aparecem por
+// extenso no texto usam campos de cadastro manual (mesmo padrão já usado em
+// fee_valor_minimo_extenso / fee_valor_parcela_extenso).
 
-export async function gerarContratoComissao(projeto: ProjetoData): Promise<Blob> {
-  // parcelas 1–9 têm data+percentual+valor; parcela 10 só tem percentual+valor
-  const parcelasFixas: Record<string, string> = {}
-  for (let i = 1; i <= 10; i++) {
-    if (i < 10) parcelasFixas[`contrato.parcela_${i}_data`] = '[A DEFINIR]'
-    parcelasFixas[`contrato.parcela_${i}_percentual`] = '[A DEFINIR]'
-    parcelasFixas[`contrato.parcela_${i}_valor`]      = '[A DEFINIR]'
-  }
+export async function gerarContratoComissao(
+  projeto: ProjetoData,
+  pacotes: PacoteData[],
+): Promise<Blob> {
+  const pacoteBase = pacotes.find(p => p.is_base)
 
   const dados: Record<string, string> = {
-    'comissao.nome':         `${projeto.nome} — ${projeto.instituicao}`,
-    'comissao.cnpj':         '[CNPJ DA COMISSÃO DE FORMATURA]',
-    'comissao.end':          '[ENDEREÇO DA COMISSÃO]',
-    'comissao.cidade':       '[CIDADE/DATA]',
-    'comissao.tel':          '[TELEFONE DA COMISSÃO]',
-    'comissao.contatos':     '[CONTATOS DA COMISSÃO]',
-    'comissao.representante':'[NOME DO REPRESENTANTE]',
+    'comissao.nome': `${projeto.instituicao} — Turma ${projeto.turma || projeto.nome}`,
 
-    'contrato.fee_percentual':           str(projeto.fee_percentual),
-    'contrato.fee_valor_minimo':         str(projeto.fee_valor_minimo),
-    'contrato.fee_valor_minimo_extenso': projeto.fee_valor_minimo_extenso ?? '',
-    'contrato.fee_parcelas':             str(projeto.fee_parcelas),
-    'contrato.fee_valor_parcela':        str(projeto.fee_valor_parcela),
-    'contrato.fee_valor_parcela_extenso':projeto.fee_valor_parcela_extenso ?? '',
-    'contrato.fee_acrescimo_percentual': str(projeto.fee_acrescimo_percentual),
-    'contrato.formandos_minimo':         str(projeto.formandos_minimo),
-    'contrato.local_data_extenso':
-      projeto.local_data_extenso ?? dataHojeExtenso(),
+    'contrato.piso_fixo.percentual':         str(projeto.fee_percentual),
+    'contrato.piso_fixo.percentual.extenso': valOrBracket(projeto.fee_percentual_extenso, 'FEE % POR EXTENSO'),
 
-    ...parcelasFixas,
+    'contrato.pacote_base.valor': pacoteBase
+      ? pacoteBase.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+      : '[VALOR DO PACOTE BASE]',
+    'contrato.pacote_base.valor.extenso': valOrBracket(pacoteBase?.valor_extenso, 'VALOR DO PACOTE BASE POR EXTENSO'),
+
+    'contrato.meta_adesoes': str(projeto.formandos_minimo),
+
+    'contrato.acrescimo_variavel.percentual':         str(projeto.fee_acrescimo_percentual),
+    'contrato.acrescimo_variavel.percentual.extenso': valOrBracket(projeto.fee_acrescimo_percentual_extenso, 'ACRÉSCIMO VARIÁVEL % POR EXTENSO'),
+
+    'contrato.parcelas.qt':    str(projeto.fee_parcelas),
+    'contrato.parcelas.datas': valOrBracket(projeto.datas_vencimento_parcelas, 'DATAS DE VENCIMENTO DAS PARCELAS'),
+
+    'contrato.gatilho_irregularidade.valor': projeto.valor_gatilho_irregularidade != null
+      ? projeto.valor_gatilho_irregularidade.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+      : '[VALOR GATILHO DE IRREGULARIDADE]',
+    'contrato.gatilho_irregularidade.valor.extenso': valOrBracket(projeto.valor_gatilho_irregularidade_extenso, 'VALOR GATILHO DE IRREGULARIDADE POR EXTENSO'),
+
+    'contrato.data_assinatura': projeto.data_assinatura ? dataExtenso(projeto.data_assinatura) : dataHojeExtenso(),
   }
 
   return gerarDocumentoDocx('/templates/Contrato_Comissao_Assessoria_TEMPLATE.docx', dados)

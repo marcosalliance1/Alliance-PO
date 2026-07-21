@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabaseComercial } from '../../lib/supabase'
 import type { ProjetoData, PacoteData } from '../../lib/gerarContratos'
-import { gerarTermoAdesao, downloadBlob } from '../../lib/gerarContratos'
-import {
-  montarDadosContratoComissao, gerarTextoContratoComissao, textoParaDocx, CamposPendentesError,
-} from '../../lib/gerarContratoComissaoLLM'
+import { gerarTermoAdesao, gerarContratoComissao, downloadBlob } from '../../lib/gerarContratos'
 
 interface CardData {
   projeto_id: string
@@ -32,9 +29,9 @@ export default function ContratosGerados() {
         gerado_em,
         projetos (
           id, nome, instituicao, turma, semestre,
-          fee_percentual, fee_valor_minimo, fee_valor_minimo_extenso,
+          fee_percentual, fee_percentual_extenso, fee_valor_minimo, fee_valor_minimo_extenso,
           fee_parcelas, fee_valor_parcela, fee_valor_parcela_extenso,
-          fee_acrescimo_percentual, formandos_minimo, local_data_extenso,
+          fee_acrescimo_percentual, fee_acrescimo_percentual_extenso, formandos_minimo, local_data_extenso,
           prazo_arrependimento, vigencia_meses, vigencia_meses_extenso,
           retencao_faixa1_inicio, retencao_faixa1_fim, retencao_faixa1_percentual,
           retencao_faixa2_inicio, retencao_faixa2_fim, retencao_faixa2_percentual,
@@ -43,7 +40,8 @@ export default function ContratosGerados() {
           retencao_faixa5_inicio, retencao_faixa5_fim, retencao_faixa5_percentual,
           retencao_faixa6_inicio, retencao_faixa6_fim, retencao_faixa6_percentual,
           retencao_faixa_final_inicio,
-          datas_vencimento_parcelas, valor_gatilho_irregularidade, data_assinatura
+          datas_vencimento_parcelas, valor_gatilho_irregularidade, valor_gatilho_irregularidade_extenso,
+          data_assinatura
         )
       `)
       .order('gerado_em', { ascending: false })
@@ -80,17 +78,11 @@ export default function ContratosGerados() {
         const blob = await gerarTermoAdesao(card.projeto, pacotesRaw as PacoteData[])
         downloadBlob(blob, `Termo_Adesao_${slug}.docx`)
       } else {
-        const dados = montarDadosContratoComissao(card.projeto, pacotesRaw as PacoteData[])
-        const texto = await gerarTextoContratoComissao(dados)
-        const blob = await textoParaDocx(texto)
+        const blob = await gerarContratoComissao(card.projeto, pacotesRaw as PacoteData[])
         downloadBlob(blob, `Contrato_Comissao_${slug}.docx`)
       }
     } catch (err) {
-      if (err instanceof CamposPendentesError) {
-        setErro(`Faltam dados no cadastro do projeto para gerar o Contrato Comissão: ${err.campos.join(', ')}.`)
-      } else {
-        setErro(err instanceof Error ? err.message : 'Erro ao gerar documento.')
-      }
+      setErro(err instanceof Error ? err.message : 'Erro ao gerar documento.')
     } finally {
       setBaixandoId(null)
     }

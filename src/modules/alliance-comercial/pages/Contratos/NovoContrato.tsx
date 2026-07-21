@@ -3,10 +3,7 @@ import type { ReactNode, FormEvent } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
 import { supabaseComercial } from '../../lib/supabase'
 import type { ProjetoData, PacoteData } from '../../lib/gerarContratos'
-import { gerarTermoAdesao, downloadBlob } from '../../lib/gerarContratos'
-import {
-  montarDadosContratoComissao, gerarTextoContratoComissao, textoParaDocx, CamposPendentesError,
-} from '../../lib/gerarContratoComissaoLLM'
+import { gerarTermoAdesao, gerarContratoComissao, downloadBlob } from '../../lib/gerarContratos'
 import type { ResultadoImportacao } from '../../lib/googleSheets'
 import { extrairSheetId, importarDadosTAP } from '../../lib/googleSheets'
 
@@ -17,10 +14,11 @@ type TipoDocumento = 'termo_adesao' | 'contrato_comissao' | 'ata_eleicao'
 interface ProjetoForm {
   nome: string; instituicao: string; curso: string; turma: string
   semestre: string; tipo_contrato: string
-  fee_percentual: string; fee_valor_minimo: string
+  fee_percentual: string; fee_percentual_extenso: string; fee_valor_minimo: string
   fee_valor_minimo_extenso: string; fee_parcelas: string
   fee_valor_parcela: string; fee_valor_parcela_extenso: string
-  fee_acrescimo_percentual: string; formandos_minimo: string
+  fee_acrescimo_percentual: string; fee_acrescimo_percentual_extenso: string
+  formandos_minimo: string
   local_data_extenso: string
   prazo_arrependimento: string
   vigencia_meses: string; vigencia_meses_extenso: string
@@ -33,6 +31,7 @@ interface ProjetoForm {
   retencao_faixa_final_inicio: string
   datas_vencimento_parcelas: string
   valor_gatilho_irregularidade: string
+  valor_gatilho_irregularidade_extenso: string
   data_assinatura: string
 }
 
@@ -56,9 +55,9 @@ interface LinhaPacote {
 
 const projetoInicial: ProjetoForm = {
   nome: '', instituicao: '', curso: '', turma: '', semestre: '',
-  tipo_contrato: 'assessoria', fee_percentual: '', fee_valor_minimo: '',
+  tipo_contrato: 'assessoria', fee_percentual: '', fee_percentual_extenso: '', fee_valor_minimo: '',
   fee_valor_minimo_extenso: '', fee_parcelas: '', fee_valor_parcela: '',
-  fee_valor_parcela_extenso: '', fee_acrescimo_percentual: '',
+  fee_valor_parcela_extenso: '', fee_acrescimo_percentual: '', fee_acrescimo_percentual_extenso: '',
   formandos_minimo: '', local_data_extenso: '',
   prazo_arrependimento: '2026-01-31',
   vigencia_meses: '64', vigencia_meses_extenso: 'sessenta e quatro',
@@ -69,7 +68,8 @@ const projetoInicial: ProjetoForm = {
   retencao_faixa5_inicio: '2030-01-01', retencao_faixa5_fim: '2030-07-31', retencao_faixa5_percentual: '1.40',
   retencao_faixa6_inicio: '2030-08-01', retencao_faixa6_fim: '2030-11-30', retencao_faixa6_percentual: '1.50',
   retencao_faixa_final_inicio: '2030-12-01',
-  datas_vencimento_parcelas: '', valor_gatilho_irregularidade: '30000', data_assinatura: '',
+  datas_vencimento_parcelas: '', valor_gatilho_irregularidade: '30000',
+  valor_gatilho_irregularidade_extenso: 'trinta mil reais', data_assinatura: '',
 }
 
 const linhaVazia: LinhaPacote = {
@@ -111,11 +111,13 @@ function formToProjetoData(id: string, f: ProjetoForm): ProjetoData {
     id, nome: f.nome.trim(), instituicao: f.instituicao.trim(),
     turma: f.turma.trim() || null,
     semestre: f.semestre.trim() || null,
-    fee_percentual: num(f.fee_percentual), fee_valor_minimo: num(f.fee_valor_minimo),
+    fee_percentual: num(f.fee_percentual), fee_percentual_extenso: f.fee_percentual_extenso.trim() || null,
+    fee_valor_minimo: num(f.fee_valor_minimo),
     fee_valor_minimo_extenso: f.fee_valor_minimo_extenso.trim() || null,
     fee_parcelas: int(f.fee_parcelas), fee_valor_parcela: num(f.fee_valor_parcela),
     fee_valor_parcela_extenso: f.fee_valor_parcela_extenso.trim() || null,
     fee_acrescimo_percentual: num(f.fee_acrescimo_percentual),
+    fee_acrescimo_percentual_extenso: f.fee_acrescimo_percentual_extenso.trim() || null,
     formandos_minimo: int(f.formandos_minimo),
     local_data_extenso: f.local_data_extenso.trim() || null,
     prazo_arrependimento: data(f.prazo_arrependimento),
@@ -142,6 +144,7 @@ function formToProjetoData(id: string, f: ProjetoForm): ProjetoData {
     retencao_faixa_final_inicio: data(f.retencao_faixa_final_inicio),
     datas_vencimento_parcelas: f.datas_vencimento_parcelas.trim() || null,
     valor_gatilho_irregularidade: num(f.valor_gatilho_irregularidade),
+    valor_gatilho_irregularidade_extenso: f.valor_gatilho_irregularidade_extenso.trim() || null,
     data_assinatura: data(f.data_assinatura),
   }
 }
@@ -284,12 +287,14 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
         semestre: projeto.semestre.trim() || null,
         tipo_contrato: projeto.tipo_contrato || null,
         fee_percentual:            num(projeto.fee_percentual),
+        fee_percentual_extenso:    projeto.fee_percentual_extenso.trim() || null,
         fee_valor_minimo:          num(projeto.fee_valor_minimo),
         fee_valor_minimo_extenso:  projeto.fee_valor_minimo_extenso.trim() || null,
         fee_parcelas:              int(projeto.fee_parcelas),
         fee_valor_parcela:         num(projeto.fee_valor_parcela),
         fee_valor_parcela_extenso: projeto.fee_valor_parcela_extenso.trim() || null,
         fee_acrescimo_percentual:  num(projeto.fee_acrescimo_percentual),
+        fee_acrescimo_percentual_extenso: projeto.fee_acrescimo_percentual_extenso.trim() || null,
         formandos_minimo:          int(projeto.formandos_minimo),
         local_data_extenso:        projeto.local_data_extenso.trim() || null,
         prazo_arrependimento:      data_(projeto.prazo_arrependimento),
@@ -316,6 +321,7 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
         retencao_faixa_final_inicio: data_(projeto.retencao_faixa_final_inicio),
         datas_vencimento_parcelas:    projeto.datas_vencimento_parcelas.trim() || null,
         valor_gatilho_irregularidade: num(projeto.valor_gatilho_irregularidade),
+        valor_gatilho_irregularidade_extenso: projeto.valor_gatilho_irregularidade_extenso.trim() || null,
         data_assinatura:              data_(projeto.data_assinatura),
       })
       .select('id')
@@ -387,9 +393,7 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
           { projeto_id: projetoId, tipo_documento: 'termo_adesao', tipo_contrato: projeto.tipo_contrato },
         )
       } else if (tipoDocumento === 'contrato_comissao') {
-        const dadosContrato = montarDadosContratoComissao(pd, pacotes)
-        const texto = await gerarTextoContratoComissao(dadosContrato)
-        const contratoBlob = await textoParaDocx(texto)
+        const contratoBlob = await gerarContratoComissao(pd, pacotes)
         downloadBlob(contratoBlob, `Contrato_Comissao_${slug}.docx`)
         await supabaseComercial.from('documentos_gerados').insert(
           { projeto_id: projetoId, tipo_documento: 'contrato_comissao', tipo_contrato: projeto.tipo_contrato },
@@ -398,14 +402,7 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
 
       onGerado()
     } catch (err) {
-      if (err instanceof CamposPendentesError) {
-        setError(
-          `O contrato foi gerado, mas faltam dados no cadastro do projeto: ${err.campos.join(', ')}. ` +
-          'Preencha esses campos e tente novamente.',
-        )
-      } else {
-        setError(err instanceof Error ? err.message : 'Erro ao gerar documentos.')
-      }
+      setError(err instanceof Error ? err.message : 'Erro ao gerar documentos.')
     } finally {
       setLoading(false)
     }
@@ -546,6 +543,11 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
                 onChange={e => setProjeto(p => ({ ...p, fee_percentual: e.target.value }))}
                 placeholder="Ex: 15.24" />
             </Campo>
+            <Campo label="FEE (%) por extenso">
+              <input className={base} value={projeto.fee_percentual_extenso}
+                onChange={e => setProjeto(p => ({ ...p, fee_percentual_extenso: e.target.value }))}
+                placeholder="Ex: quinze vírgula vinte e quatro por cento" />
+            </Campo>
             <Campo label="Valor mínimo do FEE (R$)">
               <input type="number" step="0.01" min="0" className={base}
                 value={projeto.fee_valor_minimo}
@@ -579,6 +581,11 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
                 value={projeto.fee_acrescimo_percentual}
                 onChange={e => setProjeto(p => ({ ...p, fee_acrescimo_percentual: e.target.value }))}
                 placeholder="Ex: 2" />
+            </Campo>
+            <Campo label="Acréscimo última parcela (%) por extenso">
+              <input className={base} value={projeto.fee_acrescimo_percentual_extenso}
+                onChange={e => setProjeto(p => ({ ...p, fee_acrescimo_percentual_extenso: e.target.value }))}
+                placeholder="Ex: quatorze por cento" />
             </Campo>
             <Campo label="Mínimo de formandos (Adesões Previstas)">
               <input type="number" min="1" className={base}
@@ -669,6 +676,11 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
               <input type="number" step="0.01" min="0" className={base}
                 value={projeto.valor_gatilho_irregularidade}
                 onChange={e => setProjeto(p => ({ ...p, valor_gatilho_irregularidade: e.target.value }))} />
+            </Campo>
+            <Campo label="Valor gatilho de irregularidade por extenso">
+              <input className={base} value={projeto.valor_gatilho_irregularidade_extenso}
+                onChange={e => setProjeto(p => ({ ...p, valor_gatilho_irregularidade_extenso: e.target.value }))}
+                placeholder="Ex: trinta mil reais" />
             </Campo>
             <Campo label="Data de assinatura do Contrato Comissão">
               <input type="date" className={base} value={projeto.data_assinatura}
@@ -872,7 +884,7 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
               onChange={e => setTipoDocumento(e.target.value as TipoDocumento)}>
               <option value="termo_adesao">Termo de Adesão</option>
               <option value="contrato_comissao">Contrato Comissão</option>
-              <option value="ata_eleicao" disabled>Ata de Eleição (em breve)</option>
+              <option value="ata_eleicao" disabled>Ata Comissão (em breve)</option>
             </select>
           </Campo>
 
@@ -884,7 +896,7 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
               <p className="text-sm text-text-main">📄 Termo de Adesão — merge de placeholders (docxtemplater)</p>
             )}
             {tipoDocumento === 'contrato_comissao' && (
-              <p className="text-sm text-text-main">📄 Contrato Comissão — gerado via Claude (Anthropic API), a partir do contrato-modelo Alliance × Comissão</p>
+              <p className="text-sm text-text-main">📄 Contrato Comissão — merge de placeholders (docxtemplater), modelo Alliance × Comissão de Formatura</p>
             )}
           </div>
 
