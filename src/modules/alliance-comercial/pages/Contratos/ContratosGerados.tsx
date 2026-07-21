@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { supabaseComercial } from '../../lib/supabase'
 import type { ProjetoData, PacoteData } from '../../lib/gerarContratos'
+import { gerarTermoAdesao, downloadBlob } from '../../lib/gerarContratos'
 import {
-  gerarTermoAdesao,
-  gerarContratoComissao,
-  downloadBlob,
-} from '../../lib/gerarContratos'
+  montarDadosContratoComissao, gerarTextoContratoComissao, textoParaDocx, CamposPendentesError,
+} from '../../lib/gerarContratoComissaoLLM'
 
 interface CardData {
   projeto_id: string
@@ -32,10 +31,19 @@ export default function ContratosGerados() {
         projeto_id,
         gerado_em,
         projetos (
-          id, nome, instituicao, semestre,
+          id, nome, instituicao, turma, semestre,
           fee_percentual, fee_valor_minimo, fee_valor_minimo_extenso,
           fee_parcelas, fee_valor_parcela, fee_valor_parcela_extenso,
-          fee_acrescimo_percentual, formandos_minimo, local_data_extenso
+          fee_acrescimo_percentual, formandos_minimo, local_data_extenso,
+          prazo_arrependimento, vigencia_meses, vigencia_meses_extenso,
+          retencao_faixa1_inicio, retencao_faixa1_fim, retencao_faixa1_percentual,
+          retencao_faixa2_inicio, retencao_faixa2_fim, retencao_faixa2_percentual,
+          retencao_faixa3_inicio, retencao_faixa3_fim, retencao_faixa3_percentual,
+          retencao_faixa4_inicio, retencao_faixa4_fim, retencao_faixa4_percentual,
+          retencao_faixa5_inicio, retencao_faixa5_fim, retencao_faixa5_percentual,
+          retencao_faixa6_inicio, retencao_faixa6_fim, retencao_faixa6_percentual,
+          retencao_faixa_final_inicio,
+          datas_vencimento_parcelas, valor_gatilho_irregularidade, data_assinatura
         )
       `)
       .order('gerado_em', { ascending: false })
@@ -61,21 +69,28 @@ export default function ContratosGerados() {
     try {
       const slug = card.projeto.nome.replace(/\s+/g, '_')
 
+      const { data: pacotesRaw, error: errP } = await supabaseComercial
+        .from('pacotes')
+        .select('id, nome, eventos_inclusos, valor, valor_extenso, qtd_parcelas, is_base')
+        .eq('projeto_id', card.projeto_id)
+        .order('ordem')
+      if (errP) throw new Error(`Erro ao carregar pacotes: ${errP.message}`)
+
       if (tipo === 'termo') {
-        const { data: pacotesRaw, error: errP } = await supabaseComercial
-          .from('pacotes')
-          .select('id, nome, eventos_inclusos, valor, valor_extenso, qtd_parcelas')
-          .eq('projeto_id', card.projeto_id)
-          .order('ordem')
-        if (errP) throw new Error(`Erro ao carregar pacotes: ${errP.message}`)
         const blob = await gerarTermoAdesao(card.projeto, pacotesRaw as PacoteData[])
         downloadBlob(blob, `Termo_Adesao_${slug}.docx`)
       } else {
-        const blob = await gerarContratoComissao(card.projeto)
+        const dados = montarDadosContratoComissao(card.projeto, pacotesRaw as PacoteData[])
+        const texto = await gerarTextoContratoComissao(dados)
+        const blob = await textoParaDocx(texto)
         downloadBlob(blob, `Contrato_Comissao_${slug}.docx`)
       }
     } catch (err) {
-      setErro(err instanceof Error ? err.message : 'Erro ao gerar documento.')
+      if (err instanceof CamposPendentesError) {
+        setErro(`Faltam dados no cadastro do projeto para gerar o Contrato Comissão: ${err.campos.join(', ')}.`)
+      } else {
+        setErro(err instanceof Error ? err.message : 'Erro ao gerar documento.')
+      }
     } finally {
       setBaixandoId(null)
     }

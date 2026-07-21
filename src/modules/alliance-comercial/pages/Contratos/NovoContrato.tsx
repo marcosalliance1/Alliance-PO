@@ -3,9 +3,14 @@ import type { ReactNode, FormEvent } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
 import { supabaseComercial } from '../../lib/supabase'
 import type { ProjetoData, PacoteData } from '../../lib/gerarContratos'
-import { gerarTermoAdesao, gerarContratoComissao, downloadBlob } from '../../lib/gerarContratos'
+import { gerarTermoAdesao, downloadBlob } from '../../lib/gerarContratos'
+import {
+  montarDadosContratoComissao, gerarTextoContratoComissao, textoParaDocx, CamposPendentesError,
+} from '../../lib/gerarContratoComissaoLLM'
 import type { ResultadoImportacao } from '../../lib/googleSheets'
 import { extrairSheetId, importarDadosTAP } from '../../lib/googleSheets'
+
+type TipoDocumento = 'termo_adesao' | 'contrato_comissao' | 'ata_eleicao'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────
 
@@ -17,6 +22,18 @@ interface ProjetoForm {
   fee_valor_parcela: string; fee_valor_parcela_extenso: string
   fee_acrescimo_percentual: string; formandos_minimo: string
   local_data_extenso: string
+  prazo_arrependimento: string
+  vigencia_meses: string; vigencia_meses_extenso: string
+  retencao_faixa1_inicio: string; retencao_faixa1_fim: string; retencao_faixa1_percentual: string
+  retencao_faixa2_inicio: string; retencao_faixa2_fim: string; retencao_faixa2_percentual: string
+  retencao_faixa3_inicio: string; retencao_faixa3_fim: string; retencao_faixa3_percentual: string
+  retencao_faixa4_inicio: string; retencao_faixa4_fim: string; retencao_faixa4_percentual: string
+  retencao_faixa5_inicio: string; retencao_faixa5_fim: string; retencao_faixa5_percentual: string
+  retencao_faixa6_inicio: string; retencao_faixa6_fim: string; retencao_faixa6_percentual: string
+  retencao_faixa_final_inicio: string
+  datas_vencimento_parcelas: string
+  valor_gatilho_irregularidade: string
+  data_assinatura: string
 }
 
 interface LinhaPacote {
@@ -34,6 +51,7 @@ interface LinhaPacote {
   qtd_parcelas: string
   eventos_inclusos: string
   valor_extenso: string
+  is_base: boolean
 }
 
 const projetoInicial: ProjetoForm = {
@@ -42,6 +60,16 @@ const projetoInicial: ProjetoForm = {
   fee_valor_minimo_extenso: '', fee_parcelas: '', fee_valor_parcela: '',
   fee_valor_parcela_extenso: '', fee_acrescimo_percentual: '',
   formandos_minimo: '', local_data_extenso: '',
+  prazo_arrependimento: '2026-01-31',
+  vigencia_meses: '64', vigencia_meses_extenso: 'sessenta e quatro',
+  retencao_faixa1_inicio: '2026-02-01', retencao_faixa1_fim: '2026-12-31', retencao_faixa1_percentual: '0.95',
+  retencao_faixa2_inicio: '2027-01-01', retencao_faixa2_fim: '2027-12-31', retencao_faixa2_percentual: '1.10',
+  retencao_faixa3_inicio: '2028-01-01', retencao_faixa3_fim: '2028-12-31', retencao_faixa3_percentual: '1.20',
+  retencao_faixa4_inicio: '2029-01-01', retencao_faixa4_fim: '2029-12-31', retencao_faixa4_percentual: '1.30',
+  retencao_faixa5_inicio: '2030-01-01', retencao_faixa5_fim: '2030-07-31', retencao_faixa5_percentual: '1.40',
+  retencao_faixa6_inicio: '2030-08-01', retencao_faixa6_fim: '2030-11-30', retencao_faixa6_percentual: '1.50',
+  retencao_faixa_final_inicio: '2030-12-01',
+  datas_vencimento_parcelas: '', valor_gatilho_irregularidade: '30000', data_assinatura: '',
 }
 
 const linhaVazia: LinhaPacote = {
@@ -49,7 +77,7 @@ const linhaVazia: LinhaPacote = {
   mensalidade: '', valor_total_estendido: '', valor_total_estendido_12x_sem_ap: '',
   mensalidade_estendida_12x: '', valor_total_estendido_18x: '',
   valor_total_estendido_18x_sem_ap: '', mensalidade_estendida_18x: '',
-  qtd_parcelas: '', eventos_inclusos: '', valor_extenso: '',
+  qtd_parcelas: '', eventos_inclusos: '', valor_extenso: '', is_base: false,
 }
 
 // ─── UI helpers ───────────────────────────────────────────────────────────
@@ -78,8 +106,10 @@ type Step = 'projeto' | 'pacotes' | 'gerar'
 function formToProjetoData(id: string, f: ProjetoForm): ProjetoData {
   const num = (s: string) => s.trim() ? parseFloat(s) : null
   const int = (s: string) => s.trim() ? parseInt(s, 10) : null
+  const data = (s: string) => s.trim() || null
   return {
     id, nome: f.nome.trim(), instituicao: f.instituicao.trim(),
+    turma: f.turma.trim() || null,
     semestre: f.semestre.trim() || null,
     fee_percentual: num(f.fee_percentual), fee_valor_minimo: num(f.fee_valor_minimo),
     fee_valor_minimo_extenso: f.fee_valor_minimo_extenso.trim() || null,
@@ -88,6 +118,31 @@ function formToProjetoData(id: string, f: ProjetoForm): ProjetoData {
     fee_acrescimo_percentual: num(f.fee_acrescimo_percentual),
     formandos_minimo: int(f.formandos_minimo),
     local_data_extenso: f.local_data_extenso.trim() || null,
+    prazo_arrependimento: data(f.prazo_arrependimento),
+    vigencia_meses: int(f.vigencia_meses),
+    vigencia_meses_extenso: f.vigencia_meses_extenso.trim() || null,
+    retencao_faixa1_inicio: data(f.retencao_faixa1_inicio),
+    retencao_faixa1_fim: data(f.retencao_faixa1_fim),
+    retencao_faixa1_percentual: num(f.retencao_faixa1_percentual),
+    retencao_faixa2_inicio: data(f.retencao_faixa2_inicio),
+    retencao_faixa2_fim: data(f.retencao_faixa2_fim),
+    retencao_faixa2_percentual: num(f.retencao_faixa2_percentual),
+    retencao_faixa3_inicio: data(f.retencao_faixa3_inicio),
+    retencao_faixa3_fim: data(f.retencao_faixa3_fim),
+    retencao_faixa3_percentual: num(f.retencao_faixa3_percentual),
+    retencao_faixa4_inicio: data(f.retencao_faixa4_inicio),
+    retencao_faixa4_fim: data(f.retencao_faixa4_fim),
+    retencao_faixa4_percentual: num(f.retencao_faixa4_percentual),
+    retencao_faixa5_inicio: data(f.retencao_faixa5_inicio),
+    retencao_faixa5_fim: data(f.retencao_faixa5_fim),
+    retencao_faixa5_percentual: num(f.retencao_faixa5_percentual),
+    retencao_faixa6_inicio: data(f.retencao_faixa6_inicio),
+    retencao_faixa6_fim: data(f.retencao_faixa6_fim),
+    retencao_faixa6_percentual: num(f.retencao_faixa6_percentual),
+    retencao_faixa_final_inicio: data(f.retencao_faixa_final_inicio),
+    datas_vencimento_parcelas: f.datas_vencimento_parcelas.trim() || null,
+    valor_gatilho_irregularidade: num(f.valor_gatilho_irregularidade),
+    data_assinatura: data(f.data_assinatura),
   }
 }
 
@@ -101,6 +156,7 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
   const [pacotes, setPacotes]     = useState<PacoteData[]>([])
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState<string | null>(null)
+  const [tipoDocumento, setTipoDocumento] = useState<TipoDocumento>('termo_adesao')
 
   const [linkPlanilha, setLinkPlanilha]       = useState('')
   const [importando, setImportando]           = useState(false)
@@ -186,6 +242,7 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
           qtd_parcelas: d.fee_parcelas ?? '',
           eventos_inclusos: '',
           valor_extenso: '',
+          is_base: false,
         })))
       }
 
@@ -216,6 +273,7 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
     setLoading(true)
     const num = (s: string) => s.trim() ? parseFloat(s) : null
     const int = (s: string) => s.trim() ? parseInt(s, 10) : null
+    const data_ = (s: string) => s.trim() || null
     const { data, error: err } = await supabaseComercial
       .from('projetos')
       .insert({
@@ -234,6 +292,31 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
         fee_acrescimo_percentual:  num(projeto.fee_acrescimo_percentual),
         formandos_minimo:          int(projeto.formandos_minimo),
         local_data_extenso:        projeto.local_data_extenso.trim() || null,
+        prazo_arrependimento:      data_(projeto.prazo_arrependimento),
+        vigencia_meses:            int(projeto.vigencia_meses),
+        vigencia_meses_extenso:    projeto.vigencia_meses_extenso.trim() || null,
+        retencao_faixa1_inicio:      data_(projeto.retencao_faixa1_inicio),
+        retencao_faixa1_fim:         data_(projeto.retencao_faixa1_fim),
+        retencao_faixa1_percentual:  num(projeto.retencao_faixa1_percentual),
+        retencao_faixa2_inicio:      data_(projeto.retencao_faixa2_inicio),
+        retencao_faixa2_fim:         data_(projeto.retencao_faixa2_fim),
+        retencao_faixa2_percentual:  num(projeto.retencao_faixa2_percentual),
+        retencao_faixa3_inicio:      data_(projeto.retencao_faixa3_inicio),
+        retencao_faixa3_fim:         data_(projeto.retencao_faixa3_fim),
+        retencao_faixa3_percentual:  num(projeto.retencao_faixa3_percentual),
+        retencao_faixa4_inicio:      data_(projeto.retencao_faixa4_inicio),
+        retencao_faixa4_fim:         data_(projeto.retencao_faixa4_fim),
+        retencao_faixa4_percentual:  num(projeto.retencao_faixa4_percentual),
+        retencao_faixa5_inicio:      data_(projeto.retencao_faixa5_inicio),
+        retencao_faixa5_fim:         data_(projeto.retencao_faixa5_fim),
+        retencao_faixa5_percentual:  num(projeto.retencao_faixa5_percentual),
+        retencao_faixa6_inicio:      data_(projeto.retencao_faixa6_inicio),
+        retencao_faixa6_fim:         data_(projeto.retencao_faixa6_fim),
+        retencao_faixa6_percentual:  num(projeto.retencao_faixa6_percentual),
+        retencao_faixa_final_inicio: data_(projeto.retencao_faixa_final_inicio),
+        datas_vencimento_parcelas:    projeto.datas_vencimento_parcelas.trim() || null,
+        valor_gatilho_irregularidade: num(projeto.valor_gatilho_irregularidade),
+        data_assinatura:              data_(projeto.data_assinatura),
       })
       .select('id')
       .single()
@@ -247,6 +330,10 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
 
   function atualizar(idx: number, campo: keyof LinhaPacote, valor: string) {
     setLinhas(prev => prev.map((l, i) => i === idx ? { ...l, [campo]: valor } : l))
+  }
+
+  function marcarComoBase(idx: number) {
+    setLinhas(prev => prev.map((l, i) => ({ ...l, is_base: i === idx })))
   }
 
   async function salvarPacotes(e: FormEvent) {
@@ -276,8 +363,9 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
         valor_extenso:                 l.valor_extenso.trim() || null,
         qtd_parcelas:                  l.qtd_parcelas.trim() ? parseInt(l.qtd_parcelas, 10) : null,
         ordem:                         idx + 1,
+        is_base:                       l.is_base,
       })))
-      .select('id, nome, eventos_inclusos, valor, valor_extenso, qtd_parcelas')
+      .select('id, nome, eventos_inclusos, valor, valor_extenso, qtd_parcelas, is_base')
     setLoading(false)
     if (err) { setError(`Erro ao salvar pacotes: ${err.message}`); return }
     setPacotes(data as PacoteData[])
@@ -288,22 +376,36 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
 
   async function gerarEBaixar() {
     setError(null); setLoading(true)
+    const slug = projeto.nome.trim().replace(/\s+/g, '_')
     try {
       const pd = formToProjetoData(projetoId, projeto)
-      const [termoBlob, contratoBlob] = await Promise.all([
-        gerarTermoAdesao(pd, pacotes),
-        gerarContratoComissao(pd),
-      ])
-      const slug = projeto.nome.trim().replace(/\s+/g, '_')
-      downloadBlob(termoBlob,    `Termo_Adesao_${slug}.docx`)
-      downloadBlob(contratoBlob, `Contrato_Comissao_${slug}.docx`)
-      await supabaseComercial.from('documentos_gerados').insert([
-        { projeto_id: projetoId, tipo_documento: 'termo_adesao',      tipo_contrato: 'assessoria' },
-        { projeto_id: projetoId, tipo_documento: 'contrato_comissao', tipo_contrato: 'assessoria' },
-      ])
+
+      if (tipoDocumento === 'termo_adesao') {
+        const termoBlob = await gerarTermoAdesao(pd, pacotes)
+        downloadBlob(termoBlob, `Termo_Adesao_${slug}.docx`)
+        await supabaseComercial.from('documentos_gerados').insert(
+          { projeto_id: projetoId, tipo_documento: 'termo_adesao', tipo_contrato: projeto.tipo_contrato },
+        )
+      } else if (tipoDocumento === 'contrato_comissao') {
+        const dadosContrato = montarDadosContratoComissao(pd, pacotes)
+        const texto = await gerarTextoContratoComissao(dadosContrato)
+        const contratoBlob = await textoParaDocx(texto)
+        downloadBlob(contratoBlob, `Contrato_Comissao_${slug}.docx`)
+        await supabaseComercial.from('documentos_gerados').insert(
+          { projeto_id: projetoId, tipo_documento: 'contrato_comissao', tipo_contrato: projeto.tipo_contrato },
+        )
+      }
+
       onGerado()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao gerar documentos.')
+      if (err instanceof CamposPendentesError) {
+        setError(
+          `O contrato foi gerado, mas faltam dados no cadastro do projeto: ${err.campos.join(', ')}. ` +
+          'Preencha esses campos e tente novamente.',
+        )
+      } else {
+        setError(err instanceof Error ? err.message : 'Erro ao gerar documentos.')
+      }
     } finally {
       setLoading(false)
     }
@@ -313,6 +415,7 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
     setProjeto(projetoInicial); setLinhas([{ ...linhaVazia }]); setPacotes([])
     setProjetoId(''); setError(null); setLinkPlanilha('')
     setAvisoImportacao(null); setPacotesComErro([]); setStep('projeto')
+    setTipoDocumento('termo_adesao')
   }
 
   // ── Render ────────────────────────────────────────────────────────────
@@ -490,6 +593,89 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
             </Campo>
           </div>
 
+          {/* Vigência e Retenção */}
+          <p className={secTitle}>Vigência e Escala de Retenção (Cláusula 10 do Termo de Adesão)</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Campo label="Prazo de arrependimento (adesões iniciais)">
+              <input type="date" className={base} value={projeto.prazo_arrependimento}
+                onChange={e => setProjeto(p => ({ ...p, prazo_arrependimento: e.target.value }))} />
+            </Campo>
+            <Campo label="Vigência do contrato (meses)">
+              <input type="number" min="1" className={base} value={projeto.vigencia_meses}
+                onChange={e => setProjeto(p => ({ ...p, vigencia_meses: e.target.value }))} />
+            </Campo>
+            <Campo label="Vigência por extenso">
+              <input className={base} value={projeto.vigencia_meses_extenso}
+                onChange={e => setProjeto(p => ({ ...p, vigencia_meses_extenso: e.target.value }))}
+                placeholder="Ex: sessenta e quatro" />
+            </Campo>
+          </div>
+
+          <div className="overflow-x-auto rounded-lg border border-white/10">
+            <table className="min-w-full border-collapse text-xs">
+              <thead>
+                <tr>
+                  <th className={thLeft} style={{ minWidth: 90 }}>Faixa</th>
+                  <th className={thLeft} style={{ minWidth: 140 }}>Início</th>
+                  <th className={thLeft} style={{ minWidth: 140 }}>Fim</th>
+                  <th className={th} style={{ minWidth: 90 }}>% Retenção</th>
+                </tr>
+              </thead>
+              <tbody>
+                {([1, 2, 3, 4, 5, 6] as const).map(n => {
+                  const kIni = `retencao_faixa${n}_inicio` as const
+                  const kFim = `retencao_faixa${n}_fim` as const
+                  const kPct = `retencao_faixa${n}_percentual` as const
+                  return (
+                    <tr key={n} className={n % 2 === 0 ? 'bg-white/[0.02]' : ''}>
+                      <td className={td}>Faixa {n}</td>
+                      <td className={td}>
+                        <input type="date" className={cellInput} value={projeto[kIni]}
+                          onChange={e => setProjeto(p => ({ ...p, [kIni]: e.target.value }))} />
+                      </td>
+                      <td className={td}>
+                        <input type="date" className={cellInput} value={projeto[kFim]}
+                          onChange={e => setProjeto(p => ({ ...p, [kFim]: e.target.value }))} />
+                      </td>
+                      <td className={td}>
+                        <input type="number" step="0.01" min="0" className={cellInput} value={projeto[kPct]}
+                          onChange={e => setProjeto(p => ({ ...p, [kPct]: e.target.value }))} />
+                      </td>
+                    </tr>
+                  )
+                })}
+                <tr className="bg-white/[0.02]">
+                  <td className={td}>Faixa final</td>
+                  <td className={td}>
+                    <input type="date" className={cellInput} value={projeto.retencao_faixa_final_inicio}
+                      onChange={e => setProjeto(p => ({ ...p, retencao_faixa_final_inicio: e.target.value }))} />
+                  </td>
+                  <td className={td + ' text-text-muted'}>até as solenidades</td>
+                  <td className={td + ' text-text-muted'}>= vigência</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Contrato Comissão (Piso Fixo) */}
+          <p className={secTitle}>Contrato Comissão — Piso Fixo (reaproveita FEE/Meta acima)</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Campo label="Datas de vencimento das parcelas semestrais">
+              <input className={base} value={projeto.datas_vencimento_parcelas}
+                onChange={e => setProjeto(p => ({ ...p, datas_vencimento_parcelas: e.target.value }))}
+                placeholder="Ex: 15 de junho e 15 de dezembro" />
+            </Campo>
+            <Campo label="Valor gatilho de irregularidade (R$)">
+              <input type="number" step="0.01" min="0" className={base}
+                value={projeto.valor_gatilho_irregularidade}
+                onChange={e => setProjeto(p => ({ ...p, valor_gatilho_irregularidade: e.target.value }))} />
+            </Campo>
+            <Campo label="Data de assinatura do Contrato Comissão">
+              <input type="date" className={base} value={projeto.data_assinatura}
+                onChange={e => setProjeto(p => ({ ...p, data_assinatura: e.target.value }))} />
+            </Campo>
+          </div>
+
           <button type="submit" disabled={loading} className={btnPrimary}>
             {loading ? 'Salvando…' : 'Salvar Projeto →'}
           </button>
@@ -521,6 +707,7 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
             <table className="min-w-full border-collapse text-xs">
               <thead>
                 <tr>
+                  <th className={th} style={{ minWidth: 50 }}>Base</th>
                   <th className={thLeft} style={{ minWidth: 160 }}>Pacote *</th>
                   <th className={th} style={{ minWidth: 90 }}>Total</th>
                   <th className={th} style={{ minWidth: 80 }}>A.P.</th>
@@ -543,6 +730,11 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
                   const semValor = l.nome.trim() && !l.valor.trim()
                   return (
                     <tr key={idx} className={idx % 2 === 0 ? '' : 'bg-white/[0.02]'}>
+                      <td className={td + ' text-center'}>
+                        <input type="radio" name="pacote_base" checked={l.is_base}
+                          onChange={() => marcarComoBase(idx)}
+                          title="Usar como Pacote Base no Contrato Comissão" />
+                      </td>
                       <td className={td}>
                         <input className={cellInput} value={l.nome}
                           onChange={e => atualizar(idx, 'nome', e.target.value)}
@@ -675,17 +867,30 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
             </ul>
           </div>
 
+          <Campo label="Tipo de documento">
+            <select className={base} value={tipoDocumento}
+              onChange={e => setTipoDocumento(e.target.value as TipoDocumento)}>
+              <option value="termo_adesao">Termo de Adesão</option>
+              <option value="contrato_comissao">Contrato Comissão</option>
+              <option value="ata_eleicao" disabled>Ata de Eleição (em breve)</option>
+            </select>
+          </Campo>
+
           <div className="border border-dashed border-white/10 rounded-lg p-4 space-y-1">
             <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">
-              Documentos que serão gerados
+              Mecanismo de geração
             </p>
-            <p className="text-sm text-text-main">📄 Termo de Adesão — modelo da turma</p>
-            <p className="text-sm text-text-main">📄 Contrato Comissão de Formatura</p>
+            {tipoDocumento === 'termo_adesao' && (
+              <p className="text-sm text-text-main">📄 Termo de Adesão — merge de placeholders (docxtemplater)</p>
+            )}
+            {tipoDocumento === 'contrato_comissao' && (
+              <p className="text-sm text-text-main">📄 Contrato Comissão — gerado via Claude (Anthropic API), a partir do contrato-modelo Alliance × Comissão</p>
+            )}
           </div>
 
-          <button onClick={gerarEBaixar} disabled={loading}
+          <button onClick={gerarEBaixar} disabled={loading || tipoDocumento === 'ata_eleicao'}
             className="w-full py-3 bg-primary hover:bg-primary/90 disabled:bg-primary/40 text-white font-semibold rounded-lg text-sm transition-colors">
-            {loading ? 'Gerando documentos…' : '⬇  Gerar e Baixar Contratos'}
+            {loading ? 'Gerando documento…' : '⬇  Gerar e Baixar'}
           </button>
         </div>
       )}
