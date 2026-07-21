@@ -40,7 +40,7 @@ export default function ContratosGerados() {
           retencao_faixa5_inicio, retencao_faixa5_fim, retencao_faixa5_percentual,
           retencao_faixa6_inicio, retencao_faixa6_fim, retencao_faixa6_percentual,
           retencao_faixa_final_inicio,
-          datas_vencimento_parcelas, valor_gatilho_irregularidade, valor_gatilho_irregularidade_extenso,
+          valor_gatilho_irregularidade, valor_gatilho_irregularidade_extenso,
           data_assinatura
         )
       `)

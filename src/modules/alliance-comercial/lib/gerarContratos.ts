@@ -45,6 +45,38 @@ function valOrBracket(v: string | null | undefined, rotulo: string): string {
   return v && v.trim() ? v : `[${rotulo}]`
 }
 
+// soma N meses a uma data 'YYYY-MM-DD' (aritmética em UTC p/ evitar problema de fuso)
+function adicionarMeses(iso: string, meses: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCMonth(dt.getUTCMonth() + meses)
+  const yy = dt.getUTCFullYear()
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getUTCDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+// junta itens em lista por extenso: "a, b e c"
+function listaExtenso(itens: string[]): string {
+  if (itens.length === 0) return ''
+  if (itens.length === 1) return itens[0]
+  return `${itens.slice(0, -1).join(', ')} e ${itens[itens.length - 1]}`
+}
+
+// calcula as datas de vencimento das parcelas semestrais do Piso Fixo: a
+// primeira é a própria data de assinatura do contrato, as seguintes a cada
+// 6 meses, até completar o total de parcelas.
+function datasParcelasSemestrais(dataAssinatura: string | null, qtdParcelas: number | null): string {
+  if (!dataAssinatura || !qtdParcelas || qtdParcelas < 1) {
+    return '[DATAS DE VENCIMENTO DAS PARCELAS]'
+  }
+  const datas: string[] = []
+  for (let i = 0; i < qtdParcelas; i++) {
+    datas.push(dataExtenso(adicionarMeses(dataAssinatura, i * 6)))
+  }
+  return listaExtenso(datas)
+}
+
 // formata número decimal como percentual pt-BR, ex: 0.95 → "0,95%"
 function pct(n: number | null, casas: number): string {
   if (n == null) return ''
@@ -94,7 +126,6 @@ export interface ProjetoData {
   retencao_faixa6_fim: string | null
   retencao_faixa6_percentual: number | null
   retencao_faixa_final_inicio: string | null
-  datas_vencimento_parcelas: string | null
   valor_gatilho_irregularidade: number | null
   valor_gatilho_irregularidade_extenso: string | null
   data_assinatura: string | null
@@ -289,7 +320,7 @@ export async function gerarContratoComissao(
     'contrato.acrescimo_variavel.percentual.extenso': valOrBracket(projeto.fee_acrescimo_percentual_extenso, 'ACRÉSCIMO VARIÁVEL % POR EXTENSO'),
 
     'contrato.parcelas.qt':    str(projeto.fee_parcelas),
-    'contrato.parcelas.datas': valOrBracket(projeto.datas_vencimento_parcelas, 'DATAS DE VENCIMENTO DAS PARCELAS'),
+    'contrato.parcelas.datas': datasParcelasSemestrais(projeto.data_assinatura, projeto.fee_parcelas),
 
     'contrato.gatilho_irregularidade.valor': projeto.valor_gatilho_irregularidade != null
       ? projeto.valor_gatilho_irregularidade.toLocaleString('pt-BR', { minimumFractionDigits: 2 })

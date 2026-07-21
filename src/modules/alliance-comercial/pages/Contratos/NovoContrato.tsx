@@ -29,7 +29,6 @@ interface ProjetoForm {
   retencao_faixa5_inicio: string; retencao_faixa5_fim: string; retencao_faixa5_percentual: string
   retencao_faixa6_inicio: string; retencao_faixa6_fim: string; retencao_faixa6_percentual: string
   retencao_faixa_final_inicio: string
-  datas_vencimento_parcelas: string
   valor_gatilho_irregularidade: string
   valor_gatilho_irregularidade_extenso: string
   data_assinatura: string
@@ -68,7 +67,7 @@ const projetoInicial: ProjetoForm = {
   retencao_faixa5_inicio: '2030-01-01', retencao_faixa5_fim: '2030-07-31', retencao_faixa5_percentual: '1.40',
   retencao_faixa6_inicio: '2030-08-01', retencao_faixa6_fim: '2030-11-30', retencao_faixa6_percentual: '1.50',
   retencao_faixa_final_inicio: '2030-12-01',
-  datas_vencimento_parcelas: '', valor_gatilho_irregularidade: '30000',
+  valor_gatilho_irregularidade: '30000',
   valor_gatilho_irregularidade_extenso: 'trinta mil reais', data_assinatura: '',
 }
 
@@ -142,7 +141,6 @@ function formToProjetoData(id: string, f: ProjetoForm): ProjetoData {
     retencao_faixa6_fim: data(f.retencao_faixa6_fim),
     retencao_faixa6_percentual: num(f.retencao_faixa6_percentual),
     retencao_faixa_final_inicio: data(f.retencao_faixa_final_inicio),
-    datas_vencimento_parcelas: f.datas_vencimento_parcelas.trim() || null,
     valor_gatilho_irregularidade: num(f.valor_gatilho_irregularidade),
     valor_gatilho_irregularidade_extenso: f.valor_gatilho_irregularidade_extenso.trim() || null,
     data_assinatura: data(f.data_assinatura),
@@ -319,7 +317,6 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
         retencao_faixa6_fim:         data_(projeto.retencao_faixa6_fim),
         retencao_faixa6_percentual:  num(projeto.retencao_faixa6_percentual),
         retencao_faixa_final_inicio: data_(projeto.retencao_faixa_final_inicio),
-        datas_vencimento_parcelas:    projeto.datas_vencimento_parcelas.trim() || null,
         valor_gatilho_irregularidade: num(projeto.valor_gatilho_irregularidade),
         valor_gatilho_irregularidade_extenso: projeto.valor_gatilho_irregularidade_extenso.trim() || null,
         data_assinatura:              data_(projeto.data_assinatura),
@@ -666,12 +663,12 @@ export default function NovoContrato({ onGerado }: { onGerado: () => void }) {
 
           {/* Contrato Comissão (Piso Fixo) */}
           <p className={secTitle}>Contrato Comissão — Piso Fixo (reaproveita FEE/Meta acima)</p>
+          <p className="text-xs text-text-muted -mt-3">
+            As datas de vencimento das parcelas semestrais são calculadas automaticamente: a
+            1ª parcela cai na "Data de assinatura" abaixo, e as seguintes a cada 6 meses, até
+            completar o "Parcelas de Adesão" definido em Condições do FEE.
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Campo label="Datas de vencimento das parcelas semestrais">
-              <input className={base} value={projeto.datas_vencimento_parcelas}
-                onChange={e => setProjeto(p => ({ ...p, datas_vencimento_parcelas: e.target.value }))}
-                placeholder="Ex: 15 de junho e 15 de dezembro" />
-            </Campo>
             <Campo label="Valor gatilho de irregularidade (R$)">
               <input type="number" step="0.01" min="0" className={base}
                 value={projeto.valor_gatilho_irregularidade}
