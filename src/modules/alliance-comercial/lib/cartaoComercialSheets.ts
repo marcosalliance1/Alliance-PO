@@ -123,18 +123,38 @@ interface Segmento {
 }
 
 function encontrarSegmentos(values: unknown[][]): Segmento[] {
-  let colSuperior = -1
+  // "MEDIO" acha primeiro, sozinho — aparece tanto em "ENSINO MÉDIO" quanto no erro de
+  // digitação real "ENSIMO MÉDIO" (busca só pelo sufixo, não pelo prefixo).
   let colMedio = -1
   for (const row of values as unknown[][]) {
     for (let c = 0; c < row.length; c++) {
-      const n = norm(row[c])
-      if (colSuperior === -1 && n.includes('SUPERIOR')) colSuperior = c
-      // "MEDIO" aparece tanto em "ENSINO MÉDIO" quanto no erro de digitação real "ENSIMO
-      // MÉDIO" — busca só pelo sufixo, não pelo prefixo "ENSINO"/"ENSIMO".
-      if (colMedio === -1 && n.includes('MEDIO')) colMedio = c
+      if (norm(row[c]).includes('MEDIO')) { colMedio = c; break }
     }
-    if (colSuperior !== -1 && colMedio !== -1) break
+    if (colMedio !== -1) break
   }
+
+  // "SUPERIOR" só conta se aparecer ANTES da coluna do Médio — nem toda aba repete o
+  // texto "ENSINO SUPERIOR" acima do primeiro projeto (a aba real "2o TRIMESTRE" vai
+  // direto pro nome do projeto, sem repetir o rótulo do segmento); sem essa restrição,
+  // a busca acaba achando a palavra "Superior" só na área de resumo trimestral, bem à
+  // direita — e como esse "achado" fica numa coluna MAIOR que a do Médio, o intervalo
+  // de colunas do segmento inteiro fica invertido e todo o lado Ensino Superior daquela
+  // aba é descartado em silêncio.
+  let colSuperior = -1
+  for (const row of values as unknown[][]) {
+    for (let c = 0; c < row.length; c++) {
+      if (colMedio !== -1 && c >= colMedio) break
+      if (norm(row[c]).includes('SUPERIOR')) { colSuperior = c; break }
+    }
+    if (colSuperior !== -1) break
+  }
+  // Sem o rótulo, cai no padrão coluna 1 (logo após a margem em branco da coluna 0) —
+  // posição onde o segmento Superior sempre começa de fato, confirmado nos dados reais.
+  // Só aplica esse padrão quando o Médio foi achado (confirma que é uma aba de dados de
+  // verdade) — senão uma aba sem nenhum dos dois marcadores (ex: "TOTAL ANO", resumo
+  // puro) passaria a "encontrar" um segmento Superior que não existe.
+  if (colSuperior === -1 && colMedio !== -1) colSuperior = 1
+
   const segmentos: Segmento[] = []
   if (colSuperior !== -1) segmentos.push({ nome: 'Ensino Superior', colInicio: colSuperior })
   if (colMedio !== -1) segmentos.push({ nome: 'Ensino Médio', colInicio: colMedio })
