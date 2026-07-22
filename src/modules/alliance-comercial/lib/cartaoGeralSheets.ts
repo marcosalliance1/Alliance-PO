@@ -144,7 +144,7 @@ export function parseAbaGeral(nomeAba: string, values: unknown[][]): AbaGeralRes
     // rígido que nunca deixa um ciclo "vazar" dado do próximo, mesmo que a linha de TOTAL
     // de um ciclo específico esteja ausente ou malformada.
     const fim = c + 1 < indicesCiclos.length ? indicesCiclos[c + 1] : values.length
-    const resultado = parseCicloFatura(nomeAba, values.slice(inicio, fim), portador)
+    const resultado = parseCicloFatura(nomeAba, values.slice(inicio, fim), portador, inicio)
     linhas.push(...resultado.linhas)
     avisos.push(...resultado.avisos)
   }
@@ -154,7 +154,9 @@ export function parseAbaGeral(nomeAba: string, values: unknown[][]): AbaGeralRes
 
 // Um ciclo de fatura completo (Numero/Banco/Data das compras/Vencimento + tabela de
 // compras) — `values` aqui já é só a fatia desse ciclo, isolada pelo chamador.
-function parseCicloFatura(nomeAba: string, values: unknown[][], portador: string): AbaGeralResultado {
+// `offsetAbsoluto` é a posição dessa fatia dentro da aba inteira, usada só pra compor um
+// índice de linha absoluto e estável na chave natural (ver comentário mais abaixo).
+function parseCicloFatura(nomeAba: string, values: unknown[][], portador: string, offsetAbsoluto: number): AbaGeralResultado {
   const avisos: string[] = []
 
   const linhaNumero = acharLinhaPorRotulo(values, 'Numero')
@@ -229,7 +231,12 @@ function parseCicloFatura(nomeAba: string, values: unknown[][], portador: string
       naturezaQualCasa,
       jotform,
       ehComercial,
-      chaveNatural: hashChave([nomeAba, item, valor, data, descricao]),
+      // Inclui a posição absoluta da linha na aba — sem isso, duas transações
+      // genuinamente diferentes mas com item+valor+data+descrição iguais (comum em
+      // corridas de Uber, assinaturas recorrentes etc.) geram a MESMA chave, e o
+      // upsert inteiro falha com "ON CONFLICT DO UPDATE command cannot affect row a
+      // second time" — nesse caso nenhuma linha do lote é gravada, nem as sem colisão.
+      chaveNatural: hashChave([nomeAba, offsetAbsoluto + r, item, valor, data, descricao]),
     })
   }
 
