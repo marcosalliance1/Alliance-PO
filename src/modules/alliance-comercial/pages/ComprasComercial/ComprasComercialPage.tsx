@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { ClipboardList, BarChart2 } from 'lucide-react'
+import { ClipboardList, BarChart2, GitCompare } from 'lucide-react'
 import Lancamentos from './Lancamentos'
 import DashboardCompras from './DashboardCompras'
+import ConciliacaoComercial from './ConciliacaoComercial'
 
 const ABAS = [
   { id: 'lancamentos', label: 'Lançamentos', Icon: ClipboardList },
   { id: 'dashboard',   label: 'Dashboard',    Icon: BarChart2 },
+  { id: 'conciliacao', label: 'Conciliação Comercial', Icon: GitCompare },
 ] as const
 type AbaId = typeof ABAS[number]['id']
 
@@ -37,6 +39,7 @@ export default function ComprasComercialPage() {
 
       {aba === 'lancamentos' && <Lancamentos />}
       {aba === 'dashboard'   && <DashboardCompras />}
+      {aba === 'conciliacao' && <ConciliacaoComercial />}
     </div>
   )
 }
