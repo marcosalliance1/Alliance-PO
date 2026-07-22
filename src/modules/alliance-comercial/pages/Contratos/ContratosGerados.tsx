@@ -11,12 +11,15 @@ interface CardData {
 
 const btnOutline =
   'flex items-center gap-1.5 px-4 py-2 border-2 border-primary text-primary hover:bg-primary hover:text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+const btnOutlineDanger =
+  'flex items-center gap-1.5 px-4 py-2 border-2 border-danger/40 text-danger hover:bg-danger hover:text-white hover:border-danger rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
 
 export default function ContratosGerados() {
   const [cards, setCards]         = useState<CardData[]>([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro]           = useState<string | null>(null)
   const [baixandoId, setBaixandoId] = useState<string | null>(null)
+  const [excluindoId, setExcluindoId] = useState<string | null>(null)
 
   useEffect(() => { carregar() }, [])
 
@@ -32,7 +35,7 @@ export default function ContratosGerados() {
           fee_percentual, fee_percentual_extenso, fee_valor_minimo, fee_valor_minimo_extenso,
           fee_parcelas, fee_valor_parcela, fee_valor_parcela_extenso,
           fee_acrescimo_percentual, fee_acrescimo_percentual_extenso, formandos_minimo, local_data_extenso,
-          vigencia_meses, vigencia_meses_extenso,
+          vigencia_meses_extenso,
           retencao_faixa1_percentual, retencao_faixa2_percentual, retencao_faixa3_percentual,
           retencao_faixa4_percentual, retencao_faixa5_percentual, retencao_faixa6_percentual,
           valor_gatilho_irregularidade, valor_gatilho_irregularidade_extenso,
@@ -86,6 +89,27 @@ export default function ContratosGerados() {
       setErro(err instanceof Error ? err.message : 'Erro ao gerar documento.')
     } finally {
       setBaixandoId(null)
+    }
+  }
+
+  async function excluir(card: CardData) {
+    const ok = window.confirm(
+      `Excluir o projeto "${card.projeto.nome}"? Isso apaga também os pacotes e documentos gerados dele. Esta ação não pode ser desfeita.`
+    )
+    if (!ok) return
+
+    setExcluindoId(card.projeto_id)
+    try {
+      const { error: errDel } = await supabaseComercial
+        .from('projetos')
+        .delete()
+        .eq('id', card.projeto_id)
+      if (errDel) throw new Error(errDel.message)
+      setCards(prev => prev.filter(c => c.projeto_id !== card.projeto_id))
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : 'Erro ao excluir projeto.')
+    } finally {
+      setExcluindoId(null)
     }
   }
 
@@ -187,6 +211,24 @@ export default function ContratosGerados() {
                           d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
                       Contrato Comissão
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => excluir(card)}
+                  disabled={baixandoId !== null || excluindoId !== null}
+                  className={btnOutlineDanger}
+                >
+                  {excluindoId === card.projeto_id ? (
+                    <span>Excluindo…</span>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9.5 7V4a1 1 0 011-1h3a1 1 0 011 1v3M4 7h16" />
+                      </svg>
+                      Excluir
                     </>
                   )}
                 </button>
