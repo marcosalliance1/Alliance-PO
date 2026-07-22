@@ -246,13 +246,21 @@ export async function sincronizarCartaoGeral(
   const abasNaoReconhecidas: string[] = []
 
   for (const nomeAba of nomesAbas) {
-    const { reconhecida } = portadorDaAba(nomeAba)
+    const { portador, reconhecida } = portadorDaAba(nomeAba)
     if (!reconhecida) abasNaoReconhecidas.push(nomeAba)
     const values = await fetchAba(spreadsheetId, nomeAba, accessToken)
-    if (!values || values.length === 0) continue
+    if (!values || values.length === 0) {
+      avisos.push(`Aba "${nomeAba}": a API do Sheets não retornou nenhuma linha (aba vazia ou sem permissão de leitura).`)
+      continue
+    }
     const resultado = parseAbaGeral(nomeAba, values)
     linhas.push(...resultado.linhas)
     avisos.push(...resultado.avisos)
+    // Visibilidade explícita por aba de portador dedicado — sem isso, uma aba que
+    // devolve 0 linhas (por qualquer motivo) fica indistinguível de "tudo certo".
+    if (reconhecida) {
+      avisos.push(`Aba "${nomeAba}" (portador ${portador}): ${resultado.linhas.length} lançamento(s) de ${ANO_CONCILIACAO} encontrado(s).`)
+    }
   }
 
   return { linhas, avisos, abasNaoReconhecidas }

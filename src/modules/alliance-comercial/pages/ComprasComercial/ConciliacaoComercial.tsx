@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useConciliacaoCartao, type CartaoGastoComercialRow, type CartaoGastoGeralRow } from '../../hooks/useConciliacaoCartao'
 import { useGoogleAuth } from '../../../../contexts/GoogleAuthContext'
@@ -47,19 +47,36 @@ export default function ConciliacaoComercial() {
   const [linhaExpandida, setLinhaExpandida] = useState<string | null>(null)
   const [painelSemCorrespondenciaAberto, setPainelSemCorrespondenciaAberto] = useState(false)
   const [observacaoRascunho, setObservacaoRascunho] = useState<Record<string, string>>({})
+  const [pendente, setPendente] = useState<'geral' | 'comercial' | null>(null)
 
-  async function handleSincronizar(tipo: 'geral' | 'comercial') {
-    setErroSync(null)
-    if (!accessToken) { conectar(); return }
+  async function executarSincronizacao(tipo: 'geral' | 'comercial', token: string) {
     const link = tipo === 'geral' ? linkGeral : linkComercial
     if (!link.trim()) { setErroSync(`Cole o link da planilha ${tipo === 'geral' ? 'GERAL (Controle Financeiro do Cartão)' : 'COMERCIAL (Despesas Comerciais)'}.`); return }
     try {
-      if (tipo === 'geral') await sincronizarGeral(link, accessToken)
-      else await sincronizarComercial(link, accessToken)
+      if (tipo === 'geral') await sincronizarGeral(link, token)
+      else await sincronizarComercial(link, token)
     } catch (e) {
       setErroSync(mensagemErroAmigavel((e as Error).message))
     }
   }
+
+  async function handleSincronizar(tipo: 'geral' | 'comercial') {
+    setErroSync(null)
+    // Clicar em "Conectar Google" só abre o popup de login e volta na hora — sem isso,
+    // era preciso clicar de novo manualmente depois de conectar, e sem erro nenhum
+    // aparecendo o clique único parecia "não fez nada".
+    if (!accessToken) { setPendente(tipo); conectar(); return }
+    await executarSincronizacao(tipo, accessToken)
+  }
+
+  useEffect(() => {
+    if (accessToken && pendente) {
+      const tipo = pendente
+      setPendente(null)
+      void executarSincronizacao(tipo, accessToken)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken])
 
   const projetos = useMemo(
     () => [...new Set(linhasComercial.map(l => l.projeto))].sort(),

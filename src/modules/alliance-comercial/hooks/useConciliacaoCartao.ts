@@ -123,6 +123,9 @@ export function useConciliacaoCartao() {
       if (abasNaoReconhecidas.length > 0) {
         avisosFinal.push(`Abas não reconhecidas como portador específico (assumidas como cartão "Alliance"): ${abasNaoReconhecidas.join(', ')}.`)
       }
+      // Sempre visível (mesmo em sucesso) — sem isso, um import que trouxe 0 linhas
+      // parecia "não fez nada", já que nenhum erro é lançado nesse caso.
+      avisosFinal.unshift(`Sincronização GERAL concluída: ${linhas.length} lançamento(s) lido(s).`)
 
       if (linhas.length > 0) {
         const payload = linhas.map(l => ({
@@ -186,7 +189,7 @@ export function useConciliacaoCartao() {
         if (error) throw new Error(error.message)
       }
 
-      setAvisos(avisosImport)
+      setAvisos([`Sincronização COMERCIAL concluída: ${linhas.length} lançamento(s) lido(s).`, ...avisosImport])
       await recalcular()
     } catch (e) {
       setErro((e as Error).message)
