@@ -38,6 +38,7 @@ export interface CartaoGastoComercialRow {
   portador_raw: string | null
   portador: string | null
   fora_do_cartao: boolean
+  portador_nao_informado: boolean
   chave_natural: string
   status_conciliacao: StatusConciliacao | 'nao_processado'
   match_geral_id: string | null
@@ -82,7 +83,7 @@ export function useConciliacaoCartao() {
     try {
       const [geralRes, comercialRes] = await Promise.all([
         supabase.from(TABELA_GERAL).select('id, valor, data, portador, eh_comercial'),
-        supabase.from(TABELA_COMERCIAL).select('id, valor, data, portador, fora_do_cartao'),
+        supabase.from(TABELA_COMERCIAL).select('id, valor, data, portador, fora_do_cartao, portador_nao_informado'),
       ])
       if (geralRes.error) throw new Error(geralRes.error.message)
       if (comercialRes.error) throw new Error(comercialRes.error.message)
@@ -94,6 +95,7 @@ export function useConciliacaoCartao() {
       const comercialParaConciliar: ComercialParaConciliar[] = (comercialRes.data ?? []).map(c => ({
         id: c.id as string, valor: Number(c.valor), data: c.data as string,
         portador: c.portador as string | null, foraDoCartao: c.fora_do_cartao as boolean,
+        portadorNaoInformado: c.portador_nao_informado as boolean,
       }))
 
       const { resultados, geralSemCorrespondencia } = conciliar(comercialParaConciliar, geralParaConciliar)
@@ -183,6 +185,7 @@ export function useConciliacaoCartao() {
           portador_raw: l.portadorRaw,
           portador: l.portador,
           fora_do_cartao: l.foraDoCartao,
+          portador_nao_informado: l.portadorNaoInformado,
           chave_natural: l.chaveNatural,
         }))
         const { error } = await supabase.from(TABELA_COMERCIAL).upsert(payload, { onConflict: 'chave_natural' })

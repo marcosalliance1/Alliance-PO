@@ -12,11 +12,12 @@ const STATUS_INFO: Record<StatusConciliacao | 'nao_processado', { label: string;
   nao_encontrado:    { label: 'Não encontrado',       badge: 'bg-danger/15 text-danger',    card: 'border-danger/30' },
   ambiguo:           { label: 'Match ambíguo',        badge: 'bg-purple-500/15 text-purple-400', card: 'border-purple-500/30' },
   fora_do_cartao:    { label: 'Fora do cartão',       badge: 'bg-white/10 text-text-muted', card: 'border-white/10' },
+  sem_portador:      { label: 'Sem portador',          badge: 'bg-slate-500/15 text-slate-300', card: 'border-slate-500/30' },
   nao_processado:    { label: 'Não processado',       badge: 'bg-white/10 text-text-muted', card: 'border-white/10' },
 }
 
 const ORDEM_STATUS: (StatusConciliacao | 'nao_processado')[] = [
-  'conciliado', 'divergencia_data', 'cartao_divergente', 'nao_encontrado', 'ambiguo', 'fora_do_cartao',
+  'conciliado', 'divergencia_data', 'cartao_divergente', 'nao_encontrado', 'ambiguo', 'fora_do_cartao', 'sem_portador',
 ]
 
 const inputBase = 'flex-1 min-w-[240px] bg-bg border border-white/10 rounded-md px-3 py-2 text-sm text-text-main placeholder:text-text-muted'
@@ -148,7 +149,7 @@ export default function ConciliacaoComercial() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3">
         <div className="bg-surface rounded-xl border border-white/10 p-4">
           <p className="text-text-muted text-xs">Total Comercial</p>
           <p className="text-text-main font-semibold text-lg">{formatBRL(totalComercial)}</p>

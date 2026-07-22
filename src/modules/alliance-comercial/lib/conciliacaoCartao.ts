@@ -5,7 +5,7 @@
 export const DIAS_TOLERANCIA_MATCH = 3
 
 export type StatusConciliacao =
-  | 'conciliado' | 'divergencia_data' | 'cartao_divergente' | 'nao_encontrado' | 'ambiguo' | 'fora_do_cartao'
+  | 'conciliado' | 'divergencia_data' | 'cartao_divergente' | 'nao_encontrado' | 'ambiguo' | 'fora_do_cartao' | 'sem_portador'
 
 export interface ComercialParaConciliar {
   id: string
@@ -13,6 +13,7 @@ export interface ComercialParaConciliar {
   data: string // ISO yyyy-mm-dd
   portador: string | null
   foraDoCartao: boolean
+  portadorNaoInformado: boolean
 }
 
 export interface GeralParaConciliar {
@@ -50,6 +51,14 @@ export function conciliar(
   for (const linha of comercial) {
     if (linha.foraDoCartao) {
       resultados.push({ id: linha.id, status: 'fora_do_cartao', matchGeralId: null, difDias: null })
+      continue
+    }
+    // Sem anotação de cartão nenhuma na planilha comercial — dado incompleto, não "não
+    // encontrado" (que implica que a busca rodou e falhou). Nunca tenta casar com a
+    // GERAL, pra não sugerir um erro de conciliação que na verdade é falta de
+    // preenchimento na origem.
+    if (linha.portadorNaoInformado) {
+      resultados.push({ id: linha.id, status: 'sem_portador', matchGeralId: null, difDias: null })
       continue
     }
 

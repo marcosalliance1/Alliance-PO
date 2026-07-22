@@ -14,6 +14,7 @@ export interface GastoComercialImportado {
   portadorRaw: string | null
   portador: string | null
   foraDoCartao: boolean
+  portadorNaoInformado: boolean
   chaveNatural: string
 }
 
@@ -78,35 +79,40 @@ interface PortadorParseado {
   portadorRaw: string | null
   portador: string | null
   foraDoCartao: boolean
+  portadorNaoInformado: boolean
   aviso: string | null
 }
 
 // A célula de anotação de cartão traz "(cartão Alliance) MORETZ", "(cartão Alliance)"
-// sozinho, "EVEREST" (pago via ERP, não é cartão) ou "Conta pessoal" (reembolso,
-// também não é cartão) — confirmado com o usuário que os dois últimos viram uma
-// categoria neutra "fora do cartão", fora do cruzamento.
+// sozinho, "EVEREST" (pago via ERP, não é cartão), "Conta pessoal" (reembolso, também
+// não é cartão) — ou, em muitas linhas, fica completamente em branco (ninguém preencheu
+// qual cartão foi usado). Célula em branco NÃO vira portador "Alliance" por padrão —
+// isso faria uma linha sem informação nenhuma tentar casar contra o cartão Alliance e
+// aparecer como "não encontrado" (parecendo um erro de conciliação), quando na verdade
+// é dado incompleto na planilha comercial. Vira sua própria categoria "sem_portador",
+// que nunca tenta casar com a GERAL — confirmado com o usuário.
 function normalizarPortadorComercial(raw: unknown): PortadorParseado {
   const texto = parseStr(raw)
-  if (!texto) return { portadorRaw: null, portador: 'Alliance', foraDoCartao: false, aviso: null }
+  if (!texto) return { portadorRaw: null, portador: null, foraDoCartao: false, portadorNaoInformado: true, aviso: null }
 
   const normTexto = norm(texto).replace(/\s+/g, '')
-  if (normTexto.includes('EVEREST')) return { portadorRaw: texto, portador: null, foraDoCartao: true, aviso: null }
-  if (normTexto.includes('CONTAPESSOAL')) return { portadorRaw: texto, portador: null, foraDoCartao: true, aviso: null }
+  if (normTexto.includes('EVEREST')) return { portadorRaw: texto, portador: null, foraDoCartao: true, portadorNaoInformado: false, aviso: null }
+  if (normTexto.includes('CONTAPESSOAL')) return { portadorRaw: texto, portador: null, foraDoCartao: true, portadorNaoInformado: false, aviso: null }
 
   const m = texto.match(/\(cart[ãa]o\s+alliance\)\s*(.*)/i)
   if (m) {
     const sufixo = m[1].trim()
-    if (!sufixo) return { portadorRaw: texto, portador: 'Alliance', foraDoCartao: false, aviso: null }
+    if (!sufixo) return { portadorRaw: texto, portador: 'Alliance', foraDoCartao: false, portadorNaoInformado: false, aviso: null }
     const alias = ALIAS_PORTADOR[norm(sufixo).replace(/\s+/g, '')]
-    if (alias) return { portadorRaw: texto, portador: alias, foraDoCartao: false, aviso: null }
+    if (alias) return { portadorRaw: texto, portador: alias, foraDoCartao: false, portadorNaoInformado: false, aviso: null }
     return {
-      portadorRaw: texto, portador: sufixo, foraDoCartao: false,
+      portadorRaw: texto, portador: sufixo, foraDoCartao: false, portadorNaoInformado: false,
       aviso: `Portador "${sufixo}" (anotação "${texto}") não reconhecido — mantido como está, revisar mapeamento.`,
     }
   }
 
   return {
-    portadorRaw: texto, portador: texto, foraDoCartao: false,
+    portadorRaw: texto, portador: texto, foraDoCartao: false, portadorNaoInformado: false,
     aviso: `Anotação de cartão "${texto}" fora do padrão "(cartão Alliance) ..." — mantida como portador bruto.`,
   }
 }
@@ -227,7 +233,7 @@ function parseSegmento(
     const categoria = parseStr(getCell(row, colInicio)) || null
     const reuniao = colunas.reuniao >= 0 ? (parseStr(getCell(row, colunas.reuniao)) || null) : null
     const responsavel = parseStr(getCell(row, colunas.responsavel)) || null
-    const { portadorRaw, portador, foraDoCartao, aviso } = normalizarPortadorComercial(getCell(row, colunas.cartao))
+    const { portadorRaw, portador, foraDoCartao, portadorNaoInformado, aviso } = normalizarPortadorComercial(getCell(row, colunas.cartao))
     if (aviso) avisos.push(`Aba "${planilhaAba}" (${segmento.nome}), projeto "${projetoAtual}", linha ${r + 1}: ${aviso}`)
 
     linhas.push({
@@ -243,6 +249,7 @@ function parseSegmento(
       portadorRaw,
       portador,
       foraDoCartao,
+      portadorNaoInformado,
       chaveNatural: hashChave([planilhaAba, segmento.nome, projetoAtual, categoria, dataIso, valor, fornecedor, r]),
     })
   }
