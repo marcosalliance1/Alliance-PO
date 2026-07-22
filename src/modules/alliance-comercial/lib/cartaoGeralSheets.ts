@@ -100,6 +100,20 @@ function acharLinhaPorRotulo(values: unknown[][], rotulo: string): unknown[] | n
   return null
 }
 
+// Índice de TODAS as linhas cuja coluna A bate com `rotulo` — uma aba mensal antiga tem
+// só 1 ciclo de fatura ("Numero" aparece 1 vez), mas as abas de portador dedicado
+// ("MORETZ-GOLDEN", "BIA") empilham ~10 ciclos de fatura na mesma aba, cada um com seu
+// próprio "Numero"/"Item comprado" — sem isso, só o primeiro ciclo era lido e o resto
+// (a maior parte dos dados de 2026, nessas duas abas) era descartado em silêncio.
+function todosIndicesPorRotulo(values: unknown[][], rotulo: string): number[] {
+  const alvo = norm(rotulo)
+  const indices: number[] = []
+  for (let i = 0; i < values.length; i++) {
+    if (norm(getCell(values[i] as unknown[], 0)) === alvo) indices.push(i)
+  }
+  return indices
+}
+
 function primeiroValorNaoVazio(row: unknown[] | null, apartirDe: number): string | null {
   if (!row) return null
   for (let c = apartirDe; c < row.length; c++) {
@@ -116,10 +130,32 @@ interface AbaGeralResultado {
 
 export function parseAbaGeral(nomeAba: string, values: unknown[][]): AbaGeralResultado {
   const avisos: string[] = []
-  // Aba não reconhecida (nem "MORETZ-GOLDEN" nem "BIA") cai no portador padrão
-  // "Alliance" — o aviso correspondente é agregado em sincronizarCartaoGeral, que já
-  // sabe o nome de todas as abas da planilha.
   const { portador } = portadorDaAba(nomeAba)
+
+  const indicesCiclos = todosIndicesPorRotulo(values, 'Numero')
+  if (indicesCiclos.length === 0) {
+    return { linhas: [], avisos: [`Aba "${nomeAba}": nenhum bloco de fatura ("Numero") encontrado.`] }
+  }
+
+  const linhas: GastoGeralImportado[] = []
+  for (let c = 0; c < indicesCiclos.length; c++) {
+    const inicio = indicesCiclos[c]
+    // Cada ciclo termina onde o próximo começa (ou no fim da aba, pro último) — limite
+    // rígido que nunca deixa um ciclo "vazar" dado do próximo, mesmo que a linha de TOTAL
+    // de um ciclo específico esteja ausente ou malformada.
+    const fim = c + 1 < indicesCiclos.length ? indicesCiclos[c + 1] : values.length
+    const resultado = parseCicloFatura(nomeAba, values.slice(inicio, fim), portador)
+    linhas.push(...resultado.linhas)
+    avisos.push(...resultado.avisos)
+  }
+
+  return { linhas, avisos }
+}
+
+// Um ciclo de fatura completo (Numero/Banco/Data das compras/Vencimento + tabela de
+// compras) — `values` aqui já é só a fatia desse ciclo, isolada pelo chamador.
+function parseCicloFatura(nomeAba: string, values: unknown[][], portador: string): AbaGeralResultado {
+  const avisos: string[] = []
 
   const linhaNumero = acharLinhaPorRotulo(values, 'Numero')
   const linhaBanco = acharLinhaPorRotulo(values, 'Banco')
