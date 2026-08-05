@@ -991,18 +991,27 @@ function EmptyChart({ label = 'Sem dados' }: { label?: string }) {
 // ─── Fornecedores (ranking real, direto do Everest via CAP) ───────
 function FornecedoresPorCusto({ cap: capRaw, filtroProj }: { cap: CAPRecord[]; filtroProj: string }) {
   const [busca, setBusca] = useState('')
+  const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const fp = filtroProj.toLowerCase().trim()
 
   const ranking = useMemo(() => {
-    const map = new Map<string, { total: number; titulos: number }>()
+    const map = new Map<string, { total: number; titulos: number; porCentro: Map<string, { total: number; titulos: number }> }>()
     for (const i of capRaw) {
       if (fp && !i.desc_centro_custo.toLowerCase().includes(fp)) continue
       const nome = i.fantasia_fornecedor?.trim() || '(sem fornecedor)'
-      const prev = map.get(nome) ?? { total: 0, titulos: 0 }
-      map.set(nome, { total: prev.total + (i.v_titulo ?? 0), titulos: prev.titulos + 1 })
+      const centro = i.desc_centro_custo?.trim() || '(sem centro de custo)'
+      const prev = map.get(nome) ?? { total: 0, titulos: 0, porCentro: new Map() }
+      prev.total += i.v_titulo ?? 0
+      prev.titulos += 1
+      const prevCentro = prev.porCentro.get(centro) ?? { total: 0, titulos: 0 }
+      prev.porCentro.set(centro, { total: prevCentro.total + (i.v_titulo ?? 0), titulos: prevCentro.titulos + 1 })
+      map.set(nome, prev)
     }
     return [...map.entries()]
-      .map(([nome, v]) => ({ nome, ...v }))
+      .map(([nome, v]) => ({
+        nome, total: v.total, titulos: v.titulos,
+        porCentro: [...v.porCentro.entries()].map(([centro, c]) => ({ centro, ...c })).sort((a, b) => b.total - a.total),
+      }))
       .sort((a, b) => b.total - a.total)
   }, [capRaw, fp])
 
@@ -1031,20 +1040,47 @@ function FornecedoresPorCusto({ cap: capRaw, filtroProj }: { cap: CAPRecord[]; f
       {filtrado.length === 0 ? (
         <EmptyChart label="Nenhum fornecedor encontrado" />
       ) : (
-        <div className="space-y-2.5 max-h-[520px] overflow-y-auto pr-1">
-          {filtrado.map((f, i) => (
-            <div key={f.nome}>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] text-text-muted w-6 text-right shrink-0">{i + 1}</span>
-                <span className="text-xs text-text-main truncate flex-1" title={f.nome}>{f.nome}</span>
-                <span className="text-[10px] text-text-muted shrink-0">{f.titulos} título{f.titulos !== 1 ? 's' : ''}</span>
-                <span className="text-xs font-semibold text-text-main shrink-0 w-28 text-right">{fmtCompact(f.total)}</span>
+        <div className="space-y-2.5 max-h-[640px] overflow-y-auto pr-1">
+          {filtrado.map((f, i) => {
+            const aberto = !!expandidos[f.nome]
+            const maxCentro = f.porCentro[0]?.total || 1
+            return (
+              <div key={f.nome}>
+                <button
+                  type="button"
+                  onClick={() => setExpandidos(prev => ({ ...prev, [f.nome]: !prev[f.nome] }))}
+                  className="w-full text-left"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] text-text-muted w-6 text-right shrink-0">{i + 1}</span>
+                    {aberto ? <ChevronDown size={12} className="text-text-muted shrink-0" /> : <ChevronRight size={12} className="text-text-muted shrink-0" />}
+                    <span className="text-xs text-text-main truncate flex-1" title={f.nome}>{f.nome}</span>
+                    <span className="text-[10px] text-text-muted shrink-0">{f.titulos} título{f.titulos !== 1 ? 's' : ''}</span>
+                    <span className="text-xs font-semibold text-text-main shrink-0 w-28 text-right">{fmtCompact(f.total)}</span>
+                  </div>
+                  <div className="ml-8 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                    <div className="h-full rounded-full" style={{ width: `${(f.total / maxTotal) * 100}%`, background: 'rgba(0,184,148,0.7)' }} />
+                  </div>
+                </button>
+                {aberto && (
+                  <div className="ml-8 mt-2 mb-1 space-y-1.5 border-l border-white/10 pl-3">
+                    {f.porCentro.map(c => (
+                      <div key={c.centro}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-text-muted truncate flex-1" title={c.centro}>{c.centro}</span>
+                          <span className="text-[10px] text-text-muted shrink-0">{c.titulos} título{c.titulos !== 1 ? 's' : ''}</span>
+                          <span className="text-[11px] text-text-main shrink-0 w-24 text-right">{fmtCompact(c.total)}</span>
+                        </div>
+                        <div className="h-1 rounded-full overflow-hidden mt-0.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                          <div className="h-full rounded-full" style={{ width: `${(c.total / maxCentro) * 100}%`, background: 'rgba(0,184,148,0.4)' }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="ml-8 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                <div className="h-full rounded-full" style={{ width: `${(f.total / maxTotal) * 100}%`, background: 'rgba(0,184,148,0.7)' }} />
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

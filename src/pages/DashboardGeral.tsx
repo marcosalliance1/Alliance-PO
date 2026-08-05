@@ -224,6 +224,37 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
       .sort((a, b) => b.margemOrcadaPct - a.margemOrcadaPct)
   }, [projetosFiltrados])
 
+  const resumoPorTipo = useMemo(() => {
+    const grupos: Record<'SUPERIOR' | 'MEDIO' | 'FUNDAMENTAL', { receita: number; custo: number; count: number }> = {
+      SUPERIOR: { receita: 0, custo: 0, count: 0 },
+      MEDIO: { receita: 0, custo: 0, count: 0 },
+      FUNDAMENTAL: { receita: 0, custo: 0, count: 0 },
+    }
+    for (const p of projetosFiltrados) {
+      if (p.status === 'realizado') continue
+      const tipo = (p.tap.tipoEscola ?? 'MEDIO') as 'SUPERIOR' | 'MEDIO' | 'FUNDAMENTAL'
+      const resumo = calcResumoProjeto(p)
+      grupos[tipo].receita += resumo.receitaBaile.orcado
+      grupos[tipo].custo += resumo.custoTotal.orcado
+      grupos[tipo].count += 1
+    }
+    const receitaTotal = grupos.SUPERIOR.receita + grupos.MEDIO.receita + grupos.FUNDAMENTAL.receita
+    return (['SUPERIOR', 'MEDIO', 'FUNDAMENTAL'] as const)
+      .map((tipo) => {
+        const g = grupos[tipo]
+        const margem = g.receita - g.custo
+        return {
+          tipo,
+          receita: g.receita,
+          margem,
+          count: g.count,
+          margemPct: g.receita > 0 ? (margem / g.receita) * 100 : 0,
+          participacao: receitaTotal > 0 ? (g.receita / receitaTotal) * 100 : 0,
+        }
+      })
+      .filter((g) => g.count > 0)
+  }, [projetosFiltrados])
+
   const selectCls = 'bg-surface border border-white/10 rounded-inner px-3 py-2 text-sm text-text-main outline-none focus:border-primary hover:border-white/20 transition-colors'
 
   const showEmAndamentoCharts = filtroStatus !== 'realizados'
@@ -454,6 +485,37 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
                   )
                 })}
               </div>
+
+              {resumoPorTipo.length > 0 && (
+                <div className="card">
+                  <h3 className="text-sm font-semibold text-text-main mb-4">Receita e Margem por Tipo de Ensino <span className="text-xs text-text-muted font-normal">Orçado</span></h3>
+                  <div className="space-y-4">
+                    {resumoPorTipo.map((g) => {
+                      const cor = g.tipo === 'SUPERIOR' ? '#74b9ff' : g.tipo === 'MEDIO' ? '#00b894' : '#fdcb6e'
+                      const label = TIPO_LABELS[g.tipo]
+                      return (
+                        <div key={g.tipo}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: cor }} />
+                            <span className="text-xs font-semibold" style={{ color: cor }}>{label}</span>
+                            <span className="text-[11px] text-text-muted">{g.count} projeto{g.count !== 1 ? 's' : ''}</span>
+                            <span className="ml-auto text-xs font-semibold text-text-main">{formatBRL(g.receita)}</span>
+                          </div>
+                          <div className="h-1.5 rounded-full overflow-hidden mb-1" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                            <div className="h-full rounded-full" style={{ width: `${g.participacao}%`, background: cor }} />
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-text-muted">
+                            <span>{g.participacao.toFixed(0)}% da receita orçada</span>
+                            <span>
+                              Margem <span className="font-medium" style={{ color: g.margem >= 0 ? '#16A34A' : '#DC2626' }}>{formatBRL(g.margem)} · {g.margemPct.toFixed(1)}%</span>
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="card col-span-2">
                 <h3 className="text-sm font-semibold text-text-main mb-4">Evolução por Ano</h3>
