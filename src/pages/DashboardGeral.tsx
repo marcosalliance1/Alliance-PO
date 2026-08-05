@@ -109,15 +109,22 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
     projetosRealizados.reduce((s, p) => s + (p.totalConvidadosAtual ?? 0), 0),
   [projetosRealizados])
 
+  // Sempre soma em andamento + realizados — não deve ficar zerado quando o
+  // toggle de status (topo) está em "Em Andamento", já que convidados de
+  // eventos passados também contam pro total.
+  const projetosParaConvidados = useMemo(() =>
+    [...projetosEmAndamento, ...projetosRealizados],
+  [projetosEmAndamento, projetosRealizados])
+
   const totalConvidadosGeral = useMemo(() =>
-    projetosFiltrados.reduce((s, p) => s + (p.totalConvidadosAtual ?? 0), 0),
-  [projetosFiltrados])
+    projetosParaConvidados.reduce((s, p) => s + (p.totalConvidadosAtual ?? 0), 0),
+  [projetosParaConvidados])
 
   const convidadosPorEnsino = useMemo(() => {
     const grupos: Record<'SUPERIOR' | 'MEDIO' | 'FUNDAMENTAL', { id: string; titulo: string; total: number }[]> = {
       SUPERIOR: [], MEDIO: [], FUNDAMENTAL: [],
     }
-    for (const p of projetosFiltrados) {
+    for (const p of projetosParaConvidados) {
       if (!p.totalConvidadosAtual) continue
       const tipo = (p.tap.tipoEscola ?? 'MEDIO') as 'SUPERIOR' | 'MEDIO' | 'FUNDAMENTAL'
       const titulo = p.tap.turma || `${p.tap.instituicao} ${p.tap.curso}`.trim() || `Projeto #${p.id.slice(0, 6)}`
@@ -127,7 +134,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
       grupos[tipo].sort((a, b) => b.total - a.total)
     }
     return grupos
-  }, [projetosFiltrados])
+  }, [projetosParaConvidados])
 
   const TIPO_LABELS: Record<string, string> = {
     SUPERIOR: 'Ensino Superior',
