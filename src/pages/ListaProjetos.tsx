@@ -13,7 +13,7 @@ import { ProgressBar } from '../components/ui/ProgressBar'
 import { sincronizarComSheets, extrairSpreadsheetId } from '../utils/sheetsSync'
 import { useGoogleAuth } from '../contexts/GoogleAuthContext'
 import { useAuth } from '../contexts/AuthContext'
-import { Plus, Upload, Trash2, ChevronDown, ChevronRight, RefreshCw, Cloud, Loader, Link, AlertTriangle, X, CheckCircle } from 'lucide-react'
+import { Plus, Upload, Trash2, ChevronDown, ChevronRight, RefreshCw, Cloud, Loader, Link, AlertTriangle, X, CheckCircle, ClipboardList } from 'lucide-react'
 
 function calcFrescor(atualizadoEm: string): { texto: string; cor: string } {
   if (!atualizadoEm) return { texto: 'Nunca salvo', cor: '#e17055' }
@@ -235,6 +235,8 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
     const margemPct = resumo.receitaBaile.orcado > 0
       ? ((resumo.receitaBaile.orcado - resumo.custoTotal.orcado) / resumo.receitaBaile.orcado) * 100
       : 0
+    const totalItens = p.secoes.reduce((s, sec) => s + sec.itens.length, 0)
+    const temOrcamento = p.secoes.some(sec => sec.itens.some(i => (i.valorOrcado ?? 0) > 0))
 
     return (
       <div
@@ -255,25 +257,34 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
           )}
         </div>
 
-        {/* Dados financeiros */}
-        <div className="flex items-center gap-3 text-xs mb-2.5">
-          <div>
-            <span className="text-text-muted">Receita Orç.</span>
-            <p className="font-semibold text-text-main">{formatBRL(resumo.receitaBaile.orcado)}</p>
-          </div>
-          <div>
-            <span className="text-text-muted">Custo Orç.</span>
-            <p className="font-semibold text-text-main">{formatBRL(resumo.custoTotal.orcado)}</p>
-          </div>
-          <div>
-            <span className="text-text-muted">Margem Orç.</span>
-            <p className={`font-semibold ${margemPct >= 0 ? 'text-success' : 'text-danger'}`}>
-              {margemPct.toFixed(1)}%
-            </p>
-          </div>
-        </div>
+        {temOrcamento ? (
+          <>
+            {/* Dados financeiros */}
+            <div className="flex items-center gap-3 text-xs mb-2.5">
+              <div>
+                <span className="text-text-muted">Receita Orç.</span>
+                <p className="font-semibold text-text-main">{formatBRL(resumo.receitaBaile.orcado)}</p>
+              </div>
+              <div>
+                <span className="text-text-muted">Custo Orç.</span>
+                <p className="font-semibold text-text-main">{formatBRL(resumo.custoTotal.orcado)}</p>
+              </div>
+              <div>
+                <span className="text-text-muted">Margem Orç.</span>
+                <p className={`font-semibold ${margemPct >= 0 ? 'text-success' : 'text-danger'}`}>
+                  {margemPct.toFixed(1)}%
+                </p>
+              </div>
+            </div>
 
-        <ProgressBar value={pct * 100} label={`Fechados: ${formatPercent(pct)}`} color="#00b894" />
+            <ProgressBar value={pct * 100} label={`Fechados: ${formatPercent(pct)}`} color="#00b894" />
+          </>
+        ) : (
+          <div className="flex items-center gap-1.5 text-xs text-warning/80 mb-2.5 bg-warning/5 border border-warning/15 rounded-inner px-2.5 py-1.5">
+            <ClipboardList size={12} className="shrink-0" />
+            <span>{totalItens > 0 ? `${totalItens} ${totalItens === 1 ? 'item cadastrado' : 'itens cadastrados'} · ` : ''}Orçamento ainda não lançado</span>
+          </div>
+        )}
 
         {/* Frescor + ações */}
         <div className="flex items-center justify-between mt-2" onClick={(e) => e.stopPropagation()}>
