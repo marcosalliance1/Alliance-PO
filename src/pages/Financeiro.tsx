@@ -48,8 +48,8 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
   const [instAberta, setInstAberta] = useState<Record<string, boolean>>({})
 
   const fp = filtroProj.toLowerCase()
-  const boletimF = fp ? boletim.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : boletim
-  const capF     = fp ? cap.filter(r => r.desc_centro_custo.toLowerCase().includes(fp))     : cap
+  const boletimF = fp ? boletim.filter(r => (r.desc_centro_custo ?? '').toLowerCase().includes(fp)) : boletim
+  const capF     = fp ? cap.filter(r => (r.desc_centro_custo ?? '').toLowerCase().includes(fp))     : cap
 
   const receitas    = boletimF.filter(r => r.tipo === 'RECEITA')
   const despesas    = boletimF.filter(r => r.tipo === 'DESPESA')
@@ -392,7 +392,7 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
 // ─── Aba 2: Fluxo de Caixa ────────────────────────────────────────
 function FluxoCaixa({ cap: capRaw, filtroProj }: { cap: CAPRecord[]; filtroProj: string }) {
   const fp = filtroProj.toLowerCase().trim()
-  const capProj = fp ? capRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : capRaw
+  const capProj = fp ? capRaw.filter(r => (r.desc_centro_custo ?? '').toLowerCase().includes(fp)) : capRaw
 
   const hoje     = new Date().toISOString().slice(0, 10)
   const anoAtual = new Date().getFullYear()
@@ -583,11 +583,11 @@ function ControleDespesas({ boletim: boletimRaw, cap: capRaw, dimensaoProjetos, 
     v_lancamento: number; situacao: string; desc_conta_gerencial: string
     desc_centro_custo: string; fantasia_cliente_fornecedor: string; d_competencia: string | null
   }
-  const capF = fp ? capRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : capRaw
+  const capF = fp ? capRaw.filter(r => (r.desc_centro_custo ?? '').toLowerCase().includes(fp)) : capRaw
   const tarifasF = boletimRaw.filter(r =>
     r.tipo === 'DESPESA' &&
     (r.desc_conta_gerencial ?? '').toUpperCase() === 'TARIFAS BANCARIAS' &&
-    (!fp || r.desc_centro_custo.toLowerCase().includes(fp))
+    (!fp || (r.desc_centro_custo ?? '').toLowerCase().includes(fp))
   )
   const despesas: DespNorm[] = [
     ...capF.map(i => ({
@@ -855,7 +855,7 @@ const PAGE_SIZE = 100
 
 function TabelaDados({ boletim: boletimRaw, filtroProj }: { boletim: BoletimRecord[]; filtroProj: string }) {
   const fp = filtroProj.toLowerCase().trim()
-  const boletim = fp ? boletimRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : boletimRaw
+  const boletim = fp ? boletimRaw.filter(r => (r.desc_centro_custo ?? '').toLowerCase().includes(fp)) : boletimRaw
   const [filtro, setFiltro] = useState('')
   const [pagina, setPagina] = useState(0)
 
@@ -863,9 +863,9 @@ function TabelaDados({ boletim: boletimRaw, filtroProj }: { boletim: BoletimReco
     const f = filtro.toLowerCase().trim()
     if (!f) return boletim
     return boletim.filter(r =>
-      r.desc_centro_custo.toLowerCase().includes(f) ||
+      (r.desc_centro_custo ?? '').toLowerCase().includes(f) ||
       (r.fantasia_cliente_fornecedor ?? '').toLowerCase().includes(f) ||
-      r.desc_conta_gerencial.toLowerCase().includes(f)
+      (r.desc_conta_gerencial ?? '').toLowerCase().includes(f)
     )
   }, [boletim, filtro])
 
@@ -997,7 +997,7 @@ function FornecedoresPorCusto({ cap: capRaw, filtroProj }: { cap: CAPRecord[]; f
   const ranking = useMemo(() => {
     const map = new Map<string, { total: number; titulos: number; porCentro: Map<string, { total: number; titulos: number }> }>()
     for (const i of capRaw) {
-      if (fp && !i.desc_centro_custo.toLowerCase().includes(fp)) continue
+      if (fp && !(i.desc_centro_custo ?? '').toLowerCase().includes(fp)) continue
       const nome = i.fantasia_fornecedor?.trim() || '(sem fornecedor)'
       const centro = i.desc_centro_custo?.trim() || '(sem centro de custo)'
       const prev = map.get(nome) ?? { total: 0, titulos: 0, porCentro: new Map() }

@@ -12,8 +12,8 @@ export function FinanceiroEverestTab({ projeto }: { projeto: Projeto }) {
   const [filtro, setFiltro] = useState(projeto.tap.turma || '')
 
   const fp = filtro.toLowerCase().trim()
-  const boletimF = useMemo(() => fp ? boletim.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : [], [boletim, fp])
-  const capF = useMemo(() => fp ? cap.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : [], [cap, fp])
+  const boletimF = useMemo(() => fp ? boletim.filter(r => (r.desc_centro_custo ?? '').toLowerCase().includes(fp)) : [], [boletim, fp])
+  const capF = useMemo(() => fp ? cap.filter(r => (r.desc_centro_custo ?? '').toLowerCase().includes(fp)) : [], [cap, fp])
 
   const centrosEncontrados = useMemo(() => {
     const set = new Set<string>()

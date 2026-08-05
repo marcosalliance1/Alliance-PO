@@ -110,8 +110,8 @@ export function gerarRelatorioFinanceiro(
 
   _cabecalho(doc, pw, TITULOS[aba], filtroProj)
 
-  const boletimF = fp ? boletim.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : boletim
-  const capF     = fp ? cap.filter(r => r.desc_centro_custo.toLowerCase().includes(fp))     : cap
+  const boletimF = fp ? boletim.filter(r => (r.desc_centro_custo ?? '').toLowerCase().includes(fp)) : boletim
+  const capF     = fp ? cap.filter(r => (r.desc_centro_custo ?? '').toLowerCase().includes(fp))     : cap
   const dimMap   = buildDimMap(dimensaoProjetos)
 
   if      (aba === 'resultado') _resultado(doc, boletimF, capF, dimMap)
