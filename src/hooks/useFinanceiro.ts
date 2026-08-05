@@ -29,12 +29,12 @@ export interface UploadMeta {
 
 export interface BoletimRecord extends BoletimRow {
   id: string
-  upload_id: string
+  upload_id?: string
 }
 
 export interface CAPRecord extends CAPRow {
   id: string
-  upload_id: string
+  upload_id?: string
 }
 
 export interface DimensaoProjetoRecord {
@@ -52,9 +52,12 @@ export function useFinanceiro() {
 
   const carregar = useCallback(async () => {
     setCarregando(true)
+    // Lê das views _completo (tabela viva + histórico congelado pré-04/01/2023, ver
+    // supabase/migrations/20260804000000_financeiro_historico.sql) — upload/substituição
+    // continua mexendo só na tabela viva, mais abaixo em _substituir.
     const [boletimData, capData, dimData, ulpRes] = await Promise.all([
-      fetchAll<BoletimRecord>('financeiro_boletim').catch(() => [] as BoletimRecord[]),
-      fetchAll<CAPRecord>('financeiro_cap').catch(() => [] as CAPRecord[]),
+      fetchAll<BoletimRecord>('financeiro_boletim_completo').catch(() => [] as BoletimRecord[]),
+      fetchAll<CAPRecord>('financeiro_cap_completo').catch(() => [] as CAPRecord[]),
       fetchAll<DimensaoProjetoRecord>('dimensao_projetos').catch(() => [] as DimensaoProjetoRecord[]),
       supabase.from('financeiro_uploads').select('*').in('tipo', ['BOLETIM', 'CAP']).order('uploaded_at', { ascending: false }).limit(10),
     ])
