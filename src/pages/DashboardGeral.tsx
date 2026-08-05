@@ -8,7 +8,7 @@ import { CalendarioEventos } from '../components/dashboard/CalendarioEventos'
 import { Header } from '../components/layout/Header'
 import { calcResumoProjeto, calcPercentFechados, filtrarItensCalculo } from '../utils/calculos'
 import { formatBRL, formatPercent } from '../utils/formatters'
-import { FolderOpen, TrendingUp, DollarSign, CheckCircle, SlidersHorizontal, Package, Award, ChevronDown, ChevronRight, Users } from 'lucide-react'
+import { FolderOpen, TrendingUp, DollarSign, CheckCircle, SlidersHorizontal, Award, ChevronDown, ChevronRight, Users } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface DashboardGeralProps {
@@ -191,25 +191,6 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
     return Array.from(byAno.entries())
       .sort((a, b) => a[0] - b[0])
       .map(([ano, vals]) => ({ ano: String(ano), ...vals }))
-  }, [projetosFiltrados])
-
-  const topFornecedores = useMemo(() => {
-    const map = new Map<string, { orcado: number; pago: number }>()
-    for (const p of projetosFiltrados) {
-      if (p.status === 'realizado') continue
-      for (const sec of p.secoes) {
-        for (const item of filtrarItensCalculo(sec.itens)) {
-          const key = item.fornecedor?.trim() || 'Sem fornecedor'
-          if (!item.valorOrcado && !item.valorPago) continue
-          const prev = map.get(key) ?? { orcado: 0, pago: 0 }
-          map.set(key, { orcado: prev.orcado + (item.valorOrcado || 0), pago: prev.pago + (item.valorPago || 0) })
-        }
-      }
-    }
-    return [...map.entries()]
-      .map(([nome, v]) => ({ nome, ...v }))
-      .sort((a, b) => b.orcado - a.orcado)
-      .slice(0, 8)
   }, [projetosFiltrados])
 
   const vendidoVsOrcadoData = useMemo(() =>
@@ -472,46 +453,6 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
                     </div>
                   )
                 })}
-              </div>
-
-              {/* Top Fornecedores */}
-              <div className="card">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-6 h-6 rounded flex items-center justify-center shrink-0" style={{ background: 'rgba(116,185,255,0.15)' }}>
-                    <Package className="w-3.5 h-3.5" style={{ color: '#74b9ff' }} />
-                  </div>
-                  <h3 className="text-sm font-semibold text-text-main">Top Fornecedores por Custo</h3>
-                </div>
-                {topFornecedores.length === 0 ? (
-                  <p className="text-text-muted text-sm text-center py-8">Sem dados de fornecedores</p>
-                ) : (
-                  <div className="space-y-3">
-                    {topFornecedores.map((f, i) => {
-                      const maxOrcado = topFornecedores[0].orcado
-                      const pct = maxOrcado > 0 ? (f.orcado / maxOrcado) * 100 : 0
-                      const pagoPct = f.orcado > 0 ? (f.pago / f.orcado) * 100 : 0
-                      return (
-                        <div key={f.nome}>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[10px] text-text-muted w-3 text-right shrink-0">{i + 1}</span>
-                            <span className="text-xs text-text-main truncate flex-1" title={f.nome}>{f.nome}</span>
-                            <span className="text-xs font-medium text-text-main shrink-0">{formatBRL(f.orcado)}</span>
-                          </div>
-                          <div className="ml-5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                            <div className="h-full rounded-full relative" style={{ width: `${pct}%`, background: 'rgba(59,130,246,0.45)' }}>
-                              <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${pagoPct}%`, background: 'rgba(0,184,148,0.8)' }} />
-                            </div>
-                          </div>
-                          <div className="ml-5 flex gap-3 mt-0.5">
-                            <span className="text-[9px]" style={{ color: '#74b9ff' }}>Orç. {formatBRL(f.orcado)}</span>
-                            <span className="text-[9px]" style={{ color: '#00b894' }}>Pago {formatBRL(f.pago)}</span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-                <p className="text-[10px] text-text-muted mt-4 text-center">Barra: azul = orçado · verde = pago</p>
               </div>
 
               <div className="card col-span-2">

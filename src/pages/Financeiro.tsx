@@ -3,7 +3,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts'
-import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight, Table2, Search, ChevronLeft, FileDown } from 'lucide-react'
+import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight, Table2, Search, ChevronLeft, FileDown, Package } from 'lucide-react'
 import { useFinanceiro, type BoletimRecord, type CAPRecord, type DimensaoProjetoRecord } from '../hooks/useFinanceiro'
 import { fmtCompact, tempoDesde, mesAno, nivelEnsino } from '../utils/parseFinanceiro'
 import { useAuth } from '../contexts/AuthContext'
@@ -21,10 +21,11 @@ const CORES_MARGEM_ENSINO: Record<string, string> = { Superior: '#185FA5', 'Méd
 const CORES_CAT = ['#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#06B6D4', '#84CC16', '#EF4444', '#A78BFA', '#34D399']
 
 const ABAS = [
-  { id: 'resultado', label: 'Resultado Projetos', Icon: TrendingUp },
-  { id: 'fluxo',    label: 'Fluxo de Caixa',      Icon: CreditCard },
-  { id: 'despesas', label: 'Controle de Despesas', Icon: BarChart2 },
-  { id: 'dados',    label: 'Dados',                Icon: Table2 },
+  { id: 'resultado',    label: 'Resultado Projetos', Icon: TrendingUp },
+  { id: 'fluxo',        label: 'Fluxo de Caixa',      Icon: CreditCard },
+  { id: 'despesas',     label: 'Controle de Despesas', Icon: BarChart2 },
+  { id: 'fornecedores', label: 'Fornecedores',        Icon: Package },
+  { id: 'dados',        label: 'Dados',                Icon: Table2 },
 ] as const
 type AbaId = typeof ABAS[number]['id']
 
@@ -987,6 +988,69 @@ function EmptyChart({ label = 'Sem dados' }: { label?: string }) {
   return <div className="flex items-center justify-center h-40 text-text-muted text-sm">{label}</div>
 }
 
+// ─── Fornecedores (ranking real, direto do Everest via CAP) ───────
+function FornecedoresPorCusto({ cap: capRaw, filtroProj }: { cap: CAPRecord[]; filtroProj: string }) {
+  const [busca, setBusca] = useState('')
+  const fp = filtroProj.toLowerCase().trim()
+
+  const ranking = useMemo(() => {
+    const map = new Map<string, { total: number; titulos: number }>()
+    for (const i of capRaw) {
+      if (fp && !i.desc_centro_custo.toLowerCase().includes(fp)) continue
+      const nome = i.fantasia_fornecedor?.trim() || '(sem fornecedor)'
+      const prev = map.get(nome) ?? { total: 0, titulos: 0 }
+      map.set(nome, { total: prev.total + (i.v_titulo ?? 0), titulos: prev.titulos + 1 })
+    }
+    return [...map.entries()]
+      .map(([nome, v]) => ({ nome, ...v }))
+      .sort((a, b) => b.total - a.total)
+  }, [capRaw, fp])
+
+  const filtrado = useMemo(() => {
+    const b = busca.toLowerCase().trim()
+    if (!b) return ranking
+    return ranking.filter(f => f.nome.toLowerCase().includes(b))
+  }, [ranking, busca])
+
+  const maxTotal = filtrado[0]?.total || 1
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+        <h3 className="text-sm font-semibold text-text-main">Fornecedores por Custo <span className="text-xs text-text-muted font-normal">Valor real pago — Everest (CAP)</span></h3>
+        <div className="relative w-full sm:w-64">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar fornecedor..."
+            className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:border-primary/40"
+          />
+        </div>
+      </div>
+      {filtrado.length === 0 ? (
+        <EmptyChart label="Nenhum fornecedor encontrado" />
+      ) : (
+        <div className="space-y-2.5 max-h-[520px] overflow-y-auto pr-1">
+          {filtrado.map((f, i) => (
+            <div key={f.nome}>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] text-text-muted w-6 text-right shrink-0">{i + 1}</span>
+                <span className="text-xs text-text-main truncate flex-1" title={f.nome}>{f.nome}</span>
+                <span className="text-[10px] text-text-muted shrink-0">{f.titulos} título{f.titulos !== 1 ? 's' : ''}</span>
+                <span className="text-xs font-semibold text-text-main shrink-0 w-28 text-right">{fmtCompact(f.total)}</span>
+              </div>
+              <div className="ml-8 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                <div className="h-full rounded-full" style={{ width: `${(f.total / maxTotal) * 100}%`, background: 'rgba(0,184,148,0.7)' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Página principal ─────────────────────────────────────────────
 export function Financeiro() {
   const { boletim, cap, dimensaoProjetos, uploadMeta, carregando, uploadBoletim, uploadCAP } = useFinanceiro()
@@ -1002,6 +1066,7 @@ export function Financeiro() {
   const semDados = boletim.length === 0
 
   async function handleExportarPDF() {
+    if (abaAtiva === 'fornecedores') return // aba sem relatório em PDF por enquanto
     const graficos = conteudoRef.current ? await capturarGraficos(conteudoRef.current) : []
     gerarRelatorioFinanceiro(abaAtiva, boletim, cap, dimensaoProjetos, filtroProj, graficos)
   }
@@ -1050,7 +1115,7 @@ export function Financeiro() {
         <div className="flex gap-3 flex-wrap items-start">
           <button
             onClick={handleExportarPDF}
-            disabled={semDados}
+            disabled={semDados || abaAtiva === 'fornecedores'}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 bg-white/5 border border-white/10 text-text-muted hover:text-text-main hover:bg-white/10"
           >
             <FileDown size={14} />
@@ -1148,8 +1213,9 @@ export function Financeiro() {
         <div ref={conteudoRef}>
           {abaAtiva === 'resultado' && <ResultadoProjetos boletim={boletim} cap={cap} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
           {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} filtroProj={filtroProj} />}
-          {abaAtiva === 'despesas' && <ControleDespesas boletim={boletim} cap={cap} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
-          {abaAtiva === 'dados'    && <TabelaDados boletim={boletim} filtroProj={filtroProj} />}
+          {abaAtiva === 'despesas'     && <ControleDespesas boletim={boletim} cap={cap} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
+          {abaAtiva === 'fornecedores' && <FornecedoresPorCusto cap={cap} filtroProj={filtroProj} />}
+          {abaAtiva === 'dados'        && <TabelaDados boletim={boletim} filtroProj={filtroProj} />}
         </div>
       )}
 
