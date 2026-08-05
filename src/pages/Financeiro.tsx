@@ -58,7 +58,7 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
   const despTotalPorProj: Record<string, number> = {}
   for (const i of capF) { const p = i.desc_centro_custo || ''; despTotalPorProj[p] = (despTotalPorProj[p] ?? 0) + (i.v_titulo ?? 0) }
   for (const i of boletimF) {
-    if (i.desc_conta_gerencial.toUpperCase() !== 'TARIFAS BANCARIAS') continue
+    if ((i.desc_conta_gerencial ?? '').toUpperCase() !== 'TARIFAS BANCARIAS') continue
     const p = i.desc_centro_custo || ''
     despTotalPorProj[p] = (despTotalPorProj[p] ?? 0) + (i.v_lancamento ?? 0)
   }
@@ -87,7 +87,7 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
     porAno[ano].despesas += i.v_titulo ?? 0
   }
   for (const i of boletimF) {
-    if (i.desc_conta_gerencial.toUpperCase() !== 'TARIFAS BANCARIAS') continue
+    if ((i.desc_conta_gerencial ?? '').toUpperCase() !== 'TARIFAS BANCARIAS') continue
     const ano = i.d_competencia?.slice(0, 4); if (!ano) continue
     porAno[ano] ??= { ano, receitas: 0, despesas: 0 }
     porAno[ano].despesas += i.v_lancamento ?? 0
@@ -585,7 +585,7 @@ function ControleDespesas({ boletim: boletimRaw, cap: capRaw, dimensaoProjetos, 
   const capF = fp ? capRaw.filter(r => r.desc_centro_custo.toLowerCase().includes(fp)) : capRaw
   const tarifasF = boletimRaw.filter(r =>
     r.tipo === 'DESPESA' &&
-    r.desc_conta_gerencial.toUpperCase() === 'TARIFAS BANCARIAS' &&
+    (r.desc_conta_gerencial ?? '').toUpperCase() === 'TARIFAS BANCARIAS' &&
     (!fp || r.desc_centro_custo.toLowerCase().includes(fp))
   )
   const despesas: DespNorm[] = [

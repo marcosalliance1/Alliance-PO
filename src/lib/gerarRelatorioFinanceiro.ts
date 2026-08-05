@@ -158,7 +158,7 @@ function _resultado(
     const p = i.desc_centro_custo || '(sem projeto)'
     porProj[p] ??= { receita: 0, despesa: 0 }
     if (i.tipo === 'RECEITA') porProj[p].receita += i.v_lancamento ?? 0
-    else if (i.desc_conta_gerencial.toUpperCase() === 'TARIFAS BANCARIAS') porProj[p].despesa += i.v_lancamento ?? 0
+    else if ((i.desc_conta_gerencial ?? '').toUpperCase() === 'TARIFAS BANCARIAS') porProj[p].despesa += i.v_lancamento ?? 0
   }
   for (const i of cap) {
     const p = i.desc_centro_custo || '(sem projeto)'
@@ -278,7 +278,7 @@ function _despesas(
     i.v_titulo ?? 0,
   )
   for (const i of boletim) {
-    if (i.tipo !== 'DESPESA' || i.desc_conta_gerencial.toUpperCase() !== 'TARIFAS BANCARIAS') continue
+    if (i.tipo !== 'DESPESA' || (i.desc_conta_gerencial ?? '').toUpperCase() !== 'TARIFAS BANCARIAS') continue
     add(i.desc_centro_custo || '(sem projeto)', i.desc_conta_gerencial, i.fantasia_cliente_fornecedor || '(sem fornecedor)', i.v_lancamento ?? 0)
   }
 
