@@ -121,17 +121,18 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
   [projetosParaConvidados])
 
   const convidadosPorEnsino = useMemo(() => {
-    const grupos: Record<'SUPERIOR' | 'MEDIO' | 'FUNDAMENTAL', { id: string; titulo: string; total: number }[]> = {
+    const grupos: Record<'SUPERIOR' | 'MEDIO' | 'FUNDAMENTAL', { id: string; titulo: string; total: number; realizado: boolean }[]> = {
       SUPERIOR: [], MEDIO: [], FUNDAMENTAL: [],
     }
     for (const p of projetosParaConvidados) {
       if (!p.totalConvidadosAtual) continue
       const tipo = (p.tap.tipoEscola ?? 'MEDIO') as 'SUPERIOR' | 'MEDIO' | 'FUNDAMENTAL'
       const titulo = p.tap.turma || `${p.tap.instituicao} ${p.tap.curso}`.trim() || `Projeto #${p.id.slice(0, 6)}`
-      grupos[tipo].push({ id: p.id, titulo, total: p.totalConvidadosAtual })
+      grupos[tipo].push({ id: p.id, titulo, total: p.totalConvidadosAtual, realizado: p.status === 'realizado' })
     }
     for (const tipo of ['SUPERIOR', 'MEDIO', 'FUNDAMENTAL'] as const) {
-      grupos[tipo].sort((a, b) => b.total - a.total)
+      // Em andamento primeiro (ordenados por total), depois realizados — a UI separa os dois grupos com uma linha
+      grupos[tipo].sort((a, b) => (a.realizado === b.realizado ? b.total - a.total : a.realizado ? 1 : -1))
     }
     return grupos
   }, [projetosParaConvidados])
@@ -393,7 +394,12 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
             {showConvidados ? <ChevronDown className="w-4 h-4 text-text-muted" /> : <ChevronRight className="w-4 h-4 text-text-muted" />}
             <Users className="w-4 h-4" style={{ color: '#74b9ff' }} />
             <h3 className="text-sm font-semibold text-text-main">Convidados por Ensino</h3>
-            <span className="ml-auto text-sm font-bold text-text-main">{totalConvidadosGeral.toLocaleString('pt-BR')}</span>
+            <div className="ml-auto text-right">
+              <p className="text-sm font-bold text-text-main">{totalConvidadosGeral.toLocaleString('pt-BR')}</p>
+              <p className="text-[10px] text-text-muted">
+                {totalConvidadosEmAndamento.toLocaleString('pt-BR')} em andamento · {totalConvidadosRealizados.toLocaleString('pt-BR')} realizados
+              </p>
+            </div>
           </button>
           {showConvidados && (
             <div className="mt-4 grid grid-cols-3 gap-4">
@@ -403,6 +409,10 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
                 const lista = convidadosPorEnsino[tipo]
                 if (lista.length === 0) return null
                 const totalTipo = lista.reduce((s, p) => s + p.total, 0)
+                const emAndamento = lista.filter(p => !p.realizado)
+                const realizados = lista.filter(p => p.realizado)
+                const totalTipoAndamento = emAndamento.reduce((s, p) => s + p.total, 0)
+                const totalTipoRealizados = realizados.reduce((s, p) => s + p.total, 0)
                 return (
                   <div key={tipo}>
                     <div className="flex items-center gap-1.5 mb-2">
@@ -411,7 +421,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
                       <span className="text-xs text-text-muted ml-auto">{totalTipo.toLocaleString('pt-BR')}</span>
                     </div>
                     <div className="space-y-0.5">
-                      {lista.map((p) => (
+                      {emAndamento.map((p) => (
                         <div
                           key={p.id}
                           className="flex items-center gap-2 py-1 px-1 border-b border-white/5 cursor-pointer hover:bg-white/5 rounded transition-colors"
@@ -421,7 +431,29 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
                           <span className="text-xs font-medium shrink-0" style={{ color: cor }}>{p.total.toLocaleString('pt-BR')}</span>
                         </div>
                       ))}
+                      {realizados.length > 0 && (
+                        <>
+                          <div className="flex items-center gap-2 pt-2 pb-0.5">
+                            <span className="text-[10px] text-text-muted uppercase tracking-wider">Realizados</span>
+                            <div className="flex-1 h-px bg-white/10" />
+                            <span className="text-[10px] text-text-muted">{totalTipoRealizados.toLocaleString('pt-BR')}</span>
+                          </div>
+                          {realizados.map((p) => (
+                            <div
+                              key={p.id}
+                              className="flex items-center gap-2 py-1 px-1 border-b border-white/5 cursor-pointer hover:bg-white/5 rounded transition-colors opacity-50"
+                              onClick={() => navigate(`/projetos/${p.id}`)}
+                            >
+                              <span className="text-xs text-text-main flex-1 truncate">{p.titulo}</span>
+                              <span className="text-xs font-medium shrink-0" style={{ color: cor }}>{p.total.toLocaleString('pt-BR')}</span>
+                            </div>
+                          ))}
+                        </>
+                      )}
                     </div>
+                    {emAndamento.length > 0 && realizados.length > 0 && (
+                      <p className="text-[10px] text-text-muted mt-1.5">{totalTipoAndamento.toLocaleString('pt-BR')} em andamento</p>
+                    )}
                   </div>
                 )
               })}
