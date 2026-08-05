@@ -136,6 +136,7 @@ export interface Projeto {
   sheetLayout?: 'A' | 'B'
   status: 'em_andamento' | 'realizado'
   totalConvidadosAtual?: number
+  totalAdesoesAtual?: number
 }
 
 export interface LineupItemEvento {

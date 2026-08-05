@@ -407,7 +407,10 @@ export function ProjectDashboard({ projeto }: Props) {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-text-main">Custo por Convidado</h3>
           {projeto.totalConvidadosAtual ? (
-            <span className="text-xs text-text-muted">👥 {projeto.totalConvidadosAtual.toLocaleString('pt-BR')} convidados</span>
+            <span className="text-xs text-text-muted">
+              👥 {projeto.totalConvidadosAtual.toLocaleString('pt-BR')} convidados
+              {projeto.totalAdesoesAtual ? ` · 🎓 ${projeto.totalAdesoesAtual.toLocaleString('pt-BR')} adesões` : ''}
+            </span>
           ) : (
             <span className="text-xs text-text-muted italic">Sincronize a PO para carregar o total de convidados</span>
           )}

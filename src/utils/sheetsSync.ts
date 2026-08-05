@@ -8,6 +8,7 @@ export interface SyncResult {
   receitas: Receitas
   resumoComercial: LinhaResumoComercial[]
   totalConvidadosAtual: number | null
+  totalAdesoesAtual: number | null
   avisos: string[]
 }
 
@@ -295,6 +296,20 @@ function parseTotalConvidados(values: unknown[][]): number | null {
   return null
 }
 
+// "TOTAL FORMANDOS" (bloco INFORMAÇÕES) = soma dos pacotes de convite já fechados,
+// ou seja, a contagem real de formandos aderidos — diferente de adesoesPrevistas
+// (meta do TAP) e de totalConvidadosAtual (convidados, não formandos).
+function parseTotalFormandos(values: unknown[][]): number | null {
+  for (let r = 0; r < values.length; r++) {
+    const colB = parseStr(getCell(values, r, 1))
+    if (colB.toLowerCase().includes('total formandos')) {
+      const val = parseNum(getCell(values, r, 2))
+      return val > 0 ? val : null
+    }
+  }
+  return null
+}
+
 function parseReceitasFromResumo(values: unknown[][]): Receitas {
   // Localiza a linha de cabeçalho da tabela de receitas:
   // col A = "ITEM" E a linha contém "vendido"/"orcado" (evita falso positivo em outras linhas com "ITEM")
@@ -569,6 +584,7 @@ export async function sincronizarComSheets(
   let resumoEncontrado = false
   let resumoComercialParsed: LinhaResumoComercial[] = []
   let totalConvidadosAtual: number | null = null
+  let totalAdesoesAtual: number | null = null
   const avisosItens: string[] = []
   let preEventoExtra: { id: string; numero: string; nome: string; itens: ItemCusto[] } | null = null
 
@@ -578,7 +594,10 @@ export async function sincronizarComSheets(
       onProgress(`Lendo ACOMP. Atendimento (${nomeAba})...`)
       try {
         const values = await fetchAba(spreadsheetId, nomeAba, accessToken)
-        if (values) totalConvidadosAtual = parseTotalConvidados(values)
+        if (values) {
+          totalConvidadosAtual = parseTotalConvidados(values)
+          totalAdesoesAtual = parseTotalFormandos(values)
+        }
       } catch (e) {
         if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
         console.warn(`Erro ao ler aba "${nomeAba}":`, e)
@@ -719,6 +738,7 @@ export async function sincronizarComSheets(
     receitas: receitasMerged,
     resumoComercial: resumoComercialParsed.length > 0 ? resumoComercialParsed : (projeto.resumoComercial ?? []),
     totalConvidadosAtual,
+    totalAdesoesAtual,
     avisos,
   }
 }
