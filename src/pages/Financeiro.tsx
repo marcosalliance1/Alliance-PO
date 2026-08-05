@@ -863,7 +863,7 @@ function TabelaDados({ boletim: boletimRaw, filtroProj }: { boletim: BoletimReco
     if (!f) return boletim
     return boletim.filter(r =>
       r.desc_centro_custo.toLowerCase().includes(f) ||
-      r.fantasia_cliente_fornecedor.toLowerCase().includes(f) ||
+      (r.fantasia_cliente_fornecedor ?? '').toLowerCase().includes(f) ||
       r.desc_conta_gerencial.toLowerCase().includes(f)
     )
   }, [boletim, filtro])
