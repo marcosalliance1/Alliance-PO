@@ -5,6 +5,7 @@ import { TAPForm } from '../components/projeto/TAPForm'
 import { SecaoCusto } from '../components/projeto/SecaoCusto'
 import { ResumoGeral } from '../components/projeto/ResumoGeral'
 import { ProjectDashboard } from '../components/projeto/ProjectDashboard'
+import { FinanceiroEverestTab } from '../components/projeto/FinanceiroEverestTab'
 import { Header } from '../components/layout/Header'
 import { BadgeEscola } from '../components/ui/Badge'
 import { useAuth } from '../contexts/AuthContext'
@@ -64,6 +65,7 @@ export function ViewProjeto({
     ...projeto.secoes.map((s) => ({ id: s.id, label: s.numero })),
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'resumo', label: 'Resumo Geral' },
+    { id: 'financeiro-everest', label: 'Financeiro Everest' },
   ]
 
   const handleUpdateItem = useCallback(
@@ -173,6 +175,10 @@ export function ViewProjeto({
           onUpdateConciliacao={onUpdateConciliacao}
           onUpdateCustosAdicionais={onUpdateCustosAdicionais}
         />
+      )}
+
+      {abaAtiva === 'financeiro-everest' && (
+        <FinanceiroEverestTab projeto={projeto} />
       )}
     </div>
   )
