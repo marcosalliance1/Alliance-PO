@@ -368,6 +368,17 @@ export function mesAno(isoDate: string | null): string | null {
   return `${MESES[parseInt(mes, 10) - 1]}/${ano}`
 }
 
+// Compara nome de projeto/turma (P.O.) com desc_centro_custo (Everest) por
+// aproximação: reaproveita norm() (acentos/caixa) e exige que cada "palavra" do
+// termo apareça em algum lugar do centro de custo — não precisa ser substring
+// exata, pois o Everest costuma anexar o ano completo (ex.: "PUC 26" → "PUC 2026").
+export function matchCentroCusto(centroCusto: string | null | undefined, termo: string): boolean {
+  const c = norm(centroCusto ?? '').replace(/[^a-z0-9]+/g, ' ').trim()
+  const termos = norm(termo).replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean)
+  if (termos.length === 0 || !c) return false
+  return termos.every(t => c.includes(t))
+}
+
 const ESCOLAS_MEDIO = ['BERNOULLI', 'LOYOLA', 'MARISTA', 'CSAG', 'EABH', 'ESTA', 'MAGNUM']
 export function nivelEnsino(nome: string): string {
   if (!nome) return 'Superior'

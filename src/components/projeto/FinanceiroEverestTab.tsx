@@ -3,7 +3,7 @@ import type { Projeto } from '../../types'
 import { useFinanceiro } from '../../hooks/useFinanceiro'
 import { calcResumoProjeto } from '../../utils/calculos'
 import { formatBRL } from '../../utils/formatters'
-import { fmtCompact } from '../../utils/parseFinanceiro'
+import { fmtCompact, matchCentroCusto } from '../../utils/parseFinanceiro'
 import { KPICard } from '../dashboard/KPICard'
 import { DollarSign, TrendingDown, TrendingUp, Search, Loader, AlertTriangle } from 'lucide-react'
 
@@ -11,9 +11,9 @@ export function FinanceiroEverestTab({ projeto }: { projeto: Projeto }) {
   const { boletim, cap, carregando } = useFinanceiro()
   const [filtro, setFiltro] = useState(projeto.tap.turma || '')
 
-  const fp = filtro.toLowerCase().trim()
-  const boletimF = useMemo(() => fp ? boletim.filter(r => (r.desc_centro_custo ?? '').toLowerCase().includes(fp)) : [], [boletim, fp])
-  const capF = useMemo(() => fp ? cap.filter(r => (r.desc_centro_custo ?? '').toLowerCase().includes(fp)) : [], [cap, fp])
+  const fp = filtro.trim()
+  const boletimF = useMemo(() => fp ? boletim.filter(r => matchCentroCusto(r.desc_centro_custo, fp)) : [], [boletim, fp])
+  const capF = useMemo(() => fp ? cap.filter(r => matchCentroCusto(r.desc_centro_custo, fp)) : [], [cap, fp])
 
   const centrosEncontrados = useMemo(() => {
     const set = new Set<string>()
