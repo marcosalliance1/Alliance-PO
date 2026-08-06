@@ -88,6 +88,10 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
   const [toast, setToast] = useState<{ mensagem: string; tipo: 'sucesso' | 'erro' } | null>(null)
   const [avisosSync, setAvisosSync] = useState<string[]>([])
 
+  // Sincronizar Tudo
+  const [sincronizandoTudo, setSincronizandoTudo] = useState(false)
+  const [pendingSyncAll, setPendingSyncAll] = useState(false)
+
   // Modal de URL do Sheets
   const [showUrlModal, setShowUrlModal] = useState(false)
   const [urlModalId, setUrlModalId] = useState<string | null>(null)
@@ -172,6 +176,89 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
       if (projeto) executarSync(projeto)
     }
   }, [accessToken, pendingSyncId, projetos, executarSync])
+
+  // ── Sincronizar Tudo — roda o sync de cada projeto com Sheets configurado,
+  // um de cada vez, sem substituir os botões individuais existentes ──────────
+  const executarSyncTudo = useCallback(async () => {
+    if (!accessToken) return
+    const elegiveis = projetos.filter(p => !!extrairSpreadsheetId(p.sheetsUrl ?? '') && !!p.sheetLayout)
+    const semLayout = projetos.filter(p => !!extrairSpreadsheetId(p.sheetsUrl ?? '') && !p.sheetLayout)
+
+    if (elegiveis.length === 0) {
+      setToast({
+        mensagem: semLayout.length > 0
+          ? `Nenhum projeto pronto — ${semLayout.length} precisam escolher o layout da planilha primeiro (sincronize-os individualmente uma vez)`
+          : 'Nenhum projeto com Google Sheets configurado',
+        tipo: 'erro',
+      })
+      return
+    }
+
+    setSincronizandoTudo(true)
+    let ok = 0
+    const falhas: string[] = []
+    const avisosTotais: string[] = []
+
+    for (let i = 0; i < elegiveis.length; i++) {
+      const projeto = elegiveis[i]
+      const nome = projeto.tap.turma || projeto.tap.instituicao || `Projeto #${projeto.id.slice(0, 6)}`
+      const spreadsheetId = extrairSpreadsheetId(projeto.sheetsUrl ?? '')!
+      setSincronizando(prev => ({ ...prev, [projeto.id]: true }))
+      setProgressoSync(`(${i + 1}/${elegiveis.length}) ${nome} — iniciando...`)
+      try {
+        const resultado = await sincronizarComSheets(
+          spreadsheetId,
+          accessToken,
+          projeto,
+          (msg) => setProgressoSync(`(${i + 1}/${elegiveis.length}) ${nome} — ${msg}`),
+          projeto.sheetLayout ?? 'A',
+        )
+        await onSincronizar(projeto.id, resultado)
+        ok++
+        if (resultado.avisos.length > 0) avisosTotais.push(...resultado.avisos.map(a => `${nome}: ${a}`))
+      } catch (err) {
+        const e = err as Error & { tipo?: string }
+        if (e.tipo === 'TOKEN_EXPIRADO') {
+          invalidarToken()
+          falhas.push(`${nome} (token expirado — parei por aqui)`)
+          setSincronizando(prev => ({ ...prev, [projeto.id]: false }))
+          break
+        }
+        falhas.push(`${nome} (${e.message ?? 'erro'})`)
+      } finally {
+        setSincronizando(prev => ({ ...prev, [projeto.id]: false }))
+      }
+    }
+
+    setProgressoSync(null)
+    setSincronizandoTudo(false)
+    if (avisosTotais.length > 0) setAvisosSync(avisosTotais)
+
+    const partes = [`${ok}/${elegiveis.length} sincronizados`]
+    if (semLayout.length > 0) partes.push(`${semLayout.length} sem layout (pulados)`)
+    if (falhas.length > 0) partes.push(`${falhas.length} com erro`)
+    setToast({
+      mensagem: partes.join(' · ') + (falhas.length > 0 ? ` — ${falhas.join(', ')}` : ''),
+      tipo: falhas.length > 0 ? 'erro' : 'sucesso',
+    })
+  }, [accessToken, projetos, onSincronizar, invalidarToken])
+
+  function handleSincronizarTudo() {
+    if (!accessToken) {
+      setPendingSyncAll(true)
+      conectar()
+      return
+    }
+    executarSyncTudo()
+  }
+
+  // Executar "Sincronizar Tudo" pendente após autenticação
+  useEffect(() => {
+    if (accessToken && pendingSyncAll) {
+      setPendingSyncAll(false)
+      executarSyncTudo()
+    }
+  }, [accessToken, pendingSyncAll, executarSyncTudo])
 
   function handleSincronizar(projeto: Projeto) {
     const spreadsheetId = extrairSpreadsheetId(projeto.sheetsUrl ?? '')
@@ -523,6 +610,15 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
         actions={
           isAdmin ? (
             <>
+              <button
+                className="btn-secondary flex items-center gap-2 disabled:opacity-50"
+                disabled={sincronizandoTudo}
+                onClick={handleSincronizarTudo}
+                title="Sincroniza todos os projetos com Google Sheets configurado, um de cada vez"
+              >
+                {sincronizandoTudo ? <Loader size={15} className="animate-spin" /> : <Cloud size={15} />}
+                Sincronizar Tudo
+              </button>
               <button className="btn-secondary flex items-center gap-2" onClick={() => setShowImportar(true)}>
                 <Upload size={15} /> Importar .xlsx
               </button>
