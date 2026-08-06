@@ -145,7 +145,12 @@ export function ViewProjeto({
       </div>
 
       {abaAtiva === 'tap' && (
-        <TAPForm tap={projeto.tap} onChange={onUpdateTAP} />
+        <TAPForm
+          tap={projeto.tap}
+          onChange={onUpdateTAP}
+          totalConvidadosAtual={projeto.totalConvidadosAtual}
+          isRealizado={projeto.status === 'realizado'}
+        />
       )}
 
       {projeto.secoes.map((secao) =>

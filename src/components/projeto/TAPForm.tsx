@@ -6,6 +6,8 @@ import { useAuth } from '../../contexts/AuthContext'
 interface TAPFormProps {
   tap: TAP
   onChange: (tap: TAP) => void
+  totalConvidadosAtual?: number
+  isRealizado?: boolean
 }
 
 const TIPOS: { value: TipoEscola; label: string }[] = [
@@ -28,7 +30,7 @@ function Field({
 const INPUT = 'w-full bg-surface-2 border border-white/10 rounded-inner px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary'
 const SELECT = INPUT
 
-export function TAPForm({ tap, onChange }: TAPFormProps) {
+export function TAPForm({ tap, onChange, totalConvidadosAtual, isRealizado }: TAPFormProps) {
   const { isAdmin } = useAuth()
   const ro = !isAdmin
   const [tap_, setTap] = useState<TAP>(tap)
@@ -97,9 +99,13 @@ export function TAPForm({ tap, onChange }: TAPFormProps) {
           <Field label="Adesões Previstas">
             <input type="number" className={INPUT} value={tap_.adesoesPrevistas} onChange={(e) => update({ adesoesPrevistas: parseInt(e.target.value) || 0 })} disabled={ro} />
           </Field>
-          <Field label="Convidados Baile">
+          <div className={`col-span-2 md:col-span-1 ${isRealizado ? 'opacity-50' : ''}`}>
+            <label className="block text-xs font-medium text-text-muted mb-1">Convidados Baile (previsto)</label>
             <input type="number" className={INPUT} value={tap_.qtdConvidadosBaile} onChange={(e) => update({ qtdConvidadosBaile: parseInt(e.target.value) || 0 })} disabled={ro} />
-          </Field>
+            {!!totalConvidadosAtual && (
+              <p className="text-[11px] text-text-muted mt-1">Real (sincronizado): {totalConvidadosAtual.toLocaleString('pt-BR')}</p>
+            )}
+          </div>
           <Field label="Convidados Pós-Baile">
             <input type="number" className={INPUT} value={tap_.qtdConvidadosPosBaile} onChange={(e) => update({ qtdConvidadosPosBaile: parseInt(e.target.value) || 0 })} disabled={ro} />
           </Field>
