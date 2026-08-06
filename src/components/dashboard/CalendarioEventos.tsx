@@ -4,8 +4,22 @@ import { ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
 import type { Projeto } from '../../types'
 import { parseLocalDate } from '../../utils/formatters'
 
+export interface EventoPreEvento {
+  id: string
+  titulo: string
+  data: string
+}
+
 interface Props {
   projetos: Projeto[]
+  preEventos?: EventoPreEvento[]
+}
+
+interface EventoCalendario {
+  id: string
+  titulo: string
+  data: Date
+  tipo: 'projeto' | 'preevento'
 }
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -15,16 +29,20 @@ function tituloProjeto(p: Projeto): string {
   return p.tap.turma || `${p.tap.instituicao} ${p.tap.curso}`.trim() || `Projeto #${p.id.slice(0, 6)}`
 }
 
-export function CalendarioEventos({ projetos }: Props) {
+export function CalendarioEventos({ projetos, preEventos = [] }: Props) {
   const navigate = useNavigate()
   const hoje = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }, [])
   const [mesRef, setMesRef] = useState(() => new Date(hoje.getFullYear(), hoje.getMonth(), 1))
 
-  const comData = useMemo(() =>
-    projetos
+  const comData = useMemo(() => {
+    const doProjeto: EventoCalendario[] = projetos
       .filter((p) => p.tap.dataEvento)
-      .map((p) => ({ projeto: p, data: parseLocalDate(p.tap.dataEvento) })),
-  [projetos])
+      .map((p) => ({ id: p.id, titulo: tituloProjeto(p), data: parseLocalDate(p.tap.dataEvento), tipo: 'projeto' as const }))
+    const doPreEvento: EventoCalendario[] = preEventos
+      .filter((e) => e.data)
+      .map((e) => ({ id: e.id, titulo: e.titulo, data: parseLocalDate(e.data), tipo: 'preevento' as const }))
+    return [...doProjeto, ...doPreEvento]
+  }, [projetos, preEventos])
 
   const semData = useMemo(() => {
     const anoAtual = hoje.getFullYear()
@@ -65,8 +83,16 @@ export function CalendarioEventos({ projetos }: Props) {
 
   return (
     <div className="card mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-text-main">Calendário de Eventos</h3>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-y-2">
+        <div className="flex items-center gap-4">
+          <h3 className="text-sm font-semibold text-text-main">Calendário de Eventos</h3>
+          {preEventos.length > 0 && (
+            <div className="flex items-center gap-3 text-[10px] text-text-muted">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary shrink-0" /> Baile</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-warning shrink-0" /> Pré-Evento</span>
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setMesRef(new Date(mesRef.getFullYear(), mesRef.getMonth() - 1, 1))}
@@ -107,14 +133,18 @@ export function CalendarioEventos({ projetos }: Props) {
                 {d.getDate()}
               </p>
               <div className="space-y-0.5">
-                {eventos.slice(0, 2).map(({ projeto }) => (
+                {eventos.slice(0, 2).map((ev) => (
                   <button
-                    key={projeto.id}
-                    onClick={() => navigate(`/projetos/${projeto.id}`)}
-                    title={tituloProjeto(projeto)}
-                    className="w-full text-left text-[9px] px-1 py-0.5 rounded bg-primary/20 text-primary truncate hover:bg-primary/30 transition-colors block"
+                    key={`${ev.tipo}-${ev.id}`}
+                    onClick={() => navigate(ev.tipo === 'projeto' ? `/projetos/${ev.id}` : `/pre-eventos/orcamentos/${ev.id}`)}
+                    title={ev.titulo}
+                    className={`w-full text-left text-[9px] px-1 py-0.5 rounded truncate transition-colors block ${
+                      ev.tipo === 'projeto'
+                        ? 'bg-primary/20 text-primary hover:bg-primary/30'
+                        : 'bg-warning/20 text-warning hover:bg-warning/30'
+                    }`}
                   >
-                    {tituloProjeto(projeto)}
+                    {ev.titulo}
                   </button>
                 ))}
                 {eventos.length > 2 && (

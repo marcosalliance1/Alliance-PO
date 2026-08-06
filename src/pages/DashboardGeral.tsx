@@ -6,6 +6,8 @@ import { GraficoBarras } from '../components/dashboard/GraficoBarras'
 import { GraficoLinha } from '../components/dashboard/GraficoLinha'
 import { CalendarioEventos } from '../components/dashboard/CalendarioEventos'
 import { Header } from '../components/layout/Header'
+import { useOrcamentos } from '../modules/pre-eventos/hooks/useOrcamentos'
+import { EVENT_TYPE_LABELS } from '../modules/pre-eventos/data/defaults'
 import { calcResumoProjeto, calcPercentFechados, filtrarItensCalculo } from '../utils/calculos'
 import { formatBRL, formatPercent } from '../utils/formatters'
 import { FolderOpen, TrendingUp, DollarSign, CheckCircle, SlidersHorizontal, Award, ChevronDown, ChevronRight, Users } from 'lucide-react'
@@ -37,6 +39,17 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('em_andamento')
   const [showVendidoVsOrcado, setShowVendidoVsOrcado] = useState(false)
   const [showConvidados, setShowConvidados] = useState(false)
+
+  const { orcamentos } = useOrcamentos()
+  const preEventosCalendario = useMemo(() =>
+    orcamentos
+      .filter(o => o.data)
+      .map(o => {
+        const tipoLabel = EVENT_TYPE_LABELS[o.tipo]
+        const titulo = o.turma && tipoLabel ? `${o.turma} - ${tipoLabel}` : (o.turma || tipoLabel || 'Pré-Evento')
+        return { id: o.id, titulo, data: o.data }
+      }),
+  [orcamentos])
 
   const fornecedoresUsados = useMemo(() => {
     const names = new Set<string>()
@@ -385,7 +398,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
       )}
 
       {/* ── Calendário de Eventos ──────────────────────────────────────── */}
-      <CalendarioEventos projetos={projetosFiltrados} />
+      <CalendarioEventos projetos={projetosFiltrados} preEventos={preEventosCalendario} />
 
       {/* ── Convidados por Ensino ─────────────────────────────────────── */}
       {totalConvidadosGeral > 0 && (
