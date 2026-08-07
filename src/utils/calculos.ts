@@ -43,6 +43,24 @@ export function filtrarItensCalculo(itens: ItemCusto[]): ItemCusto[] {
   )
 }
 
+/**
+ * Projeção da P.O. para a VISÃO DO CLIENTE (Portal). Remove as linhas internas
+ * "Despesa Fee" — fee/comissão/margem da Alliance, custo interno que não afeta a
+ * saúde financeira do projeto do cliente. Mantém todo o resto dos custos.
+ * Ver SPEC_PORTAL_CLIENTE_PO.md, regra #1.
+ */
+export function projetoVisaoCliente(projeto: Projeto): Projeto {
+  return {
+    ...projeto,
+    secoes: projeto.secoes.map((s) => ({
+      ...s,
+      itens: s.itens.filter(
+        (i) => (i.subcategoria?.trim().toLowerCase() ?? '') !== 'despesa fee',
+      ),
+    })),
+  }
+}
+
 export function calcTotaisSecao(secao: SecaoCusto, qtdFormandos: number): TotaisSecao {
   const itens = filtrarItensCalculo(secao.itens)
   const totalVendido = itens.reduce((s, i) => s + (i.totalAtual ?? 0), 0)

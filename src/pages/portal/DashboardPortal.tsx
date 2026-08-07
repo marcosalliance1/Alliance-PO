@@ -3,14 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
-  PieChart, Pie, Cell,
 } from 'recharts'
-import { CheckCircle2, AlertTriangle, LogOut, ChevronDown, ChevronRight, Ticket } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, LogOut, ChevronDown, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { usePortalAuth } from '../../contexts/PortalAuthContext'
-import { calcResumoProjeto, filtrarItensCalculo } from '../../utils/calculos'
+import { calcResumoProjeto, filtrarItensCalculo, projetoVisaoCliente } from '../../utils/calculos'
 import allianceLogo from '../../assets/alliance-logo.png'
-import type { Projeto, SecaoCusto, TAP, Receitas, CustoAdicional, ConciliacaoEverest, EventoOperacional, LineupItemEvento } from '../../types'
+import type { Projeto, SecaoCusto, TAP, Receitas, CustoAdicional, ConciliacaoEverest } from '../../types'
 import type { Orcamento, ItemOrcamento } from '../../modules/pre-eventos/types'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -49,7 +48,6 @@ interface CapVencimento {
 
 // ─── Chart constants ──────────────────────────────────────────────────────────
 
-const PIE_COLORS = ['#E63329', '#F56060', '#C44242', '#FF7A6E', '#B8302A', '#FF9B8C', '#A02525', '#FF6B5B']
 const TOOLTIP_STYLE = { backgroundColor: '#1a1a2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#f1f5f9', fontSize: 12 }
 const AXIS_STYLE = { fill: '#8892a4', fontSize: 11 }
 
@@ -57,46 +55,62 @@ const AXIS_STYLE = { fill: '#8892a4', fontSize: 11 }
 
 function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; vencimentos: CapVencimento[] }) {
   const resumo = useMemo(() => calcResumoProjeto(projeto), [projeto])
-  const { contratado: totalContratado, pago: totalPago, faltaPagar } = resumo.custoTotal
-  const pctPago = totalContratado > 0 ? Math.min(100, (totalPago / totalContratado) * 100) : 0
+  // Tudo na MESMA coluna por linha, pra Receita − Custo = Saldo fechar na tela.
+  const receitaPrevista = resumo.receitaBaile.orcado
+  const custoPrevisto   = resumo.custoTotal.orcado
+  const saldoPrevisto   = resumo.margem.orcado   // = receitaPrevista − custoPrevisto
+  const receitaRecebida = resumo.receitaBaile.pago
+  const custoPago       = resumo.custoTotal.pago
+  const saldoAtual      = resumo.margem.pago     // = receitaRecebida − custoPago
+  const pctExecutado = custoPrevisto > 0 ? Math.min(100, (custoPago / custoPrevisto) * 100) : 0
 
   const chartData = resumo.custos
-    .filter(c => c.contratado > 0 || c.pago > 0)
-    .map(c => ({ nome: c.nome.split(' ')[0], 'Custo Previsto': Math.round(c.contratado), Pago: Math.round(c.pago) }))
+    .filter(c => c.orcado > 0 || c.pago > 0)
+    .map(c => ({ nome: c.nome.split(' ')[0], 'Custo Previsto': Math.round(c.orcado), Pago: Math.round(c.pago) }))
+
+  const linhaPlano = [
+    { label: 'Receita Prevista', value: fmtBRL(receitaPrevista) },
+    { label: 'Custo Previsto',   value: fmtBRL(custoPrevisto) },
+    { label: 'Saldo Previsto',   value: fmtBRL(saldoPrevisto), color: saldoPrevisto >= 0 ? 'text-success' : 'text-danger' },
+  ]
+  const linhaReal = [
+    { label: 'Receita Recebida', value: fmtBRL(receitaRecebida) },
+    { label: 'Custo Pago',       value: fmtBRL(custoPago) },
+    { label: 'Saldo Atual',      value: fmtBRL(saldoAtual), color: saldoAtual >= 0 ? 'text-success' : 'text-danger' },
+  ]
 
   return (
     <div className="space-y-6">
-      {/* Saldo da Turma */}
+      {/* Plano (Orçado) — Receita − Custo = Saldo, fecha na horizontal */}
       <div>
-        <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-3">Saldo da Turma</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: 'Receita Prevista', value: fmtBRL(resumo.receitaBaile.orcado), color: 'text-primary' },
-            { label: 'Receita Everest',  value: fmtBRL(resumo.receitaBaile.pago),   color: 'text-success' },
-            { label: 'Saldo Previsto',   value: fmtBRL(resumo.margem.orcado),       color: resumo.margem.orcado >= 0 ? 'text-success' : 'text-danger' },
-            { label: 'Saldo Everest',    value: fmtBRL(resumo.margem.pago),         color: resumo.margem.pago >= 0 ? 'text-success' : 'text-danger' },
-          ].map(({ label, value, color }) => (
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-1 h-4 bg-primary rounded-full" />
+          <h3 className="text-text-main text-sm font-semibold">Plano <span className="text-text-muted font-normal">· orçado</span></h3>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {linhaPlano.map(({ label, value, color }) => (
             <div key={label} className="bg-bg rounded-xl px-4 py-4">
               <div className="text-text-muted text-xs mb-1">{label}</div>
-              <div className={`text-lg font-semibold ${color}`}>{value}</div>
+              <div className={`text-lg font-semibold ${color ?? 'text-text-main'}`}>{value}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Custo Previsto',   value: fmtBRL(totalContratado), color: 'text-primary' },
-          { label: 'Total Pago',       value: fmtBRL(totalPago),       color: 'text-success' },
-          { label: 'Falta Pagar',      value: fmtBRL(faltaPagar),      color: 'text-warning' },
-          { label: '% Pago',           value: `${pctPago.toFixed(1)}%`, color: pctPago >= 80 ? 'text-success' : 'text-primary' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="bg-bg rounded-xl px-4 py-4">
-            <div className="text-text-muted text-xs mb-1">{label}</div>
-            <div className={`text-lg font-semibold ${color}`}>{value}</div>
-          </div>
-        ))}
+      {/* Recebido (Everest) — Receita − Custo = Saldo, fecha na horizontal */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-1 h-4 bg-success rounded-full" />
+          <h3 className="text-text-main text-sm font-semibold">Recebido <span className="text-text-muted font-normal">· Everest</span></h3>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {linhaReal.map(({ label, value, color }) => (
+            <div key={label} className="bg-bg rounded-xl px-4 py-4">
+              <div className="text-text-muted text-xs mb-1">{label}</div>
+              <div className={`text-lg font-semibold ${color ?? 'text-text-main'}`}>{value}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Gráfico Custo Previsto × Pago por seção */}
@@ -117,17 +131,17 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
         </div>
       )}
 
-      {/* Barra de progresso de pagamento */}
+      {/* Barra de progresso: quanto do custo previsto já foi pago */}
       <div className="bg-bg rounded-xl px-4 py-4">
         <div className="mb-2">
-          <span className="text-text-muted text-xs">Progresso de Pagamento</span>
+          <span className="text-text-muted text-xs">Custo pago do previsto</span>
         </div>
         <div className="h-2.5 bg-white/10 rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all" style={{ width: `${pctPago}%`, background: '#00b894' }} />
+          <div className="h-full rounded-full transition-all" style={{ width: `${pctExecutado}%`, background: '#00b894' }} />
         </div>
         <div className="flex justify-between text-xs text-text-muted mt-1.5">
-          <span>{fmtBRL(totalPago)} pago</span>
-          <span>{pctPago.toFixed(1)}% de {fmtBRL(totalContratado)}</span>
+          <span>{fmtBRL(custoPago)} pago</span>
+          <span>{pctExecutado.toFixed(1)}% de {fmtBRL(custoPrevisto)}</span>
         </div>
       </div>
 
@@ -140,29 +154,21 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
 function SecaoPO({ projeto }: { projeto: Projeto }) {
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
 
-  // Custos Administrativos: exibir apenas itens com subcategoria = 'Custo Projeto'
-  const projetoFiltrado = useMemo(() => ({
-    ...projeto,
-    secoes: projeto.secoes.map(s =>
-      s.nome.toLowerCase().includes('administrativ')
-        ? { ...s, itens: s.itens.filter(i => i.subcategoria === 'Custo Projeto') }
-        : s
-    ),
-  }), [projeto])
-
-  const resumo = useMemo(() => calcResumoProjeto(projetoFiltrado), [projetoFiltrado])
-  // Sem o filtro de administrativos — usado só pro "Saldo em Conta", que precisa bater
-  // com o Saldo Everest da aba Financeiro (custo total real, não o exibido nesta tela).
-  const resumoCompleto = useMemo(() => calcResumoProjeto(projeto), [projeto])
+  // `projeto` já chega como visão do cliente (sem "Despesa Fee", spec #1). resumo e
+  // "Saldo em Conta" usam a mesma base — batem com a aba Financeiro.
+  const resumo = useMemo(() => calcResumoProjeto(projeto), [projeto])
+  const resumoCompleto = resumo
 
   const anyOpen = Object.values(expandidos).some(Boolean)
 
-  const pieData = useMemo(() =>
+  const composicao = useMemo(() =>
     resumo.custos
       .filter(c => c.contratado > 0)
-      .map((c, i) => ({ name: c.nome.split(' ')[0], fullName: c.nome, value: c.contratado, secaoId: c.secaoId, color: PIE_COLORS[i % PIE_COLORS.length] })),
+      .map(c => ({ name: c.nome.split(' ')[0], value: c.contratado, secaoId: c.secaoId }))
+      .sort((a, b) => b.value - a.value),
     [resumo]
   )
+  const maxComposicao = composicao.length ? composicao[0].value : 0
 
   const barData = resumo.custos
     .filter(c => c.contratado > 0 || c.pago > 0)
@@ -176,49 +182,29 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
     <div className="space-y-6">
       {/* Donut + Bar */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Donut */}
-        {pieData.length > 0 && (
+        {/* Composição do custo — lista rankeada, barras neutras (sem arco-íris de cores) */}
+        {composicao.length > 0 && (
           <div className="bg-bg rounded-xl p-4">
-            <div className="mb-2">
-              <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider">Composição Contratada</h3>
-            </div>
-            <div className="flex gap-4 flex-wrap items-start">
-              <ResponsiveContainer width={180} height={180}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%" cy="50%"
-                    innerRadius={50} outerRadius={82}
-                    dataKey="value"
-                    onClick={d => toggle((d as unknown as typeof pieData[0]).secaoId)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {pieData.map(entry => (
-                      <Cell
-                        key={entry.secaoId}
-                        fill={entry.color}
-                        opacity={anyOpen && !expandidos[entry.secaoId] ? 0.3 : 1}
-                        stroke={expandidos[entry.secaoId] ? '#fff' : 'transparent'}
-                        strokeWidth={2}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, _n, p) => [fmtBRL(Number(v)), (p.payload as typeof pieData[0])?.fullName ?? '']} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="flex-1 space-y-1 pt-1">
-                {pieData.map(entry => (
+            <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-3">Composição do Custo</h3>
+            <div className="space-y-2.5">
+              {composicao.map(entry => {
+                const w = maxComposicao > 0 ? (entry.value / maxComposicao) * 100 : 0
+                return (
                   <button
                     key={entry.secaoId}
                     onClick={() => toggle(entry.secaoId)}
-                    className={`w-full flex items-center gap-2 text-left py-0.5 transition-opacity ${anyOpen && !expandidos[entry.secaoId] ? 'opacity-30' : ''}`}
+                    className={`w-full text-left transition-opacity ${anyOpen && !expandidos[entry.secaoId] ? 'opacity-40' : ''}`}
                   >
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: entry.color }} />
-                    <span className="text-xs text-text-muted flex-1 truncate">{entry.name}</span>
-                    <span className="text-xs text-text-main font-medium">{fmtBRL(entry.value)}</span>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-text-muted truncate">{entry.name}</span>
+                      <span className="text-xs text-text-main font-medium shrink-0 ml-2">{fmtBRL(entry.value)}</span>
+                    </div>
+                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-white/30 rounded-full" style={{ width: `${w}%` }} />
+                    </div>
                   </button>
-                ))}
-              </div>
+                )
+              })}
             </div>
           </div>
         )}
@@ -308,7 +294,7 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
         {resumo.custos.map(c => {
           const pct = c.contratado > 0 ? Math.min(100, (c.pago / c.contratado) * 100) : 0
           const isOpen = expandidos[c.secaoId] ?? false
-          const secao = projetoFiltrado.secoes.find(s => s.id === c.secaoId)
+          const secao = projeto.secoes.find(s => s.id === c.secaoId)
 
           return (
             <div key={c.secaoId} className={`rounded-xl overflow-hidden transition-all ${isOpen ? 'bg-surface ring-1 ring-white/10' : 'bg-bg'}`}>
@@ -334,7 +320,9 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
 
               {/* Drill-down inline */}
               {isOpen && secao && (() => {
+                // Regra #2 da spec: só itens com dado real (esconde linhas de template R$0).
                 const itensFiltrados = filtrarItensCalculo(secao.itens)
+                  .filter(i => i.valorContratado > 0 || i.valorPago > 0 || i.valorOrcado > 0)
                 const porSubcat: Record<string, { contratado: number; pago: number; itens: typeof itensFiltrados }> = {}
                 for (const item of itensFiltrados) {
                   const sub = item.subcategoria?.trim() || item.area?.trim() || 'Geral'
@@ -344,11 +332,11 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
                   porSubcat[sub].itens.push(item)
                 }
                 return (
-                  <div className="border-t border-white/8 px-4 pb-4 pt-3 space-y-2">
+                  <div className="border-t border-white/8 px-4 pb-4 pt-3">
                     {Object.entries(porSubcat).map(([sub, vals]) => {
                       const p = vals.contratado > 0 ? Math.min(100, (vals.pago / vals.contratado) * 100) : 0
                       return (
-                        <div key={sub} className="space-y-1">
+                        <div key={sub} className="space-y-1 border-t border-white/8 pt-3 mt-3 first:border-t-0 first:pt-0 first:mt-0">
                           <div className="flex items-center gap-3">
                             {vals.contratado > 0
                               ? <CheckCircle2 size={13} className="text-success shrink-0" />
@@ -680,159 +668,14 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
   )
 }
 
-// ─── Seção 5: Eventos ──────────────────────────────────────────────────────────
-
-function InfoCardPortal({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-bg rounded-xl px-3 py-3">
-      <div className="text-text-muted text-xs mb-1">{label}</div>
-      <div className="text-text-main text-sm font-semibold leading-snug">{value}</div>
-    </div>
-  )
-}
-
-function rowToEventoOperacional(row: Record<string, unknown>): EventoOperacional {
-  return {
-    id: row.id as string,
-    tabName: row.tab_name as string,
-    turma: (row.turma as string) ?? '',
-    nomeEvento: (row.nome_evento as string) ?? '',
-    tipo: (row.tipo as string) ?? '',
-    dataStr: (row.data_str as string) ?? '',
-    dataIso: (row.data_iso as string) ?? null,
-    diaSemana: (row.dia_semana as string) ?? '',
-    local: (row.local as string) ?? '',
-    horario: (row.horario as string) ?? '',
-    tematica: (row.tematica as string) ?? '',
-    totalConvidados: (row.total_convidados as string) ?? '',
-    dataAdimplencia: (row.data_adimplencia as string) ?? '',
-    vendaDeConvite: (row.venda_de_convite as string) ?? '',
-    linkVenda: (row.link_venda as string) ?? null,
-    lineup: (row.lineup as LineupItemEvento[]) ?? [],
-    isRealizado: !!row.is_realizado,
-    sincronizadoEm: (row.sincronizado_em as string) ?? '',
-  }
-}
-
-function SecaoEventos({ projeto }: { projeto: Projeto }) {
-  const [eventos, setEventos] = useState<EventoOperacional[]>([])
-  const [loading, setLoading] = useState(true)
-  const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
-
-  useEffect(() => {
-    async function load() {
-      const { data } = await supabase.from('eventos_operacional').select('*')
-      const todos = ((data ?? []) as Record<string, unknown>[]).map(rowToEventoOperacional)
-
-      const turmaProjeto = (projeto.tap.turma ?? '').toLowerCase().trim()
-      const filtrados = todos
-        .filter(e => (e.turma ?? '').toLowerCase().trim() === turmaProjeto)
-        .sort((a, b) => (a.dataIso ?? '').localeCompare(b.dataIso ?? ''))
-
-      setEventos(filtrados)
-      setLoading(false)
-    }
-    load()
-  }, [projeto.tap.turma])
-
-  if (loading) return <div className="text-text-muted text-sm text-center py-8">Carregando eventos…</div>
-  if (eventos.length === 0) return <div className="text-text-muted text-sm text-center py-8">Nenhum evento encontrado.</div>
-
-  return (
-    <div className="space-y-3">
-      {eventos.map(ev => {
-        const isOpen = expandidos[ev.id] ?? false
-        return (
-          <div key={ev.id} className={`rounded-xl overflow-hidden transition-all ${ev.isRealizado ? 'opacity-50' : ''} ${isOpen ? 'bg-surface ring-1 ring-white/10' : 'bg-bg'}`}>
-            <button
-              onClick={() => setExpandidos(prev => ({ ...prev, [ev.id]: !prev[ev.id] }))}
-              className="w-full flex items-center gap-3 px-4 py-4 hover:bg-white/3 transition-colors text-left"
-            >
-              <span className="text-text-muted shrink-0">
-                {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="text-text-main font-semibold text-sm">{ev.nomeEvento || ev.turma}</div>
-                {ev.dataStr && (
-                  <div className="text-text-muted text-xs mt-0.5">{ev.dataStr}{ev.diaSemana ? ` — ${ev.diaSemana}` : ''}</div>
-                )}
-              </div>
-              {ev.isRealizado && <span className="text-xs text-text-muted/60 shrink-0">Realizado</span>}
-            </button>
-
-            {isOpen && (
-              <div className="border-t border-white/8 px-4 py-5 space-y-5">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {ev.tipo            && <InfoCardPortal label="Tipo"             value={ev.tipo} />}
-                  {ev.dataStr         && <InfoCardPortal label="Data"             value={`${ev.dataStr}${ev.diaSemana ? ` — ${ev.diaSemana}` : ''}`} />}
-                  {ev.local           && <InfoCardPortal label="Local"            value={ev.local} />}
-                  {ev.horario         && <InfoCardPortal label="Horário"          value={ev.horario} />}
-                  {ev.tematica        && <InfoCardPortal label="Temática"         value={ev.tematica} />}
-                  {ev.totalConvidados && <InfoCardPortal label="Total Convidados" value={ev.totalConvidados} />}
-                </div>
-
-                {ev.lineup.length > 0 && (
-                  <div>
-                    <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Lineup Artístico</h4>
-                    <div className="rounded-xl border border-white/8 overflow-hidden">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="bg-white/4 border-b border-white/8">
-                            <th className="text-left px-3 py-2 text-text-muted font-medium w-20">Horário</th>
-                            <th className="text-left px-3 py-2 text-text-muted font-medium">Artista</th>
-                            <th className="text-left px-3 py-2 text-text-muted font-medium hidden sm:table-cell">Obs.</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {ev.lineup.map((l, i) => (
-                            <tr key={i} className="border-b border-white/5 last:border-0">
-                              <td className="px-3 py-2.5 text-text-muted tabular-nums">{l.horario || '—'}</td>
-                              <td className="px-3 py-2.5 text-text-main font-medium">{l.artista}</td>
-                              <td className="px-3 py-2.5 text-text-muted hidden sm:table-cell">{l.obs}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {(ev.dataAdimplencia || ev.vendaDeConvite || ev.linkVenda) && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      {ev.dataAdimplencia && <InfoCardPortal label="Data p/ Adimplência" value={ev.dataAdimplencia} />}
-                      {ev.vendaDeConvite  && <InfoCardPortal label="Venda de Convite"    value={ev.vendaDeConvite} />}
-                    </div>
-                    {ev.linkVenda && (
-                      <a
-                        href={ev.linkVenda}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold py-3 px-5 rounded-xl transition-colors w-fit"
-                      >
-                        <Ticket size={15} /> Link de Venda
-                      </a>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 // ─── Dashboard Principal ──────────────────────────────────────────────────────
 
-type TabId = 'financeiro' | 'po' | 'pre-eventos' | 'eventos'
+type TabId = 'financeiro' | 'po' | 'pre-eventos'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'financeiro',   label: 'Financeiro' },
   { id: 'po',           label: 'P.O. Resumido' },
   { id: 'pre-eventos',  label: 'Pré-Eventos' },
-  { id: 'eventos',      label: 'Eventos' },
 ]
 
 export function DashboardPortal() {
@@ -894,6 +737,8 @@ export function DashboardPortal() {
   }
 
   const nomeEvento = [projeto.tap.instituicao, projeto.tap.turma].filter(Boolean).join(' — ')
+  // Visão do cliente: remove linhas internas "Despesa Fee" antes de renderizar (spec #1).
+  const projetoCliente = projetoVisaoCliente(projeto)
 
   return (
     <div className="min-h-screen bg-bg">
@@ -947,10 +792,9 @@ export function DashboardPortal() {
 
       {/* Conteúdo */}
       <main className="max-w-4xl mx-auto px-4 sm:px-8 py-8">
-        {tabAtiva === 'financeiro'  && <SecaoFinanceiro projeto={projeto} vencimentos={vencimentos} />}
-        {tabAtiva === 'po'          && <SecaoPO projeto={projeto} />}
+        {tabAtiva === 'financeiro'  && <SecaoFinanceiro projeto={projetoCliente} vencimentos={vencimentos} />}
+        {tabAtiva === 'po'          && <SecaoPO projeto={projetoCliente} />}
         {tabAtiva === 'pre-eventos' && <SecaoPreEventos projeto={projeto} />}
-        {tabAtiva === 'eventos'     && <SecaoEventos projeto={projeto} />}
       </main>
     </div>
   )

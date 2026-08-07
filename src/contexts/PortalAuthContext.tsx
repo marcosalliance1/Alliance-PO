@@ -1,6 +1,5 @@
 import { createContext, useContext, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import bcrypt from 'bcryptjs'
 
 const PORTAL_KEY = 'alliance_portal'
 
@@ -30,23 +29,27 @@ export function PortalAuthProvider({ children }: { children: React.ReactNode }) 
   })
 
   async function signIn(email: string, password: string) {
-    const { data, error } = await supabase
-      .from('portal_clientes')
-      .select('*')
-      .eq('email', email.toLowerCase().trim())
-      .eq('ativo', true)
-      .single()
+    // A validação da senha acontece no servidor (Edge Function `portal-login`,
+    // service_role). O navegador nunca lê `portal_clientes` nem o `senha_hash`.
+    const { data, error } = await supabase.functions.invoke('portal-login', {
+      body: { email: email.toLowerCase().trim(), password },
+    })
 
-    if (error || !data) throw new Error('Email não encontrado ou acesso inativo')
-
-    const valid = await bcrypt.compare(password, data.senha_hash as string)
-    if (!valid) throw new Error('Senha incorreta')
+    if (error) {
+      // Erros não-2xx da função vêm em error.context (Response). Extrai a mensagem.
+      let msg = 'Falha ao entrar. Tente novamente.'
+      try {
+        const body = await (error as { context?: Response }).context?.json?.()
+        if (body?.error) msg = body.error
+      } catch { /* mantém msg padrão */ }
+      throw new Error(msg)
+    }
 
     const s: PortalSession = {
-      clienteId: data.id as string,
-      projetoId: data.projeto_id as string,
+      clienteId: data.clienteId as string,
+      projetoId: data.projetoId as string,
       email: data.email as string,
-      nomeContato: (data.nome_contato as string) ?? null,
+      nomeContato: (data.nomeContato as string) ?? null,
     }
     sessionStorage.setItem(PORTAL_KEY, JSON.stringify(s))
     setSession(s)
