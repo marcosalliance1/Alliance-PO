@@ -1,6 +1,6 @@
 ﻿import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning } from 'lucide-react'
+import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning, Database } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL, newItemId } from '../../utils/formatters'
@@ -13,6 +13,9 @@ import CampoMoeda from '../../components/UI/CampoMoeda'
 import TabelaLotes from '../../components/UI/TabelaLotes'
 import { ModalImportarPlanilha } from '../../components/Orcamento/ModalImportarPlanilha'
 import { ModalImportarDoDrive } from '../../components/Orcamento/ModalImportarDoDrive'
+import { ModalConciliacaoEverest } from '../../components/Everest/ModalConciliacaoEverest'
+import { aplicarAssociacoes, SECOES as SECOES_EVEREST, type DestinoEverest, type FornecedorEverest } from '../../utils/matchEverest'
+import { salvarDepara } from '../../utils/deparaEverest'
 import { supabase } from '../../lib/supabase'
 import { recalcularItem } from '../../utils/automacoes'
 import type { Orcamento, EventType, OrcamentoStatus, ItemOrcamento, Cotacao, DocumentoCotacao } from '../../types'
@@ -82,6 +85,7 @@ export const OrcamentoPage: React.FC = () => {
   const [dirty, setDirty] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showDriveModal, setShowDriveModal] = useState(false)
+  const [showEverestModal, setShowEverestModal] = useState(false)
   const [uploadingCotId, setUploadingCotId] = useState<string | null>(null)
   const cotFileRef = useRef<HTMLInputElement>(null)
 
@@ -198,6 +202,34 @@ export const OrcamentoPage: React.FC = () => {
     setShowImportModal(false)
     setShowDriveModal(false)
     addToast(`${reconhecidos.length + mapeados.length + novos.length} itens importados!`, 'success')
+  }
+
+  function handleAplicarEverest(
+    grupos: FornecedorEverest[],
+    destinos: Record<string, DestinoEverest>,
+  ) {
+    if (!orc) return
+    const nAssociados = Object.values(destinos).filter(d => d.tipo !== 'ignorar').length
+    setOrc(aplicarAssociacoes(orc, grupos, destinos))
+    setDirty(true)
+    setShowEverestModal(false)
+    addToast(`${nAssociados} custo(s) do Everest associado(s)!`, 'success')
+
+    // Aprende o de-para (fornecedor → nome do item) das associações simples,
+    // pra pré-preencher nas próximas turmas. Divididos não são memorizados.
+    const pares: { fornecedor: string; itemNome: string; secao: typeof SECOES_EVEREST[number]['key'] }[] = []
+    for (const g of grupos) {
+      const d = destinos[g.fornecedor]
+      if (!d) continue
+      if (d.tipo === 'novo') pares.push({ fornecedor: g.fornecedor, itemNome: d.nome, secao: d.secao })
+      else if (d.tipo === 'item' && d.itemId) {
+        for (const secao of SECOES_EVEREST) {
+          const it = orc[secao.key].find(i => i.id === d.itemId)
+          if (it && it.item.trim()) { pares.push({ fornecedor: g.fornecedor, itemNome: it.item, secao: secao.key }); break }
+        }
+      }
+    }
+    void salvarDepara(pares)
   }
 
   // ─── Anexar documento em Cotação ────────────────────────────────────────
@@ -368,6 +400,13 @@ export const OrcamentoPage: React.FC = () => {
           className="hidden md:flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors"
         >
           <ExternalLink className="w-4 h-4" /> Drive
+        </button>
+        <button
+          onClick={() => setShowEverestModal(true)}
+          title="Cruzar os itens com os lançamentos reais do Everest (somente leitura)"
+          className="hidden md:flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors"
+        >
+          <Database className="w-4 h-4" /> Everest
         </button>
         <button
           onClick={handlePendenciasPDF}
@@ -598,6 +637,15 @@ export const OrcamentoPage: React.FC = () => {
           orc={orc}
           onConfirmar={handleAplicarImportacao}
           onFechar={() => setShowDriveModal(false)}
+        />
+      )}
+
+      {/* Modal de associação de custos do Everest */}
+      {showEverestModal && (
+        <ModalConciliacaoEverest
+          orc={orc}
+          onAplicar={handleAplicarEverest}
+          onFechar={() => setShowEverestModal(false)}
         />
       )}
 
