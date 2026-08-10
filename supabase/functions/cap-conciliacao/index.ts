@@ -13,7 +13,8 @@ const cors = {
 
 function norm(s: string | null | undefined): string {
   return (s ?? '').toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[áàâãä]/g, 'a').replace(/[éèêë]/g, 'e').replace(/[íìîï]/g, 'i')
+    .replace(/[óòôõö]/g, 'o').replace(/[úùûü]/g, 'u').replace(/ç/g, 'c')
     .replace(/[.\s]+/g, ' ')
     .trim()
 }
@@ -49,16 +50,18 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
-    // Pré-filtro no SQL pelo token mais longo da turma; refino fino em memória.
-    const token = norm(turma).replace(/[^a-z0-9]+/g, ' ').split(' ').filter(Boolean)
-      .sort((a: string, b: string) => b.length - a.length)[0] ?? ''
+    // Pré-filtro no SQL por TODOS os tokens da turma (não só o maior): o PostgREST
+    // teta em 1000 linhas por request, então um filtro largo (ex "%cmmg%" traz
+    // todas as turmas CMMG) estoura o teto e corta linhas silenciosamente. Exigir
+    // cada token (cmmg AND 82 AND 2030) reduz ao centro de custo certo.
+    const termos = norm(turma).replace(/[^a-z0-9]+/g, ' ').split(' ').filter(Boolean)
     const alvo = norm(contaGerencial)
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('financeiro_cap_completo')
       .select('fantasia_fornecedor,desc_conta_gerencial,desc_centro_custo,v_titulo,d_vencimento,situacao')
-      .ilike('desc_centro_custo', `%${token}%`)
-      .limit(5000)
+    for (const t of termos) query = query.ilike('desc_centro_custo', `%${t}%`)
+    const { data, error } = await query.limit(5000)
 
     if (error) return json({ error: error.message }, 500)
 

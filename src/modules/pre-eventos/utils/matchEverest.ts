@@ -24,7 +24,8 @@ const SEP = '||'
 
 export function norm(s: string | null | undefined): string {
   return (s ?? '').toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '') // tira acento
+    .replace(/[áàâãä]/g, 'a').replace(/[éèêë]/g, 'e').replace(/[íìîï]/g, 'i')
+    .replace(/[óòôõö]/g, 'o').replace(/[úùûü]/g, 'u').replace(/ç/g, 'c') // tira acento
     .replace(/[.\s]+/g, ' ')
     .trim()
 }
