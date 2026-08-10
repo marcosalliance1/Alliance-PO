@@ -122,6 +122,6 @@ export const ITENS_AB = [
   'Bar de Drinks', 'Bartenders Extra', 'Soft Drinks', 'Chopp', 'Buffet', 'Custos Bebidas',
 ]
 
-export const ITENS_EXTRAS = [
-  '', '', '', '', '', '', '', '',
-]
+// Extras nasce vazio — o usuário adiciona linhas conforme precisa (ou o import
+// do Drive cria as reais). Evita as linhas em branco de template que viravam lixo.
+export const ITENS_EXTRAS: string[] = []

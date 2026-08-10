@@ -1,6 +1,6 @@
 ﻿import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning, Database } from 'lucide-react'
+import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning, Database, Wallet, Eraser } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL, newItemId } from '../../utils/formatters'
@@ -14,6 +14,8 @@ import TabelaLotes from '../../components/UI/TabelaLotes'
 import { ModalImportarPlanilha } from '../../components/Orcamento/ModalImportarPlanilha'
 import { ModalImportarDoDrive } from '../../components/Orcamento/ModalImportarDoDrive'
 import { ModalConciliacaoEverest } from '../../components/Everest/ModalConciliacaoEverest'
+import { ModalApagarVazias } from '../../components/Orcamento/ModalApagarVazias'
+import { ModalPreencherVCliente } from '../../components/Orcamento/ModalPreencherVCliente'
 import { aplicarAssociacoes, SECOES as SECOES_EVEREST, type DestinoEverest, type FornecedorEverest } from '../../utils/matchEverest'
 import { salvarDepara } from '../../utils/deparaEverest'
 import { supabase } from '../../lib/supabase'
@@ -86,6 +88,8 @@ export const OrcamentoPage: React.FC = () => {
   const [showImportModal, setShowImportModal] = useState(false)
   const [showDriveModal, setShowDriveModal] = useState(false)
   const [showEverestModal, setShowEverestModal] = useState(false)
+  const [showVaziasModal, setShowVaziasModal] = useState(false)
+  const [showVClienteModal, setShowVClienteModal] = useState(false)
   const [uploadingCotId, setUploadingCotId] = useState<string | null>(null)
   const cotFileRef = useRef<HTMLInputElement>(null)
 
@@ -230,6 +234,20 @@ export const OrcamentoPage: React.FC = () => {
       }
     }
     void salvarDepara(pares)
+  }
+
+  function handleApagarVazias(novo: Orcamento, removidos: number) {
+    setOrc(novo)
+    setDirty(true)
+    setShowVaziasModal(false)
+    addToast(`${removidos} linha(s) vazia(s) removida(s)`, 'success')
+  }
+
+  function handlePreencherVCliente(novo: Orcamento) {
+    setOrc(novo)
+    setDirty(true)
+    setShowVClienteModal(false)
+    addToast('V. Cliente preenchido nos itens sem BV', 'success')
   }
 
   // ─── Anexar documento em Cotação ────────────────────────────────────────
@@ -403,10 +421,24 @@ export const OrcamentoPage: React.FC = () => {
         </button>
         <button
           onClick={() => setShowEverestModal(true)}
-          title="Cruzar os itens com os lançamentos reais do Everest (somente leitura)"
+          title="Associar os custos reais do Everest aos itens do orçamento"
           className="hidden md:flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors"
         >
           <Database className="w-4 h-4" /> Everest
+        </button>
+        <button
+          onClick={() => setShowVClienteModal(true)}
+          title="Preencher V. Cliente = Pago nos itens sem BV"
+          className="hidden md:flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors"
+        >
+          <Wallet className="w-4 h-4" /> V. Cliente
+        </button>
+        <button
+          onClick={() => setShowVaziasModal(true)}
+          title="Apagar linhas vazias (sem fornecedor e sem valores)"
+          className="hidden md:flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors"
+        >
+          <Eraser className="w-4 h-4" /> Limpar
         </button>
         <button
           onClick={handlePendenciasPDF}
@@ -646,6 +678,24 @@ export const OrcamentoPage: React.FC = () => {
           orc={orc}
           onAplicar={handleAplicarEverest}
           onFechar={() => setShowEverestModal(false)}
+        />
+      )}
+
+      {/* Modal de preencher V. Cliente */}
+      {showVClienteModal && (
+        <ModalPreencherVCliente
+          orc={orc}
+          onConfirmar={handlePreencherVCliente}
+          onFechar={() => setShowVClienteModal(false)}
+        />
+      )}
+
+      {/* Modal de apagar linhas vazias */}
+      {showVaziasModal && (
+        <ModalApagarVazias
+          orc={orc}
+          onConfirmar={handleApagarVazias}
+          onFechar={() => setShowVaziasModal(false)}
         />
       )}
 
