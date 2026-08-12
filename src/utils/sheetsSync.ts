@@ -689,23 +689,44 @@ export async function sincronizarComSheets(
     }
   }
 
+  // Usa codigo como chave primária; fallback para subcategoria|item se código vazio.
+  const chaveDoItem = (i: { codigo?: string; subcategoria: string; item: string }) =>
+    i.codigo?.trim() ? i.codigo.trim() : `|${i.subcategoria}|${i.item}`
+
   const secoesAtualizadas = projeto.secoes.map(secao => {
     const novosItens = novasSecoes.get(secao.numero)
     if (!novosItens) return secao
 
-    // Usa codigo como chave primária; fallback para subcategoria|item se código vazio
-    const existingMap = new Map<string, ItemCusto>()
+    // Agrupa por chave dos dois lados (existente e novo) — só reaproveita o ID antigo
+    // quando a chave for INEQUÍVOCA (exatamente 1 item de cada lado). Quando "código" está
+    // vazio e o mesmo par subcategoria+item se repete em várias linhas, várias entradas
+    // cairiam na mesma chave; reaproveitar cegamente colidia todas no mesmo ID (bug real,
+    // encontrado em quase todo projeto sincronizado — editar uma linha aplicava a mudança
+    // em todas as que compartilhavam o ID). Itens ambíguos ficam com o ID novo gerado no
+    // parse em vez de arriscar juntar itens diferentes.
+    const existingByChave = new Map<string, ItemCusto[]>()
     for (const item of secao.itens) {
-      const chave = item.codigo?.trim() ? item.codigo.trim() : `|${item.subcategoria}|${item.item}`
-      existingMap.set(chave, item)  // último vence — elimina duplicatas de mesmo código
+      const chave = chaveDoItem(item)
+      const arr = existingByChave.get(chave)
+      if (arr) arr.push(item)
+      else existingByChave.set(chave, [item])
+    }
+
+    const novosPorChave = new Map<string, number>()
+    for (const novoItem of novosItens) {
+      const chave = chaveDoItem(novoItem)
+      novosPorChave.set(chave, (novosPorChave.get(chave) ?? 0) + 1)
     }
 
     // Sync sobrescreve — apenas itens lidos do sheet ficam. IDs existentes são preservados
-    // para estabilidade de chaves React, mas itens que não existem mais no sheet são removidos.
+    // para estabilidade de chaves React quando a chave é inequívoca; itens que não existem
+    // mais no sheet são removidos.
     const itensFinais = novosItens.map(novoItem => {
-      const chave = novoItem.codigo?.trim() ? novoItem.codigo.trim() : `|${novoItem.subcategoria}|${novoItem.item}`
-      const existente = existingMap.get(chave)
-      if (existente) {
+      const chave = chaveDoItem(novoItem)
+      const existentes = existingByChave.get(chave)
+      const inequivoco = existentes?.length === 1 && novosPorChave.get(chave) === 1
+      if (inequivoco) {
+        const existente = existentes[0]
         return { ...novoItem, id: existente.id, jotform: existente.jotform }
       }
       return novoItem

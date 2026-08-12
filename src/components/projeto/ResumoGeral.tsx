@@ -6,6 +6,7 @@ import { calcResumoProjeto } from '../../utils/calculos'
 import { formatBRL } from '../../utils/formatters'
 import { v4 as uuid } from '../../utils/uuid'
 import { useAuth } from '../../contexts/AuthContext'
+import { ValorContabil } from './LinhaItem'
 
 interface ResumoGeralProps {
   projeto: Projeto
@@ -62,7 +63,7 @@ function BRLInput({ value, onChange, readOnly }: { value: number; onChange: (v: 
 function ValorCell({ value, className = '' }: { value: number; className?: string }) {
   return (
     <td className={`text-right px-3 py-1.5 text-sm whitespace-nowrap ${className}`}>
-      {formatBRL(value)}
+      <ValorContabil value={value} />
     </td>
   )
 }
@@ -138,9 +139,10 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateCustosAdicionai
                     <BRLInput value={linha.pago}       onChange={(v) => updateLinha(key, 'pago', v)} readOnly={!isAdmin} />
                   </td>
                   <td className="text-right px-3 py-1 text-sm">
-                    <span className={faltaPagar > 0 ? 'text-danger font-medium' : faltaPagar < 0 ? 'text-success' : 'text-text-muted'}>
-                      {formatBRL(faltaPagar)}
-                    </span>
+                    <ValorContabil
+                      value={faltaPagar}
+                      className={faltaPagar > 0 ? 'text-danger font-medium' : faltaPagar < 0 ? 'text-success' : 'text-text-muted'}
+                    />
                   </td>
                 </tr>
               )
