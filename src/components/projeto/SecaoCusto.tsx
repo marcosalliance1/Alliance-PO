@@ -28,7 +28,7 @@ const COLUNAS = [
   'Qtde C.', '$ Unit. Cont.', 'Valor Cont.',
   '|',
   'Status', 'Pgto.',
-  'Vlr. Final', 'Vlr. Pago', 'Falta Pagar', 'Total Prog.', 'Em Aberto', '',
+  'Vlr. Final', 'Vlr. Pago', 'Falta Pagar', '',
 ]
 
 // Subtítulo de bloco acima dos nomes de coluna — mesma ideia da planilha original
@@ -41,7 +41,7 @@ const GRUPOS: { label?: string; span: number; sep?: boolean }[] = [
   { sep: true, span: 1 },
   { label: 'Contratado', span: 3 },
   { sep: true, span: 1 },
-  { label: 'Pagamento', span: 7 },
+  { label: 'Pagamento', span: 5 },
   { span: 1 },
 ]
 
@@ -87,10 +87,10 @@ export function SecaoCusto({
       <div className="flex items-center gap-4 px-3 py-1.5 bg-surface border-b border-white/5 text-[10px] text-text-muted">
         <span className="font-medium">Status:</span>
         {[
-          { color: '#3B82F6', label: 'Vendido' },
-          { color: '#EAB308', label: 'Orçado' },
-          { color: '#16A34A', label: 'Contratado' },
-          { color: '#10B981', label: 'Pago' },
+          { color: '#ffffff', label: 'Orçar' },
+          { color: '#EAB308', label: 'Orçando' },
+          { color: '#3B82F6', label: 'Estimado' },
+          { color: '#16A34A', label: 'Fechado' },
         ].map(({ color, label }) => (
           <span key={label} className="flex items-center gap-1">
             <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: color }} />

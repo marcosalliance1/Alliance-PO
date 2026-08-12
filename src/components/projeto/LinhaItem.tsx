@@ -37,12 +37,15 @@ export function ValorContabil({ value, className = '', style, title }: {
   )
 }
 
+// Cor vem só do status de planejamento — orçar fica sem cor (branco), o resto segue a
+// legenda oficial: orçando=amarelo, estimado=azul, fechado=verde.
 function getStickyBg(item: ItemCusto): string {
-  if (item.statusPagamento === 'pago') return '#e6faf5'
-  if (item.status === 'fechado' || item.statusPagamento === 'parcial') return '#f0fdf4'
-  if (item.status === 'estimado' || item.status === 'orçando') return '#fffbeb'
-  if (item.qtdeVendida > 0 && item.valorUnitarioAtual > 0) return '#eff6ff'
-  return '#ffffff'
+  switch (item.status) {
+    case 'orçando': return '#fffbeb'
+    case 'estimado': return '#eff6ff'
+    case 'fechado': return '#f0fdf4'
+    default: return '#ffffff'
+  }
 }
 
 function NumInput({ value, onChange, readOnly }: { value: number; onChange: (v: number) => void; readOnly?: boolean }) {
@@ -121,20 +124,14 @@ function divTitle(item: ItemCusto, coluna: string): string {
   return `${coluna}: ${d.qtde} × ${formatBRL(d.unitario)} = ${formatBRL(d.totalCalculado)} | Planilha: ${formatBRL(d.totalPlanilha)}`
 }
 
+// Mesma regra de getStickyBg, só que pra linha inteira (cor mais forte) — orçar sem cor.
 function getRowStyle(item: ItemCusto): React.CSSProperties {
-  if (item.statusPagamento === 'pago') {
-    return { backgroundColor: 'rgba(16,185,129,0.12)', borderLeft: '3px solid #10B981' }
+  switch (item.status) {
+    case 'orçando': return { backgroundColor: 'rgba(234,179,8,0.08)', borderLeft: '3px solid #EAB308' }
+    case 'estimado': return { backgroundColor: 'rgba(59,130,246,0.08)', borderLeft: '3px solid #3B82F6' }
+    case 'fechado': return { backgroundColor: 'rgba(22,163,74,0.08)', borderLeft: '3px solid #16A34A' }
+    default: return {}
   }
-  if (item.status === 'fechado' || item.statusPagamento === 'parcial') {
-    return { backgroundColor: 'rgba(22,163,74,0.08)', borderLeft: '3px solid #16A34A' }
-  }
-  if (item.status === 'estimado' || item.status === 'orçando') {
-    return { backgroundColor: 'rgba(234,179,8,0.08)', borderLeft: '3px solid #EAB308' }
-  }
-  if (item.qtdeVendida > 0 && item.valorUnitarioAtual > 0) {
-    return { backgroundColor: 'rgba(59,130,246,0.08)', borderLeft: '3px solid #3B82F6' }
-  }
-  return {}
 }
 
 export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = [] }: LinhaItemProps) {
@@ -241,8 +238,6 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
       <Td className={item.faltaPagar > 0 ? 'text-red-600 font-medium' : ''}>
         <ValorContabil value={item.faltaPagar} />
       </Td>
-      <Td><NumInput value={item.totalProgramado} onChange={(v) => upd({ totalProgramado: v })} readOnly={ro} /></Td>
-      <Td><ValorContabil value={item.emAberto} /></Td>
 
       <Td>
         {isAdmin && (
