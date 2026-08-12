@@ -44,6 +44,30 @@
     top: 0;
     z-index: 10;
   }
+  /* Linha de subtítulo de bloco (VENDIDO / ORÇADO / CONTRATADO / PAGAMENTO) — fica
+     acima da linha de nomes de coluna, que passa a grudar em top:22px em vez de 0. */
+  .table-po thead tr.row-grupos th {
+    height: 22px;
+    padding: 3px 8px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-align: center;
+    color: #94a3b8;
+    background-color: #12121f;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    top: 0;
+    z-index: 11;
+  }
+  .table-po thead tr.row-grupos th.col-fixed {
+    text-align: left;
+    z-index: 21;
+    left: 0;
+  }
+  .table-po thead tr.row-colnames th {
+    top: 22px;
+  }
   /* Sticky frozen columns (first 7) */
   .table-po .col-fixed {
     position: sticky;
@@ -59,17 +83,24 @@
   .table-po .col-4 { left: 328px; min-width: 102px; }
   .table-po .col-5 { left: 430px; min-width: 132px; }
   .table-po .col-6 { left: 562px; min-width: 112px; }
-  /* Column group separator */
+  /* Column group separator — respiro visual entre os blocos Vendido/Orçado/Contratado */
   .table-po .col-sep {
-    width: 6px;
-    min-width: 6px;
+    width: 14px;
+    min-width: 14px;
     padding: 0;
-    border-left: 2px solid #94a3b8;
+    border-left: 1px solid #cbd5e1;
+    border-right: 1px solid #cbd5e1;
     background: transparent;
   }
   .table-po th.col-sep {
     background-color: #1a1a2e;
-    border-left: 2px solid rgba(255,255,255,0.25);
+    border-left: 1px solid rgba(255,255,255,0.15);
+    border-right: 1px solid rgba(255,255,255,0.15);
+  }
+  .table-po thead tr.row-grupos th.col-sep {
+    background-color: #12121f;
+    border-left: 1px solid rgba(255,255,255,0.08);
+    border-right: 1px solid rgba(255,255,255,0.08);
   }
   .table-po td {
     padding: 3px 6px;

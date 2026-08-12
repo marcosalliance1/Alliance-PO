@@ -31,6 +31,20 @@ const COLUNAS = [
   'Vlr. Final', 'Vlr. Pago', 'Falta Pagar', 'Total Prog.', 'Em Aberto', '',
 ]
 
+// Subtítulo de bloco acima dos nomes de coluna — mesma ideia da planilha original
+// (colunas separando "ORÇADO" de "CONTRATADO"), pra deixar os blocos óbvios de longe.
+const GRUPOS: { label?: string; span: number; sep?: boolean }[] = [
+  { span: 7 },
+  { label: 'Vendido', span: 5 },
+  { sep: true, span: 1 },
+  { label: 'Orçado', span: 3 },
+  { sep: true, span: 1 },
+  { label: 'Contratado', span: 3 },
+  { sep: true, span: 1 },
+  { label: 'Pagamento', span: 7 },
+  { span: 1 },
+]
+
 export function SecaoCusto({
   secao,
   qtdFormandos,
@@ -87,7 +101,17 @@ export function SecaoCusto({
       <div className="overflow-auto max-h-[75vh]">
       <table className="table-po">
         <thead>
-          <tr>
+          <tr className="row-grupos">
+            {GRUPOS.map((g, i) => {
+              if (g.sep) return <th key={`sep-${i}`} className="col-sep" />
+              return (
+                <th key={`grupo-${i}`} colSpan={g.span} className={i === 0 ? 'col-fixed' : ''}>
+                  {g.label ?? ''}
+                </th>
+              )
+            })}
+          </tr>
+          <tr className="row-colnames">
             {COLUNAS.map((col, i) => {
               if (col === '|') return <th key={i} className="col-sep" />
               const fixedClass = i < 7 ? `col-fixed col-${i}` : ''
