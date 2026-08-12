@@ -19,7 +19,7 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
     atualizadoEm: row.atualizado_em as string,
     importadoDe: (row.importado_de as string) ?? undefined,
     sheetsUrl: (row.sheets_url as string) ?? undefined,
-    sheetLayout: ((row.sheet_layout as string) === 'B' ? 'B' : undefined),
+    sheetLayout: ((row.sheet_layout as string) === 'A' || (row.sheet_layout as string) === 'B') ? (row.sheet_layout as 'A' | 'B') : undefined,
     status: (row.status as string) === 'realizado' ? 'realizado' : 'em_andamento',
     totalConvidadosAtual: (row.total_convidados_atual as number) ?? undefined,
     totalAdesoesAtual: (row.total_adesoes_atual as number) ?? undefined,
