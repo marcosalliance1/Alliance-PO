@@ -217,17 +217,20 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
         ok++
         if (resultado.avisos.length > 0) avisosTotais.push(...resultado.avisos.map(a => `${nome}: ${a}`))
       } catch (err) {
-        const e = err as Error & { tipo?: string }
+        console.error('[Sincronizar Tudo] falha em', nome, err)
+        const e = (err ?? {}) as Error & { tipo?: string }
         if (e.tipo === 'TOKEN_EXPIRADO') {
           invalidarToken()
           falhas.push(`${nome} (token expirado — parei por aqui)`)
           setSincronizando(prev => ({ ...prev, [projeto.id]: false }))
           break
         }
-        falhas.push(`${nome} (${e.message ?? 'erro'})`)
+        falhas.push(`${nome} (${e.message ?? 'erro desconhecido'})`)
       } finally {
         setSincronizando(prev => ({ ...prev, [projeto.id]: false }))
       }
+      // Pequena pausa entre projetos pra não estourar limite de taxa da API do Google Sheets
+      if (i < elegiveis.length - 1) await new Promise(r => setTimeout(r, 800))
     }
 
     setProgressoSync(null)
@@ -259,6 +262,15 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
       executarSyncTudo()
     }
   }, [accessToken, pendingSyncAll, executarSyncTudo])
+
+  // Sair da página no meio do "Sincronizar Tudo" mata o processo sem aviso nenhum
+  // (é só JS rodando no navegador) — avisa antes de recarregar/fechar a aba.
+  useEffect(() => {
+    if (!sincronizandoTudo) return
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [sincronizandoTudo])
 
   function handleSincronizar(projeto: Projeto) {
     const spreadsheetId = extrairSpreadsheetId(projeto.sheetsUrl ?? '')
