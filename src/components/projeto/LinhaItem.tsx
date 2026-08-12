@@ -37,9 +37,11 @@ export function ValorContabil({ value, className = '', style, title }: {
   )
 }
 
-// Cor vem só do status de planejamento — orçar fica sem cor (branco), o resto segue a
-// legenda oficial: orçando=amarelo, estimado=azul, fechado=verde.
+// Cor vem do status de planejamento — orçar fica sem cor (branco), orçando=amarelo,
+// estimado=azul, fechado=verde. "Pago" é uma camada extra por cima (outro tom de verde,
+// pra não confundir com "fechado" mas ainda deixar claro que é um estado positivo).
 function getStickyBg(item: ItemCusto): string {
+  if (item.statusPagamento === 'pago') return '#e6faf5'
   switch (item.status) {
     case 'orçando': return '#fffbeb'
     case 'estimado': return '#eff6ff'
@@ -126,6 +128,9 @@ function divTitle(item: ItemCusto, coluna: string): string {
 
 // Mesma regra de getStickyBg, só que pra linha inteira (cor mais forte) — orçar sem cor.
 function getRowStyle(item: ItemCusto): React.CSSProperties {
+  if (item.statusPagamento === 'pago') {
+    return { backgroundColor: 'rgba(16,185,129,0.12)', borderLeft: '3px solid #10B981' }
+  }
   switch (item.status) {
     case 'orçando': return { backgroundColor: 'rgba(234,179,8,0.08)', borderLeft: '3px solid #EAB308' }
     case 'estimado': return { backgroundColor: 'rgba(59,130,246,0.08)', borderLeft: '3px solid #3B82F6' }

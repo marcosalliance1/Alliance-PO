@@ -91,6 +91,7 @@ export function SecaoCusto({
           { color: '#EAB308', label: 'Orçando' },
           { color: '#3B82F6', label: 'Estimado' },
           { color: '#16A34A', label: 'Fechado' },
+          { color: '#10B981', label: 'Pago' },
         ].map(({ color, label }) => (
           <span key={label} className="flex items-center gap-1">
             <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: color }} />

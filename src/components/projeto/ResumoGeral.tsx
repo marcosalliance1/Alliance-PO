@@ -149,13 +149,13 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateCustosAdicionai
             })}
 
             {/* RECEITA BAILE */}
-            <tr className="bg-blue-50 border-t-2 border-blue-200">
-              <td className="px-3 py-2 font-bold text-blue-800 text-sm">RECEITA BAILE</td>
-              <ValorCell value={resumo.receitaBaile.vendido}     className="font-bold text-blue-800" />
-              <ValorCell value={resumo.receitaBaile.orcado}      className="font-bold text-blue-800" />
-              <ValorCell value={resumo.receitaBaile.contratado}  className="font-bold text-blue-800" />
-              <ValorCell value={resumo.receitaBaile.pago}        className="font-bold text-blue-700" />
-              <ValorCell value={resumo.receitaBaile.faltaPagar}  className={`font-bold ${resumo.receitaBaile.faltaPagar > 0 ? 'text-danger' : 'text-blue-700'}`} />
+            <tr className="bg-blue-500/10 border-t-2 border-blue-500/30">
+              <td className="px-3 py-2 font-bold text-blue-300 text-sm">RECEITA BAILE</td>
+              <ValorCell value={resumo.receitaBaile.vendido}     className="font-bold text-blue-300" />
+              <ValorCell value={resumo.receitaBaile.orcado}      className="font-bold text-blue-300" />
+              <ValorCell value={resumo.receitaBaile.contratado}  className="font-bold text-blue-300" />
+              <ValorCell value={resumo.receitaBaile.pago}        className="font-bold text-blue-200" />
+              <ValorCell value={resumo.receitaBaile.faltaPagar}  className={`font-bold ${resumo.receitaBaile.faltaPagar > 0 ? 'text-danger' : 'text-blue-200'}`} />
             </tr>
 
             {/* ── CUSTOS ──────────────────────────────────────────────── */}
@@ -256,14 +256,14 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateCustosAdicionai
             </tr>
 
             {/* MARGEM */}
-            <tr className={`border-t-2 ${margemPositiva ? 'bg-green-50' : 'bg-red-50'}`}>
-              <td className={`px-3 py-2.5 font-bold text-sm ${margemPositiva ? 'text-green-800' : 'text-red-800'}`}>
+            <tr className={`border-t-2 ${margemPositiva ? 'bg-success/10 border-success/30' : 'bg-danger/10 border-danger/30'}`}>
+              <td className={`px-3 py-2.5 font-bold text-sm ${margemPositiva ? 'text-success' : 'text-danger'}`}>
                 MARGEM DE CONTRIBUIÇÃO
               </td>
-              <ValorCell value={resumo.margem.vendido}    className={`font-bold text-lg ${margemPositiva ? 'text-green-700' : 'text-red-700'}`} />
-              <ValorCell value={resumo.margem.orcado}     className={`font-bold ${margemPositiva ? 'text-green-600' : 'text-red-600'}`} />
-              <ValorCell value={resumo.margem.contratado} className={`font-bold ${margemPositiva ? 'text-green-600' : 'text-red-600'}`} />
-              <ValorCell value={resumo.margem.pago}       className={`font-bold ${resumo.margem.pago >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+              <ValorCell value={resumo.margem.vendido}    className={`font-bold text-lg ${margemPositiva ? 'text-success' : 'text-danger'}`} />
+              <ValorCell value={resumo.margem.orcado}     className={`font-bold ${margemPositiva ? 'text-success' : 'text-danger'}`} />
+              <ValorCell value={resumo.margem.contratado} className={`font-bold ${margemPositiva ? 'text-success' : 'text-danger'}`} />
+              <ValorCell value={resumo.margem.pago}       className={`font-bold ${resumo.margem.pago >= 0 ? 'text-success' : 'text-danger'}`} />
               <ValorCell value={resumo.margem.faltaPagar} className="font-bold text-text-muted" />
             </tr>
           </tbody>
