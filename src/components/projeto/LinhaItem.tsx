@@ -30,7 +30,7 @@ export function ValorContabil({ value, className = '', style, title }: {
   const sinal = value < 0 ? '-' : ''
   const abs = Math.abs(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return (
-    <span className={`flex items-baseline justify-between gap-1 tabular-nums ${className}`} style={style} title={title}>
+    <span className={`flex items-baseline justify-between gap-1 tabular-nums w-full min-w-[84px] ${className}`} style={style} title={title}>
       <span className="opacity-50">{sinal}R$</span>
       <span>{abs}</span>
     </span>
