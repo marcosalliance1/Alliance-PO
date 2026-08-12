@@ -151,8 +151,13 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
   const bg = getStickyBg(item)
   const fixed = (cls: string) => ({ className: `col-fixed ${cls}`, style: { backgroundColor: bg } })
 
+  // Item "mãe" (cabeçalho de grupo, ex: "COMISSÕES PROJETO", "RESCISÃO CONTRATO") não tem
+  // subcategoria preenchida — só os filhos têm. Igual na planilha original, fica em negrito.
+  const isItemMae = !item.subcategoria?.trim() && !!item.item?.trim()
+  const rowStyle: React.CSSProperties = { ...getRowStyle(item), ...(isItemMae ? { fontWeight: 700 } : {}) }
+
   return (
-    <tr style={getRowStyle(item)}>
+    <tr style={rowStyle}>
       <Td {...fixed('col-0')}><TextInput value={item.codigo} onChange={(v) => upd({ codigo: v })} width="60px" readOnly={ro} /></Td>
       <Td {...fixed('col-1')}><TextInput value={item.area} onChange={(v) => upd({ area: v })} width="80px" readOnly={ro} /></Td>
       <Td {...fixed('col-2')}>

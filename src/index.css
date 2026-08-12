@@ -136,6 +136,7 @@
     font-size: 0.73rem;
     color: inherit;
     font-family: inherit;
+    font-weight: inherit;
   }
   .table-po input:focus,
   .table-po select:focus {
