@@ -20,6 +20,23 @@ function Td({ children, className = '', style }: { children: React.ReactNode; cl
   return <td className={className} style={style}>{children}</td>
 }
 
+// Formato "contabilidade" (R$ grudado à esquerda, número grudado à direita) — alinha as
+// casas decimais verticalmente entre linhas, igual planilha. Não renderiza nada em zero,
+// pra manter a tabela limpa (mesmo comportamento de antes).
+export function ValorContabil({ value, className = '', style, title }: {
+  value: number; className?: string; style?: React.CSSProperties; title?: string
+}) {
+  if (!value) return null
+  const sinal = value < 0 ? '-' : ''
+  const abs = Math.abs(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return (
+    <span className={`flex items-baseline justify-between gap-1 tabular-nums ${className}`} style={style} title={title}>
+      <span className="opacity-50">{sinal}R$</span>
+      <span>{abs}</span>
+    </span>
+  )
+}
+
 function getStickyBg(item: ItemCusto): string {
   if (item.statusPagamento === 'pago') return '#e6faf5'
   if (item.status === 'fechado' || item.statusPagamento === 'parcial') return '#f0fdf4'
@@ -52,7 +69,7 @@ function NumInput({ value, onChange, readOnly }: { value: number; onChange: (v: 
         onChange={(e) => setRaw(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Tab') commit() }}
-        style={{ width: '80px' }}
+        style={{ width: '80px', textAlign: 'right' }}
       />
     )
   }
@@ -61,7 +78,7 @@ function NumInput({ value, onChange, readOnly }: { value: number; onChange: (v: 
       className={`block w-full rounded px-1 ${readOnly ? '' : 'cursor-pointer hover:bg-blue-50'}`}
       onClick={startEdit}
     >
-      {value === 0 ? '' : formatBRL(value)}
+      <ValorContabil value={value} />
     </span>
   )
 }
@@ -72,7 +89,7 @@ function QtyInput({ value, onChange, readOnly }: { value: number; onChange: (v: 
       type="number"
       value={value || ''}
       onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-      style={{ width: '50px' }}
+      style={{ width: '50px', textAlign: 'right' }}
       readOnly={readOnly}
       disabled={readOnly}
     />
@@ -172,15 +189,14 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
       <Td><QtyInput value={item.qtdeVendida} onChange={(v) => upd({ qtdeVendida: v })} readOnly={ro} /></Td>
       <Td><NumInput value={item.valorUnitarioAtual} onChange={(v) => upd({ valorUnitarioAtual: v })} readOnly={ro} /></Td>
       <Td className="font-medium">
-        {item.totalAtual ? (
-          <span
-            style={isDivCol(item, 'Vendido') ? { color: '#EA580C', fontWeight: 600 } : undefined}
-            title={divTitle(item, 'Vendido') || undefined}
-          >{formatBRL(item.totalAtual)}</span>
-        ) : ''}
+        <ValorContabil
+          value={item.totalAtual}
+          style={isDivCol(item, 'Vendido') ? { color: '#EA580C', fontWeight: 600 } : undefined}
+          title={divTitle(item, 'Vendido') || undefined}
+        />
       </Td>
-      <Td className="text-blue-600">{item.valorProjetado ? formatBRL(item.valorProjetado) : ''}</Td>
-      <Td className="text-blue-600">{item.totalProjetado ? formatBRL(item.totalProjetado) : ''}</Td>
+      <Td className="text-blue-600"><ValorContabil value={item.valorProjetado} /></Td>
+      <Td className="text-blue-600"><ValorContabil value={item.totalProjetado} /></Td>
 
       <td className="col-sep" />
 
@@ -188,12 +204,11 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
       <Td><QtyInput value={item.qtdeOrcada} onChange={(v) => upd({ qtdeOrcada: v })} readOnly={ro} /></Td>
       <Td><NumInput value={item.valorUnitarioOrcado} onChange={(v) => upd({ valorUnitarioOrcado: v })} readOnly={ro} /></Td>
       <Td className="font-medium">
-        {item.valorOrcado ? (
-          <span
-            style={isDivCol(item, 'Orçado') ? { color: '#EA580C', fontWeight: 600 } : undefined}
-            title={divTitle(item, 'Orçado') || undefined}
-          >{formatBRL(item.valorOrcado)}</span>
-        ) : ''}
+        <ValorContabil
+          value={item.valorOrcado}
+          style={isDivCol(item, 'Orçado') ? { color: '#EA580C', fontWeight: 600 } : undefined}
+          title={divTitle(item, 'Orçado') || undefined}
+        />
       </Td>
 
       <td className="col-sep" />
@@ -202,12 +217,11 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
       <Td><QtyInput value={item.qtdeContratada} onChange={(v) => upd({ qtdeContratada: v })} readOnly={ro} /></Td>
       <Td><NumInput value={item.valorUnitarioContratado} onChange={(v) => upd({ valorUnitarioContratado: v })} readOnly={ro} /></Td>
       <Td className="font-medium">
-        {item.valorContratado ? (
-          <span
-            style={isDivCol(item, 'Contratado') ? { color: '#EA580C', fontWeight: 600 } : undefined}
-            title={divTitle(item, 'Contratado') || undefined}
-          >{formatBRL(item.valorContratado)}</span>
-        ) : ''}
+        <ValorContabil
+          value={item.valorContratado}
+          style={isDivCol(item, 'Contratado') ? { color: '#EA580C', fontWeight: 600 } : undefined}
+          title={divTitle(item, 'Contratado') || undefined}
+        />
       </Td>
 
       <td className="col-sep" />
@@ -225,10 +239,10 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
       <Td><NumInput value={item.valorFinal} onChange={(v) => upd({ valorFinal: v })} readOnly={ro} /></Td>
       <Td><NumInput value={item.valorPago} onChange={(v) => upd({ valorPago: v })} readOnly={ro} /></Td>
       <Td className={item.faltaPagar > 0 ? 'text-red-600 font-medium' : ''}>
-        {item.faltaPagar ? formatBRL(item.faltaPagar) : ''}
+        <ValorContabil value={item.faltaPagar} />
       </Td>
       <Td><NumInput value={item.totalProgramado} onChange={(v) => upd({ totalProgramado: v })} readOnly={ro} /></Td>
-      <Td>{item.emAberto ? formatBRL(item.emAberto) : ''}</Td>
+      <Td><ValorContabil value={item.emAberto} /></Td>
 
       <Td>
         {isAdmin && (

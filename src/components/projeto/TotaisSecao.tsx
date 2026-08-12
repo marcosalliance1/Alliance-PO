@@ -1,5 +1,5 @@
 import type { TotaisSecao as TTotais } from '../../types'
-import { formatBRL } from '../../utils/formatters'
+import { ValorContabil } from './LinhaItem'
 
 interface TotaisSecaoProps {
   totais: TTotais
@@ -14,37 +14,37 @@ export function TotaisSecaoRow({ totais, nomeSecao }: TotaisSecaoProps) {
         <td colSpan={9} className="font-bold uppercase tracking-wide text-xs">
           TOTAL — {nomeSecao}
         </td>
-        <td className="font-bold">{formatBRL(totais.totalVendido)}</td>
+        <td className="font-bold"><ValorContabil value={totais.totalVendido} /></td>
         <td />
-        <td className="font-bold text-blue-600">{formatBRL(totais.totalProjetado)}</td>
-        <td />
-        <td />
-        <td />
-        <td className="font-bold">{formatBRL(totais.totalOrcado)}</td>
+        <td className="font-bold text-blue-400"><ValorContabil value={totais.totalProjetado} /></td>
         <td />
         <td />
         <td />
-        <td className="font-bold">{formatBRL(totais.totalContratado)}</td>
+        <td className="font-bold"><ValorContabil value={totais.totalOrcado} /></td>
+        <td />
+        <td />
+        <td />
+        <td className="font-bold"><ValorContabil value={totais.totalContratado} /></td>
         <td />
         <td colSpan={2} />
         <td />
-        <td className="font-bold">{formatBRL(totais.totalPago)}</td>
-        <td className="font-bold">{formatBRL(totais.totalFaltaPagar)}</td>
+        <td className="font-bold"><ValorContabil value={totais.totalPago} /></td>
+        <td className="font-bold"><ValorContabil value={totais.totalFaltaPagar} /></td>
         <td colSpan={3} />
       </tr>
       <tr className="row-cpf">
         <td colSpan={9}>Custo por formando</td>
-        <td>{formatBRL(totais.custoPorFormandoVendido)}</td>
+        <td><ValorContabil value={totais.custoPorFormandoVendido} /></td>
         <td />
         <td />
         <td />
         <td />
         <td />
-        <td>{formatBRL(totais.custoPorFormandoOrcado)}</td>
+        <td><ValorContabil value={totais.custoPorFormandoOrcado} /></td>
         <td />
         <td />
         <td />
-        <td>{formatBRL(totais.custoPorFormandoContratado)}</td>
+        <td><ValorContabil value={totais.custoPorFormandoContratado} /></td>
         <td />
         <td colSpan={2} />
         <td colSpan={6} />

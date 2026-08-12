@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
-import type { Projeto, Receitas, ReceitaLinha, ConciliacaoEverest, LinhaEverest, CustoAdicional } from '../../types'
+import { useState } from 'react'
+import { Plus, Trash2, Database } from 'lucide-react'
+import type { Projeto, Receitas, ReceitaLinha, ConciliacaoEverest, CustoAdicional } from '../../types'
 // Receitas is Record<string, ReceitaLinha> — keys are human-readable labels
 import { calcResumoProjeto } from '../../utils/calculos'
 import { formatBRL } from '../../utils/formatters'
@@ -68,11 +68,7 @@ function ValorCell({ value, className = '' }: { value: number; className?: strin
 }
 
 
-function emptyLinhaEverest(secaoId: string, secaoNome: string): LinhaEverest {
-  return { secaoId, secaoNome, valorEverest: 0, observacao: '' }
-}
-
-export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao, onUpdateCustosAdicionais }: ResumoGeralProps) {
+export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateCustosAdicionais }: ResumoGeralProps) {
   const { isAdmin } = useAuth()
   const resumo = calcResumoProjeto(projeto)
   const r = projeto.receitas
@@ -91,34 +87,9 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao, on
     onUpdateCustosAdicionais(custosAdicionais.map((c) => c.id === id ? { ...c, ...changes } : c))
   }
 
-  // Conciliação Everest — sincroniza seções com o projeto atual
-  const conciliacao: ConciliacaoEverest = useMemo(() => {
-    const base = projeto.conciliacaoEverest ?? { linhas: [], observacaoGeral: '' }
-    const linhas = projeto.secoes.map((s) => {
-      const existente = base.linhas.find((l) => l.secaoId === s.id)
-      return existente ?? emptyLinhaEverest(s.id, s.nome)
-    })
-    return { linhas, observacaoGeral: base.observacaoGeral ?? '' }
-  }, [projeto])
-
   function updateLinha(key: string, field: keyof ReceitaLinha, valor: number) {
     onUpdateReceitas({ ...r, [key]: { ...r[key], [field]: valor } })
   }
-
-  function updateEverest(secaoId: string, campo: 'valorEverest' | 'observacao', valor: number | string) {
-    const linhas = conciliacao.linhas.map((l) =>
-      l.secaoId === secaoId ? { ...l, [campo]: valor } : l,
-    )
-    onUpdateConciliacao({ ...conciliacao, linhas })
-  }
-
-  function updateObsGeral(obs: string) {
-    onUpdateConciliacao({ ...conciliacao, observacaoGeral: obs })
-  }
-
-  const totalEverest = conciliacao.linhas.reduce((s, l) => s + (l.valorEverest || 0), 0)
-  const totalSistema = resumo.custoTotal.pago
-  const difEverest = totalEverest - totalSistema
 
   return (
     <div className="space-y-6">
@@ -298,81 +269,16 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateConciliacao, on
       </div>
 
       {/* ── Conciliação Everest ────────────────────────────────────────────── */}
-      <div className="card overflow-x-auto">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-sm font-semibold text-text-main">Conciliação Everest</h3>
-            <p className="text-text-muted text-xs mt-0.5">Insira os valores reais do ERP Everest para reconciliar com o sistema</p>
-          </div>
-          <div className={`text-xs font-semibold px-3 py-1 rounded-inner ${difEverest === 0 ? 'bg-success/10 text-success' : difEverest > 0 ? 'bg-warning/10 text-warning' : 'bg-danger/10 text-danger'}`}>
-            Diferença: {formatBRL(difEverest)}
-          </div>
+      <div className="card flex items-center gap-3">
+        <div className="rounded-inner p-2 bg-primary/10 shrink-0">
+          <Database size={16} className="text-primary" />
         </div>
-
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="bg-surface-2">
-              <th className="text-left px-3 py-2 text-text-muted font-medium text-xs w-48">Seção</th>
-              <th className="text-right px-3 py-2 text-text-muted font-medium text-xs min-w-[140px]">Sistema (Pago)</th>
-              <th className="text-right px-3 py-2 text-text-muted font-medium text-xs min-w-[140px]">Everest</th>
-              <th className="text-right px-3 py-2 text-text-muted font-medium text-xs min-w-[100px]">Diferença</th>
-              <th className="text-left px-3 py-2 text-text-muted font-medium text-xs">Observação</th>
-            </tr>
-          </thead>
-          <tbody>
-            {conciliacao.linhas.map((linha, idx) => {
-              const custoSec = resumo.custos.find((c) => c.secaoId === linha.secaoId)
-              const sistemaPago = custoSec?.pago ?? 0
-              const dif = linha.valorEverest - sistemaPago
-              return (
-                <tr key={linha.secaoId} className={`border-b border-white/5 ${idx % 2 === 0 ? '' : 'bg-white/2'}`}>
-                  <td className="px-3 py-1.5 text-text-main text-sm">{linha.secaoNome}</td>
-                  <td className="text-right px-3 py-1.5 text-sm text-text-muted">{formatBRL(sistemaPago)}</td>
-                  <td className="px-2 py-0.5">
-                    <BRLInput
-                      value={linha.valorEverest}
-                      onChange={(v) => updateEverest(linha.secaoId, 'valorEverest', v)}
-                      readOnly={!isAdmin}
-                    />
-                  </td>
-                  <td className={`text-right px-3 py-1.5 text-sm font-medium ${dif === 0 ? 'text-text-muted' : dif > 0 ? 'text-warning' : 'text-danger'}`}>
-                    {formatBRL(dif)}
-                  </td>
-                  <td className="px-2 py-0.5">
-                    <input
-                      type="text"
-                      value={linha.observacao}
-                      onChange={(e) => updateEverest(linha.secaoId, 'observacao', e.target.value)}
-                      placeholder="Observação..."
-                      className="w-full text-xs bg-transparent border-b border-white/10 focus:border-primary focus:outline-none py-0.5 text-text-main placeholder:text-text-muted/40"
-                      disabled={!isAdmin}
-                    />
-                  </td>
-                </tr>
-              )
-            })}
-
-            {/* Totais */}
-            <tr className="bg-surface-2 border-t-2 border-white/20">
-              <td className="px-3 py-2 font-bold text-text-main text-sm">TOTAL</td>
-              <td className="text-right px-3 py-2 font-bold text-text-main text-sm">{formatBRL(totalSistema)}</td>
-              <td className="text-right px-3 py-2 font-bold text-text-main text-sm">{formatBRL(totalEverest)}</td>
-              <td className={`text-right px-3 py-2 font-bold text-sm ${difEverest === 0 ? 'text-success' : difEverest > 0 ? 'text-warning' : 'text-danger'}`}>
-                {formatBRL(difEverest)}
-              </td>
-              <td className="px-2 py-1">
-                <input
-                  type="text"
-                  value={conciliacao.observacaoGeral}
-                  onChange={(e) => updateObsGeral(e.target.value)}
-                  placeholder="Observação geral..."
-                  className="w-full text-xs bg-transparent border-b border-white/10 focus:border-primary focus:outline-none py-0.5 text-text-main placeholder:text-text-muted/40"
-                  disabled={!isAdmin}
-                />
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div>
+          <h3 className="text-sm font-semibold text-text-main">Conciliação com o Everest</h3>
+          <p className="text-text-muted text-xs mt-0.5">
+            Essa comparação era manual e podia ficar desatualizada. Agora é automática — veja a aba <strong className="text-text-main">Financeiro Everest</strong>, que puxa o dado real direto do ERP.
+          </p>
+        </div>
       </div>
     </div>
   )
