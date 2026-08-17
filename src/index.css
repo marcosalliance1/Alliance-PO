@@ -77,12 +77,11 @@
     z-index: 20;
   }
   .table-po .col-0 { left: 0;     min-width: 72px;  }
-  .table-po .col-1 { left: 72px;  min-width: 92px;  }
-  .table-po .col-2 { left: 164px; min-width: 62px;  }
-  .table-po .col-3 { left: 226px; min-width: 102px; }
-  .table-po .col-4 { left: 328px; min-width: 102px; }
-  .table-po .col-5 { left: 430px; min-width: 132px; }
-  .table-po .col-6 { left: 562px; min-width: 112px; }
+  .table-po .col-1 { left: 72px;  min-width: 140px; }
+  .table-po .col-2 { left: 212px; min-width: 102px; }
+  .table-po .col-3 { left: 314px; min-width: 150px; }
+  .table-po .col-4 { left: 464px; min-width: 132px; }
+  .table-po .col-5 { left: 596px; min-width: 112px; }
   /* Column group separator — respiro visual entre os blocos Vendido/Orçado/Contratado */
   .table-po .col-sep {
     width: 14px;

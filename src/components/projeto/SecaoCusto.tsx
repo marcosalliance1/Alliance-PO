@@ -20,7 +20,7 @@ interface SecaoCustoProps {
 }
 
 const COLUNAS = [
-  'Cód.', 'Área', 'MoSCoW', 'Custo', 'Sub Cat.', 'Item', 'Fornecedor',
+  'Cód.', 'Área', 'Custo', 'Sub Cat.', 'Item', 'Fornecedor',
   'Qtde V.', '$ Unit. Atual', 'Total Atual', '$ Proj.', 'Total Proj.',
   '|',
   'Qtde O.', '$ Unit. Orç.', 'Valor Orç.',
@@ -34,7 +34,7 @@ const COLUNAS = [
 // Subtítulo de bloco acima dos nomes de coluna — mesma ideia da planilha original
 // (colunas separando "ORÇADO" de "CONTRATADO"), pra deixar os blocos óbvios de longe.
 const GRUPOS: { label?: string; span: number; sep?: boolean }[] = [
-  { span: 7 },
+  { span: 6 },
   { label: 'Vendido', span: 5 },
   { sep: true, span: 1 },
   { label: 'Orçado', span: 3 },
@@ -115,7 +115,7 @@ export function SecaoCusto({
           <tr className="row-colnames">
             {COLUNAS.map((col, i) => {
               if (col === '|') return <th key={i} className="col-sep" />
-              const fixedClass = i < 7 ? `col-fixed col-${i}` : ''
+              const fixedClass = i < 6 ? `col-fixed col-${i}` : ''
               return <th key={i} className={fixedClass}>{col}</th>
             })}
           </tr>

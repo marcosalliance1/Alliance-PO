@@ -11,7 +11,7 @@ export function TotaisSecaoRow({ totais, nomeSecao }: TotaisSecaoProps) {
   return (
     <>
       <tr className="row-total">
-        <td colSpan={9} className="font-bold uppercase tracking-wide text-xs">
+        <td colSpan={8} className="font-bold uppercase tracking-wide text-xs">
           TOTAL — {nomeSecao}
         </td>
         <td className="font-bold"><ValorContabil value={totais.totalVendido} /></td>
@@ -33,7 +33,7 @@ export function TotaisSecaoRow({ totais, nomeSecao }: TotaisSecaoProps) {
         <td colSpan={1} />
       </tr>
       <tr className="row-cpf">
-        <td colSpan={9}>Custo por formando</td>
+        <td colSpan={8}>Custo por formando</td>
         <td><ValorContabil value={totais.custoPorFormandoVendido} /></td>
         <td />
         <td />

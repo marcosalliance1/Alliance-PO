@@ -14,7 +14,6 @@ interface LinhaItemProps {
 const STATUS_OPTS: StatusItem[] = ['orçar', 'orçando', 'estimado', 'fechado', 'N/A']
 const PGTO_OPTS: StatusPagamento[] = ['N/A', 'em aberto', 'parcial', 'pago']
 const TIPO_CUSTO_OPTS: TipoCusto[] = ['Custo Fixo', 'Custo Variável']
-const MOSCOW_OPTS = ['', 'M', 'S', 'C', 'W']
 
 function Td({ children, className = '', style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
   return <td className={className} style={style}>{children}</td>
@@ -159,20 +158,15 @@ export function LinhaItem({ item, onChange, onDelete, fornecedoresSugeridos = []
   return (
     <tr style={rowStyle}>
       <Td {...fixed('col-0')}><TextInput value={item.codigo} onChange={(v) => upd({ codigo: v })} width="60px" readOnly={ro} /></Td>
-      <Td {...fixed('col-1')}><TextInput value={item.area} onChange={(v) => upd({ area: v })} width="80px" readOnly={ro} /></Td>
+      <Td {...fixed('col-1')}><TextInput value={item.area} onChange={(v) => upd({ area: v })} width="140px" readOnly={ro} /></Td>
       <Td {...fixed('col-2')}>
-        <select value={item.moscow} onChange={(e) => upd({ moscow: e.target.value })} style={{ width: '50px' }} disabled={ro}>
-          {MOSCOW_OPTS.map((o) => <option key={o} value={o}>{o || '—'}</option>)}
-        </select>
-      </Td>
-      <Td {...fixed('col-3')}>
         <select value={item.tipoCusto} onChange={(e) => upd({ tipoCusto: e.target.value as TipoCusto })} style={{ width: '90px' }} disabled={ro}>
           {TIPO_CUSTO_OPTS.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
       </Td>
-      <Td {...fixed('col-4')}><TextInput value={item.subcategoria} onChange={(v) => upd({ subcategoria: v })} width="90px" readOnly={ro} /></Td>
-      <Td {...fixed('col-5')}><TextInput value={item.item} onChange={(v) => upd({ item: v })} width="120px" readOnly={ro} /></Td>
-      <Td {...fixed('col-6')}>
+      <Td {...fixed('col-3')}><TextInput value={item.subcategoria} onChange={(v) => upd({ subcategoria: v })} width="150px" readOnly={ro} /></Td>
+      <Td {...fixed('col-4')}><TextInput value={item.item} onChange={(v) => upd({ item: v })} width="120px" readOnly={ro} /></Td>
+      <Td {...fixed('col-5')}>
         {fornecedoresSugeridos.length > 0 ? (
           <input
             list={`forn-${item.id}`}
