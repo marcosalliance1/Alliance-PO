@@ -1,6 +1,6 @@
 ﻿import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning, Database, Wallet, Eraser } from 'lucide-react'
+import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning, Database, Wallet, Eraser, Ticket } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL, newItemId } from '../../utils/formatters'
@@ -9,6 +9,8 @@ import { ResumoFinanceiro } from '../../components/Orcamento/ResumoFinanceiro'
 import { PainelMargem } from '../../components/Orcamento/PainelMargem'
 import { PainelSugestoes } from '../../components/Orcamento/PainelSugestoes'
 import { AbaInfoEvento } from '../../components/Evento/AbaInfoEvento'
+import { CronogramaRegua } from '../../components/Evento/CronogramaRegua'
+import { gerarLotesIngresso, custoVariavelPorPessoa } from '../../utils/lotesIngresso'
 import { criarItemDeSugestao, type ItemEstimado } from '../../utils/estimativa'
 import { SecaoAccordion } from '../../components/Orcamento/SecaoAccordion'
 import { exportarPDF, exportarPendenciasPDF } from '../../utils/exportPDF'
@@ -88,7 +90,7 @@ export const OrcamentoPage: React.FC = () => {
   const { buscarOrcamento, salvarOrcamento, addToast, atualizarEquipe, config, recalcularSecao } = useAppContext()
 
   const [orc, setOrc] = useState<Orcamento | null>(null)
-  const [abaAtiva, setAbaAtiva] = useState<'orcamento' | 'evento'>('orcamento')
+  const [abaAtiva, setAbaAtiva] = useState<'orcamento' | 'evento' | 'cronograma'>('orcamento')
   const [dirty, setDirty] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showDriveModal, setShowDriveModal] = useState(false)
@@ -261,6 +263,18 @@ export const OrcamentoPage: React.FC = () => {
     setOrc({ ...orc, [secao]: [...(orc[secao] as ItemOrcamento[]), novoItem] })
     setDirty(true)
     addToast(`"${item.item}" adicionado`, 'success')
+  }
+
+  function handleGerarLotes() {
+    if (!orc) return
+    const lotes = gerarLotesIngresso(orc)
+    if (lotes.length === 0) {
+      addToast('Pra gerar os lotes, preencha os Formandos (aba Info do Evento) e o A&B.', 'error')
+      return
+    }
+    setOrc({ ...orc, receitasSympla: lotes })
+    setDirty(true)
+    addToast(`${lotes.length} lotes gerados pela fórmula`, 'success')
   }
 
   // ─── Anexar documento em Cotação ────────────────────────────────────────
@@ -552,7 +566,7 @@ export const OrcamentoPage: React.FC = () => {
 
       {/* ── Abas: Orçamento | Info do Evento ── */}
       <div className="flex gap-1 border-b border-bordercol">
-        {([['orcamento', 'Orçamento'], ['evento', 'Info do Evento']] as const).map(([k, label]) => (
+        {([['orcamento', 'Orçamento'], ['evento', 'Info do Evento'], ['cronograma', 'Cronograma']] as const).map(([k, label]) => (
           <button key={k} onClick={() => setAbaAtiva(k)}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${abaAtiva === k ? 'border-accent text-white' : 'border-transparent text-muted hover:text-white'}`}>
             {label}
@@ -563,6 +577,8 @@ export const OrcamentoPage: React.FC = () => {
       {abaAtiva === 'evento' && (
         <AbaInfoEvento orc={orc} onChange={info => { setOrc({ ...orc, infoEvento: info }); setDirty(true) }} />
       )}
+
+      {abaAtiva === 'cronograma' && <CronogramaRegua orc={orc} />}
 
       {abaAtiva === 'orcamento' && (<>
       {/* ── Painel de margem (planejamento: elas veem se fecha) ── */}
@@ -592,7 +608,23 @@ export const OrcamentoPage: React.FC = () => {
             </div>
           </div>
         </div>
-        <p className="text-xs text-muted mb-3">Lotes Sympla</p>
+        <div className="flex items-end justify-between gap-2 mb-3 flex-wrap">
+          <div>
+            <p className="text-xs text-muted">Lotes Sympla</p>
+            {(() => {
+              const cv = custoVariavelPorPessoa(orc)
+              return cv.formandos > 0 && cv.totalAB > 0 ? (
+                <p className="text-[10px] text-muted">Custo variável: <span className="text-gray-300">{formatBRL(cv.valor)}/pessoa</span> (A&B {formatBRL(cv.totalAB)} ÷ {cv.formandos} formandos)</p>
+              ) : (
+                <p className="text-[10px] text-muted">Pra gerar pela fórmula: preencha Formandos (aba Info do Evento) e o A&B.</p>
+              )
+            })()}
+          </div>
+          <button onClick={handleGerarLotes}
+            className="flex items-center gap-1.5 text-xs text-accent hover:underline shrink-0">
+            <Ticket className="w-3.5 h-3.5" /> Gerar lotes (fórmula)
+          </button>
+        </div>
         <TabelaLotes
           lotes={orc.receitasSympla}
           onChange={l => set('receitasSympla', l)}

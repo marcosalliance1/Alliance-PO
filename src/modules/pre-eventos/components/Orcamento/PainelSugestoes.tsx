@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react'
-import { Plus, Lightbulb, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Lightbulb, ChevronDown, ChevronRight, Utensils } from 'lucide-react'
 import type { Orcamento } from '../../types'
 import { formatBRL } from '../../utils/formatters'
-import { gerarItensDoHistorico, type ItemEstimado } from '../../utils/estimativa'
+import { gerarItensDoHistorico, custoPerCapitaAB, type ItemEstimado } from '../../utils/estimativa'
 import { SECOES, type SecaoKeyEverest } from '../../utils/matchEverest'
 import { useAppContext } from '../../contexts/AppContext'
 
@@ -28,7 +28,12 @@ export const PainelSugestoes: React.FC<Props> = ({ orc, onAdicionar }) => {
 
   const total = useMemo(() => porSecao.reduce((s, x) => s + x.sugestoes.length, 0), [porSecao])
 
-  if (porSecao.length === 0) return null
+  // Referência de quanto se gasta por pessoa em cada item de A&B (Buffet, Chopp,
+  // Bar de Drinks...), pela mediana histórica do tipo. Guia pra quem preenche à mão.
+  const perCapitaAB = useMemo(() => custoPerCapitaAB(orcamentos, orc.tipo), [orcamentos, orc.tipo])
+  const conv = orc.quantidadeConvidados || 0
+
+  if (porSecao.length === 0 && perCapitaAB.length === 0) return null
 
   return (
     <div className="bg-surface-2 border border-bordercol rounded-card mt-6">
@@ -39,14 +44,35 @@ export const PainelSugestoes: React.FC<Props> = ({ orc, onAdicionar }) => {
         <span className="text-white font-bold text-base flex items-center gap-2">
           <Lightbulb className="w-4 h-4 text-warning" />
           Sugestões do histórico
-          <span className="text-xs font-normal text-muted">({total})</span>
+          {total > 0 && <span className="text-xs font-normal text-muted">({total})</span>}
         </span>
         {aberto ? <ChevronDown className="w-5 h-5 text-muted" /> : <ChevronRight className="w-5 h-5 text-muted" />}
       </button>
 
       {aberto && (
         <div className="px-5 pb-5 space-y-4">
-          <p className="text-xs text-muted -mt-2">Itens que apareceram em eventos parecidos. Clique pra adicionar se este também for ter.</p>
+          {perCapitaAB.length > 0 && (
+            <div>
+              <p className="text-[11px] text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
+                <Utensils className="w-3 h-3 text-accent" /> Referência A&amp;B por pessoa
+                <span className="normal-case tracking-normal text-muted/70">· quanto costumamos gastar por pessoa{conv > 0 ? ` (≈ pra ${conv} convidados)` : ''}</span>
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                {perCapitaAB.map(i => (
+                  <div key={i.item} className="bg-surface border border-bordercol/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-muted uppercase truncate" title={i.item}>{i.item}</p>
+                    <p className="text-sm text-white font-semibold">
+                      {formatBRL(i.perCapita)}<span className="text-[10px] text-muted font-normal"> /pessoa</span>
+                    </p>
+                    {conv > 0 && <p className="text-[10px] text-muted">≈ {formatBRL(i.perCapita * conv)} · {i.amostras}am</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {porSecao.length > 0 && (
+          <p className="text-xs text-muted">Itens que apareceram em eventos parecidos. Clique pra adicionar se este também for ter.</p>
+          )}
           {porSecao.map(({ secao, sugestoes }) => (
           <div key={secao.key}>
             <p className="text-[11px] text-muted uppercase tracking-wide mb-1.5">{secao.label}</p>

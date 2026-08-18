@@ -145,6 +145,33 @@ export function estimarPorHistorico(
   return { nivelFiltro: nivel, orcamentosBase: base.length, secoes }
 }
 
+// ─── Referência: custo de A&B por pessoa (histórico) ──────────────────────────
+// Pra cada item de A&B (Buffet, Chopp, Bar de Drinks...), a mediana histórica de
+// (total do item ÷ convidados do evento) — quanto se gasta por pessoa em cada.
+export interface PerCapitaAB { item: string; perCapita: number; amostras: number }
+
+export function custoPerCapitaAB(orcamentos: Orcamento[], tipo: EventType): PerCapitaAB[] {
+  const doTipo = orcamentos.filter(o => o.tipo === tipo && o.quantidadeConvidados > 0)
+  const base = doTipo.length ? doTipo : orcamentos.filter(o => o.quantidadeConvidados > 0)
+
+  const porNome = new Map<string, number[]>()
+  for (const o of base)
+    for (const it of o.abBebidas) {
+      const nome = it.item.trim()
+      if (!nome) continue
+      const total = it.totalPagoReal > 0 ? it.totalPagoReal : it.totalOrcado
+      if (total <= 0) continue
+      const arr = porNome.get(nome) ?? []
+      arr.push(total / o.quantidadeConvidados)
+      porNome.set(nome, arr)
+    }
+
+  return [...porNome.entries()]
+    .map(([item, arr]) => ({ item, perCapita: Math.round(mediana(arr) * 100) / 100, amostras: arr.length }))
+    .filter(x => x.perCapita > 0)
+    .sort((a, b) => b.perCapita - a.perCapita)
+}
+
 // ─── Geração do orçamento pré-preenchido ──────────────────────────────────────
 // Item "core" (aparece em >= metade dos orçamentos base) entra no orçamento;
 // item raro (de 1 evento específico) vira sugestão opcional pra a atendente

@@ -5,6 +5,7 @@ import { useAppContext } from '../../contexts/AppContext'
 import { criarOrcamentoVazio } from '../../hooks/useOrcamentos'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { gerarItensDoHistorico, sugerirConvidados } from '../../utils/estimativa'
+import { INFO_EVENTO_VAZIO } from '../../components/Evento/AbaInfoEvento'
 import { SECOES } from '../../utils/matchEverest'
 import { formatBRL } from '../../utils/formatters'
 import type { EventType, Orcamento } from '../../types'
@@ -17,6 +18,7 @@ export const NovoOrcamentoPage: React.FC = () => {
   const [turma, setTurma] = useState('')
   const [convidados, setConvidados] = useState(200)
   const [convidadosEditado, setConvidadosEditado] = useState(false)
+  const [formandos, setFormandos] = useState(0)
 
   // Sugere convidados pela mediana histórica do tipo (refina pela instituição).
   const sugestaoConv = useMemo(
@@ -58,6 +60,11 @@ export const NovoOrcamentoPage: React.FC = () => {
     orc.instituicao = instituicao
     orc.turma = turma
     orc.quantidadeConvidados = convidados
+    orc.infoEvento = {
+      ...(orc.infoEvento ?? INFO_EVENTO_VAZIO),
+      formandos: formandos > 0 ? String(formandos) : (orc.infoEvento?.formandos ?? ''),
+      totalConvidados: convidados > 0 ? String(convidados) : (orc.infoEvento?.totalConvidados ?? ''),
+    }
     salvarOrcamento(orc)
     navigate(`/pre-eventos/orcamentos/${orc.id}`)
   }
@@ -110,25 +117,27 @@ export const NovoOrcamentoPage: React.FC = () => {
             <label className={labelCls}>Turma</label>
             <input value={turma} onChange={e => setTurma(e.target.value)} className={inputCls} placeholder="Ex: UNIFENAS 44" />
           </div>
-          <div className="sm:col-span-2">
+          <div>
             <label className={labelCls}>Quantidade de Convidados</label>
-            <input
-              type="number"
-              min={0}
-              value={convidados || ''}
+            <input type="number" min={0} value={convidados || ''}
               onChange={e => { setConvidados(Number(e.target.value) || 0); setConvidadosEditado(true) }}
-              className={inputCls}
-            />
+              className={inputCls} />
             {sugestaoConv.convidados > 0 && (
               <p className="text-[11px] text-muted mt-1 flex items-center gap-1.5">
                 <Users className="w-3 h-3" />
-                Média histórica {sugestaoConv.escopo === 'instituicao' ? `da ${instituicao}` : 'do tipo'}:{' '}
-                <b className="text-gray-300">{sugestaoConv.convidados}</b> ({sugestaoConv.amostras} evento{sugestaoConv.amostras !== 1 ? 's' : ''})
+                Média {sugestaoConv.escopo === 'instituicao' ? `da ${instituicao}` : 'do tipo'}:{' '}
+                <b className="text-gray-300">{sugestaoConv.convidados}</b> ({sugestaoConv.amostras}ev)
                 {convidadosEditado && (
                   <button onClick={() => setConvidadosEditado(false)} className="text-accent hover:underline ml-1">usar</button>
                 )}
               </p>
             )}
+          </div>
+          <div>
+            <label className={labelCls}>Quantidade de Formandos</label>
+            <input type="number" min={0} value={formandos || ''}
+              onChange={e => setFormandos(Number(e.target.value) || 0)} className={inputCls} placeholder="ex: 200" />
+            <p className="text-[10px] text-muted mt-1">Usado na fórmula dos lotes de ingresso.</p>
           </div>
         </div>
 
