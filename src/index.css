@@ -89,6 +89,20 @@
   .table-po .col-3 { left: 314px; min-width: 150px; }
   .table-po .col-4 { left: 464px; min-width: 132px; }
   .table-po .col-5 { left: 596px; min-width: 112px; }
+  /* No celular as 6 colunas congeladas somam 708px — mais largo que a tela toda,
+     então a última coluna nunca aparece e parece que o dedo não arrasta nada.
+     Tira o "left" (mantém position:sticky pro cabeçalho continuar grudando no topo
+     ao rolar pra baixo) — a tabela vira scroll horizontal normal, sem coluna presa. */
+  @media (max-width: 767px) {
+    .table-po .col-0,
+    .table-po .col-1,
+    .table-po .col-2,
+    .table-po .col-3,
+    .table-po .col-4,
+    .table-po .col-5 {
+      left: auto;
+    }
+  }
   /* Column group separator — respiro visual entre os blocos Vendido/Orçado/Contratado */
   .table-po .col-sep {
     width: 14px;

@@ -169,7 +169,7 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Resultado Realizado */}
         <div className="card">
           <h3 className="text-text-main text-sm font-semibold mb-3 pb-2 border-b border-white/10">Resultado Caixa <span className="text-xs text-text-muted font-normal">Movimentos bancários realizados</span></h3>
@@ -197,8 +197,8 @@ function ResultadoProjetos({ boletim, cap, dimensaoProjetos, filtroProj }: { bol
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
-        <div className="card col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="card lg:col-span-2">
           <h3 className="text-text-main text-sm font-semibold mb-4">Receitas vs Despesas por Ano</h3>
           {dadosAnos.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
@@ -474,7 +474,7 @@ function FluxoCaixa({ cap: capRaw, filtroProj }: { cap: CAPRecord[]; filtroProj:
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard title="Total em Aberto"    value={fmtCompact(totalAberto)}  color="#94a3b8" />
         <KPICard title="Total Vencido"      value={fmtCompact(totalVencido)} color={C_DESPESA} subtitle="ATIVO com data passada" />
         <KPICard title="A Vencer 7 dias"    value={fmtCompact(aVencer7)}    color="#f59e0b" />
@@ -671,13 +671,13 @@ function ControleDespesas({ boletim: boletimRaw, cap: capRaw, dimensaoProjetos, 
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <KPICard title="Total Despesas"  value={fmtCompact(totalDespesas)}  color="#94a3b8" />
         <KPICard title="Total Liquidado" value={fmtCompact(totalLiquidado)} color={C_RECEITA} />
         <KPICard title="Total em Aberto" value={fmtCompact(totalAberto)}    color={C_CORAL} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card">
           <h3 className="text-text-main text-sm font-semibold mb-4">Top 10 Contas Gerenciais</h3>
           {top10Ger.length > 0 ? (
