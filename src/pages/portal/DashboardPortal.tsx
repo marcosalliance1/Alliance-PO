@@ -491,10 +491,253 @@ function PlanilhaSecao({ titulo, items, col1 = 'Item', col2 = 'Fornecedor' }: {
   )
 }
 
+// ─── Cronograma (régua) — leitura no portal ──────────────────────────────────
+
+const STATUS_REGUA_CHIP: Record<string, string> = {
+  'Concluído':    'bg-success/15 text-success',
+  'A iniciar':    'bg-white/10 text-white',
+  'Em andamento': 'bg-yellow-400/15 text-yellow-400',
+  'Pendente':     'bg-orange-400/15 text-orange-400',
+  'Cancelado':    'bg-red-400/15 text-red-400 line-through',
+}
+
+const STATUS_DOT: Record<string, string> = {
+  'Concluído':    'bg-success',
+  'A iniciar':    'bg-white',
+  'Em andamento': 'bg-yellow-400',
+  'Pendente':     'bg-orange-400',
+  'Cancelado':    'bg-red-400',
+}
+
+interface ReguaTarefaPortal {
+  id: string; tarefa: string; momento: string; dias: number; responsavel: string; status: string
+}
+
+function dataMenosDias(iso: string, dias: number): string {
+  if (!iso) return '—'
+  const d = new Date(iso.slice(0, 10) + 'T00:00:00')
+  if (isNaN(d.getTime())) return '—'
+  d.setDate(d.getDate() - dias)
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function diasAteEvento(iso: string): number | null {
+  if (!iso) return null
+  const alvo = new Date(iso.slice(0, 10) + 'T00:00:00')
+  if (isNaN(alvo.getTime())) return null
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+  return Math.round((alvo.getTime() - hoje.getTime()) / 86400000)
+}
+
+// Fases da régua (pra agrupar as tarefas em barras no Gantt, em vez de 1 ponto por tarefa).
+const FASES_REGUA = [
+  { nome: 'Concepção',    min: 65,        max: Infinity },
+  { nome: 'Fornecedores', min: 35,        max: 65 },
+  { nome: 'Vendas',       min: 10,        max: 35 },
+  { nome: 'Reta final',   min: -Infinity, max: 10 },
+]
+
+function corFase(tasks: { status: string }[]): string {
+  const ativos = tasks.filter(t => t.status !== 'Cancelado')
+  if (ativos.length === 0) return 'bg-white/10'
+  if (ativos.every(t => t.status === 'Concluído')) return 'bg-success'
+  if (ativos.some(t => t.status === 'Concluído' || t.status === 'Em andamento')) return 'bg-yellow-400'
+  if (ativos.some(t => t.status === 'A iniciar')) return 'bg-white'
+  return 'bg-orange-400'
+}
+
+// Marcas de mês entre duas datas, com posição x (%) na linha do tempo.
+function mesesEntre(start: Date, end: Date): { label: string; x: number }[] {
+  const total = end.getTime() - start.getTime()
+  if (total <= 0) return []
+  const res: { label: string; x: number }[] = []
+  const d = new Date(start.getFullYear(), start.getMonth(), 1)
+  if (d < start) d.setMonth(d.getMonth() + 1)
+  let guard = 0
+  while (d <= end && guard < 60) {
+    const x = ((d.getTime() - start.getTime()) / total) * 100
+    const mes = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')
+    res.push({ label: `${mes}/${String(d.getFullYear()).slice(2)}`, x })
+    d.setMonth(d.getMonth() + 1)
+    guard++
+  }
+  return res
+}
+
+function CronogramaPortal({ tarefas, dataEvento }: { tarefas: ReguaTarefaPortal[]; dataEvento: string }) {
+  if (tarefas.length === 0) return null
+
+  const dias = diasAteEvento(dataEvento)
+  const total = tarefas.length
+  const concluidas = tarefas.filter(t => t.status === 'Concluído').length
+  const pct = total > 0 ? Math.round((concluidas / total) * 100) : 0
+
+  return (
+    <div>
+      <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Cronograma</h4>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div className="bg-bg rounded-xl px-3 py-3">
+          <div className="text-text-muted text-[10px] mb-1">Contagem regressiva</div>
+          <div className="text-primary text-sm font-bold">
+            {dias == null ? '—' : dias >= 0 ? `faltam ${dias} dias` : `${Math.abs(dias)} dias atrás`}
+          </div>
+        </div>
+        <div className="bg-bg rounded-xl px-3 py-3">
+          <div className="text-text-muted text-[10px] mb-1">Jornada</div>
+          <div className="text-text-main text-sm font-bold">{concluidas} de {total} · {pct}%</div>
+          <div className="h-1 bg-white/10 rounded-full overflow-hidden mt-1.5">
+            <div className="h-full bg-success rounded-full" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      </div>
+      <div className="rounded-xl border border-white/8 overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-white/4 border-b border-white/8">
+              <th className="text-left px-3 py-2 text-text-muted font-medium w-14">Prazo</th>
+              <th className="text-left px-3 py-2 text-text-muted font-medium">Tarefa</th>
+              <th className="text-right px-3 py-2 text-text-muted font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tarefas.map(t => (
+              <tr key={t.id} className="border-b border-white/5 last:border-0">
+                <td className="px-3 py-2.5 text-text-muted whitespace-nowrap tabular-nums">{dataMenosDias(dataEvento, t.dias)}</td>
+                <td className="px-3 py-2.5 text-text-main">
+                  {t.tarefa}
+                  {t.responsavel && <span className="text-text-muted/70"> · {t.responsavel}</span>}
+                </td>
+                <td className="px-3 py-2.5 text-right">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${STATUS_REGUA_CHIP[t.status] ?? STATUS_REGUA_CHIP.Pendente}`}>
+                    {t.status}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  )
+}
+
+function GanttPortal({ tarefas, dataEvento }: { tarefas: ReguaTarefaPortal[]; dataEvento: string }) {
+  const [fasesAbertas, setFasesAbertas] = useState<Record<string, boolean>>({})
+
+  if (tarefas.length === 0) return null
+
+  const dias = diasAteEvento(dataEvento)
+  const diasArr = tarefas.map(t => t.dias)
+  const maxDias = Math.max(...diasArr, 0)
+  const minDias = Math.min(...diasArr, 0)
+  const range = (maxDias - minDias) || 1
+  const xPos = (d: number) => ((maxDias - d) / range) * 100
+  const xHoje = dias == null ? null : Math.max(0, Math.min(100, ((maxDias - dias) / range) * 100))
+  const evDate = dataEvento ? new Date(dataEvento.slice(0, 10) + 'T00:00:00') : null
+  const eventoValida = !!evDate && !isNaN(evDate.getTime())
+  const meses = eventoValida
+    ? (() => {
+        const ini = new Date(evDate!); ini.setDate(ini.getDate() - maxDias)
+        const fim = new Date(evDate!); fim.setDate(fim.getDate() - minDias)
+        return mesesEntre(ini, fim)
+      })()
+    : []
+  const fasesGantt = FASES_REGUA.map(f => {
+    const ts = tarefas.filter(t => t.dias < f.max && t.dias >= f.min)
+    if (ts.length === 0) return null
+    const ds = ts.map(t => t.dias)
+    return {
+      nome: f.nome,
+      left: xPos(Math.max(...ds)),
+      right: xPos(Math.min(...ds)),
+      cor: corFase(ts),
+      n: ts.length,
+      feitas: ts.filter(t => t.status === 'Concluído').length,
+      inicio: dataMenosDias(dataEvento, Math.max(...ds)),
+      fim: dataMenosDias(dataEvento, Math.min(...ds)),
+      tasks: ts,
+    }
+  }).filter((f): f is NonNullable<typeof f> => f !== null)
+
+  if (fasesGantt.length === 0) return null
+
+  return (
+    <div>
+      <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Linha do tempo</h4>
+      <div className="rounded-xl border border-white/8 p-3">
+        {/* eixo de meses */}
+        <div className="flex mb-2">
+          <div className="w-48 shrink-0" />
+          <div className="relative flex-1 h-3">
+            {meses.map((m, i) => (
+              <span key={i} className="absolute -translate-x-1/2 text-[9px] text-text-muted whitespace-nowrap" style={{ left: `${m.x}%` }}>{m.label}</span>
+            ))}
+          </div>
+        </div>
+        {/* barras de fase — clica pra recolher/expandir as tarefas */}
+        <div className="space-y-2">
+          {fasesGantt.map(f => {
+            const aberta = fasesAbertas[f.nome] ?? true
+            return (
+              <div key={f.nome}>
+                <div className="flex items-center">
+                  <button
+                    onClick={() => setFasesAbertas(p => ({ ...p, [f.nome]: !aberta }))}
+                    className="w-48 shrink-0 pr-2 flex items-center gap-1 text-[12px] text-text-main hover:text-primary transition-colors text-left"
+                  >
+                    {aberta ? <ChevronDown size={12} className="shrink-0" /> : <ChevronRight size={12} className="shrink-0" />}
+                    <span className="truncate">{f.nome}</span>
+                  </button>
+                  <div className="relative flex-1 h-4">
+                    {meses.map((m, i) => <div key={i} className="absolute top-0 bottom-0 w-px bg-white/6" style={{ left: `${m.x}%` }} />)}
+                    {xHoje != null && <div className="absolute top-0 bottom-0 w-px bg-white/30" style={{ left: `${xHoje}%` }} />}
+                    <div
+                      className={`absolute top-1/2 -translate-y-1/2 h-2.5 rounded-full ${f.cor}`}
+                      style={{ left: `${f.left}%`, width: `${Math.max(2, f.right - f.left)}%` }}
+                      title={`${f.inicio} – ${f.fim} · ${f.feitas}/${f.n} concluídas`}
+                    />
+                  </div>
+                </div>
+                {aberta && f.tasks.map(t => (
+                  <div key={t.id} className="flex items-start mt-1">
+                    <span className="w-48 shrink-0 pr-2 pl-5 text-[10px] leading-tight text-text-muted" title={`${dataMenosDias(dataEvento, t.dias)} · ${t.status}`}>
+                      {t.tarefa}
+                    </span>
+                    <div className="relative flex-1 h-4">
+                      {meses.map((m, i) => <div key={i} className="absolute top-0 bottom-0 w-px bg-white/4" style={{ left: `${m.x}%` }} />)}
+                      {xHoje != null && <div className="absolute top-0 bottom-0 w-px bg-white/15" style={{ left: `${xHoje}%` }} />}
+                      <div className="absolute left-0 right-0 top-2 h-px bg-white/5" />
+                      <div
+                        className={`absolute top-2 -translate-y-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${STATUS_DOT[t.status] ?? 'bg-orange-400'}`}
+                        style={{ left: `${xPos(t.dias)}%` }}
+                        title={`${dataMenosDias(dataEvento, t.dias)} · ${t.status}`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+        {/* hoje / evento */}
+        <div className="flex text-[9px] text-text-muted mt-2">
+          <div className="w-48 shrink-0" />
+          <div className="relative flex-1 h-3">
+            {xHoje != null && <span className="absolute -translate-x-1/2 text-white/60" style={{ left: `${xHoje}%` }}>hoje</span>}
+            <span className="absolute right-0">{eventoValida ? fmtData(dataEvento) : 'evento'}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([])
   const [loading, setLoading] = useState(true)
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
+  const [reguas, setReguas] = useState<Record<string, ReguaTarefaPortal[]>>({})
 
   const hoje = new Date().toISOString().slice(0, 10)
 
@@ -522,6 +765,21 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
 
       setOrcamentos(filtrados)
       setLoading(false)
+
+      // Carrega as réguas de todos os pré-eventos desta turma de uma vez.
+      const ids = filtrados.map(o => o.id).filter(Boolean)
+      if (ids.length > 0) {
+        const { data: rt } = await supabase
+          .from('regua_tarefas')
+          .select('id, orcamento_id, tarefa, momento, dias, responsavel, status')
+          .in('orcamento_id', ids)
+          .order('ordem', { ascending: true })
+        const map: Record<string, ReguaTarefaPortal[]> = {}
+        for (const t of ((rt ?? []) as (ReguaTarefaPortal & { orcamento_id: string })[])) {
+          (map[t.orcamento_id] ??= []).push(t)
+        }
+        setReguas(map)
+      }
     }
     load()
   }, [projeto.tap.instituicao]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -556,8 +814,21 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
             </button>
 
             {/* Planilha expandida */}
-            {isOpen && (
+            {isOpen && (() => {
+              const tarefasRegua = reguas[orc.id] ?? []
+              const temCronograma = tarefasRegua.length > 0
+              return (
               <div className="border-t border-white/8 px-4 py-5 space-y-5">
+                <div className={`grid grid-cols-1 gap-8 items-start ${temCronograma ? 'lg:grid-cols-2' : ''}`}>
+                {temCronograma && (
+                  <div className="space-y-5">
+                    <CronogramaPortal tarefas={tarefasRegua} dataEvento={orc.data} />
+                  </div>
+                )}
+
+                {/* Orçamento completo */}
+                <div className="space-y-5">
+                <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Orçamento</h4>
                 {/* KPIs financeiros */}
                 {(() => {
                   const receita = totalReceitas(orc)
@@ -621,6 +892,10 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
                   items={orc.operacaoEstrutura ?? []}
                 />
                 <PlanilhaSecao
+                  titulo="Equipe"
+                  items={orc.equipe ?? []}
+                />
+                <PlanilhaSecao
                   titulo="Lineup Artístico"
                   items={orc.atracao ?? []}
                   col1="Horário / Atração"
@@ -659,8 +934,12 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
                     </div>
                   </div>
                 )}
+                </div>
+                </div>
+                {temCronograma && <GanttPortal tarefas={tarefasRegua} dataEvento={orc.data} />}
               </div>
-            )}
+              )
+            })()}
           </div>
         )
       })}
@@ -791,7 +1070,7 @@ export function DashboardPortal() {
       </div>
 
       {/* Conteúdo */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-8 py-8">
+      <main className={`${tabAtiva === 'pre-eventos' ? 'max-w-7xl' : 'max-w-4xl'} mx-auto px-4 sm:px-8 py-8 transition-[max-width]`}>
         {tabAtiva === 'financeiro'  && <SecaoFinanceiro projeto={projetoCliente} vencimentos={vencimentos} />}
         {tabAtiva === 'po'          && <SecaoPO projeto={projetoCliente} />}
         {tabAtiva === 'pre-eventos' && <SecaoPreEventos projeto={projeto} />}
