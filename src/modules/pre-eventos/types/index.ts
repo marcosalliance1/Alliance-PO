@@ -62,6 +62,30 @@ export interface Cotacao {
   documentos?: DocumentoCotacao[]
 }
 
+// ─── Info do Evento (operacional) ─────────────────────────────────────────────
+// Criada/editada no próprio sistema (salva no orçamento). A leitura da planilha
+// "Operacional" do Drive é só migração dos eventos passados pra cá.
+export interface InfoEventoFornecedor { categoria: string; fornecedor: string; fechado: boolean }
+export interface InfoEventoLineup { horario: string; artista: string; obs: string }
+export interface InfoEvento {
+  nomeEvento: string
+  tipo: string
+  data: string
+  diaSemana: string
+  local: string
+  horario: string
+  tematica: string
+  totalConvidados: string
+  formandos: string
+  pagantes: string
+  bolsaFolia: string
+  dataAdimplencia: string
+  vendaDeConvite: string
+  fornecedores: InfoEventoFornecedor[]
+  lineup: InfoEventoLineup[]
+  linkVenda: string | null
+}
+
 export interface Orcamento {
   id: string
   tipo: EventType
@@ -80,6 +104,7 @@ export interface Orcamento {
   abBebidas: ItemOrcamento[]
   extras: ItemOrcamento[]
   cotacoes?: Cotacao[]
+  infoEvento?: InfoEvento   // dados operacionais do evento, editáveis no sistema
 }
 
 // ─── Config Automações ───────────────────────────────────────────────────────

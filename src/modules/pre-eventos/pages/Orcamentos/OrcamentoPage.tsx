@@ -8,7 +8,7 @@ import TabelaItens from '../../components/Orcamento/TabelaItens'
 import { ResumoFinanceiro } from '../../components/Orcamento/ResumoFinanceiro'
 import { PainelMargem } from '../../components/Orcamento/PainelMargem'
 import { PainelSugestoes } from '../../components/Orcamento/PainelSugestoes'
-import { PainelEventoOperacional } from '../../components/Evento/PainelEventoOperacional'
+import { AbaInfoEvento } from '../../components/Evento/AbaInfoEvento'
 import { criarItemDeSugestao, type ItemEstimado } from '../../utils/estimativa'
 import { SecaoAccordion } from '../../components/Orcamento/SecaoAccordion'
 import { exportarPDF, exportarPendenciasPDF } from '../../utils/exportPDF'
@@ -560,7 +560,9 @@ export const OrcamentoPage: React.FC = () => {
         ))}
       </div>
 
-      {abaAtiva === 'evento' && <PainelEventoOperacional orc={orc} />}
+      {abaAtiva === 'evento' && (
+        <AbaInfoEvento orc={orc} onChange={info => { setOrc({ ...orc, infoEvento: info }); setDirty(true) }} />
+      )}
 
       {abaAtiva === 'orcamento' && (<>
       {/* ── Painel de margem (planejamento: elas veem se fecha) ── */}

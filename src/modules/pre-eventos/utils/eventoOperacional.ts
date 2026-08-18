@@ -1,29 +1,14 @@
 // Leitura/parsing da planilha "Operacional" de eventos (Drive). Cada ABA = um
 // evento/turma. Extraído do src/pages/Operacional.tsx pra reuso no Pré-Eventos.
 import { matchCentroCusto } from './matchEverest'
+import type { InfoEvento, InfoEventoFornecedor, InfoEventoLineup } from '../types'
 
 export const SHEET_EVENTOS_ID = '1VpA4_lRcZlJ75Qc93VZZZvwW748Xnw-UsmQVCB-tRjc'
 
-export interface FornecedorEvento { categoria: string; fornecedor: string; fechado: boolean }
-export interface LineupItem { horario: string; artista: string; obs: string }
-export interface EventoDetalhes {
-  nomeEvento: string
-  tipo: string
-  data: string
-  diaSemana: string
-  local: string
-  horario: string
-  tematica: string
-  totalConvidados: string
-  formandos: string
-  pagantes: string
-  bolsaFolia: string
-  dataAdimplencia: string
-  vendaDeConvite: string
-  fornecedores: FornecedorEvento[]
-  lineup: LineupItem[]
-  linkVenda: string | null
-}
+// O formato lido da planilha é o MESMO que o salvo no orçamento (InfoEvento).
+export type FornecedorEvento = InfoEventoFornecedor
+export type LineupItem = InfoEventoLineup
+export type EventoDetalhes = InfoEvento
 
 // Abas genéricas a ignorar ao listar eventos.
 export const TABS_IGNORAR = new Set([
