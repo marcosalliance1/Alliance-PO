@@ -8,6 +8,7 @@ import TabelaItens from '../../components/Orcamento/TabelaItens'
 import { ResumoFinanceiro } from '../../components/Orcamento/ResumoFinanceiro'
 import { PainelMargem } from '../../components/Orcamento/PainelMargem'
 import { PainelSugestoes } from '../../components/Orcamento/PainelSugestoes'
+import { PainelEventoOperacional } from '../../components/Evento/PainelEventoOperacional'
 import { criarItemDeSugestao, type ItemEstimado } from '../../utils/estimativa'
 import { SecaoAccordion } from '../../components/Orcamento/SecaoAccordion'
 import { exportarPDF, exportarPendenciasPDF } from '../../utils/exportPDF'
@@ -87,6 +88,7 @@ export const OrcamentoPage: React.FC = () => {
   const { buscarOrcamento, salvarOrcamento, addToast, atualizarEquipe, config, recalcularSecao } = useAppContext()
 
   const [orc, setOrc] = useState<Orcamento | null>(null)
+  const [abaAtiva, setAbaAtiva] = useState<'orcamento' | 'evento'>('orcamento')
   const [dirty, setDirty] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showDriveModal, setShowDriveModal] = useState(false)
@@ -548,6 +550,19 @@ export const OrcamentoPage: React.FC = () => {
         </div>
       </div>
 
+      {/* ── Abas: Orçamento | Info do Evento ── */}
+      <div className="flex gap-1 border-b border-bordercol">
+        {([['orcamento', 'Orçamento'], ['evento', 'Info do Evento']] as const).map(([k, label]) => (
+          <button key={k} onClick={() => setAbaAtiva(k)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${abaAtiva === k ? 'border-accent text-white' : 'border-transparent text-muted hover:text-white'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {abaAtiva === 'evento' && <PainelEventoOperacional orc={orc} />}
+
+      {abaAtiva === 'orcamento' && (<>
       {/* ── Painel de margem (planejamento: elas veem se fecha) ── */}
       <PainelMargem orc={orc} />
 
@@ -654,6 +669,7 @@ export const OrcamentoPage: React.FC = () => {
       <PainelSugestoes orc={orc} onAdicionar={handleAdicionarSugestao} />
 
       <ResumoFinanceiro orc={orc} />
+      </>)}
 
       {/* Floating save — desktop only */}
       {dirty && (
