@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { CalendarClock, Plus, Trash2, Save, ListChecks } from 'lucide-react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { CalendarClock, Plus, Trash2, Check, ListChecks, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { newItemId } from '../../utils/formatters'
 import {
@@ -48,7 +48,11 @@ export const CronogramaRegua: React.FC<{ orc: Orcamento }> = ({ orc }) => {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [salvo, setSalvo] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  // Conta cada edição. Serve pra não sobrescrever o que o usuário digitou
+  // enquanto um auto-save estava em trânsito (guarda contra race).
+  const editSeq = useRef(0)
 
   useEffect(() => {
     let ativo = true
@@ -93,16 +97,18 @@ export const CronogramaRegua: React.FC<{ orc: Orcamento }> = ({ orc }) => {
   }
 
   function upd(id: string, campo: keyof TarefaRegua, valor: string | number) {
+    editSeq.current++
     setTarefas(prev => prev.map(t => t.id === id ? { ...t, [campo]: valor } : t))
-    setDirty(true)
+    setSalvo(false); setDirty(true)
   }
 
   function addTarefa() {
+    editSeq.current++
     setTarefas(prev => [...prev, {
       id: `novo_${newItemId()}`, tarefa: '', momento: '', dias: 0,
       responsavel: '', status: 'A iniciar', observacoes: '', ordem: prev.length,
     }])
-    setDirty(true)
+    setSalvo(false); setDirty(true)
   }
 
   async function removerTarefa(id: string) {
@@ -116,6 +122,7 @@ export const CronogramaRegua: React.FC<{ orc: Orcamento }> = ({ orc }) => {
 
   async function salvar() {
     if (!supabase) return
+    const seqInicio = editSeq.current
     setSaving(true); setErro(null)
     const rows = tarefas.map((t, i) => ({
       ...(t.id.startsWith('novo_') ? {} : { id: t.id }),
@@ -131,10 +138,36 @@ export const CronogramaRegua: React.FC<{ orc: Orcamento }> = ({ orc }) => {
       updated_at: new Date().toISOString(),
     }))
     const { data, error } = await supabase.from('regua_tarefas').upsert(rows).select('*')
-    if (error) setErro('Erro ao salvar. (Precisa estar logado como equipe.)')
-    else { setTarefas((data ?? []) as TarefaRegua[]); setDirty(false) }
+    if (error) {
+      setErro('Erro ao salvar o cronograma.')
+    } else {
+      setDirty(false)
+      // Só reconcilia com o banco (pega ids das linhas novas) se NADA foi
+      // editado enquanto o save estava em trânsito — senão sobrescreveria o
+      // que o usuário acabou de digitar.
+      if (editSeq.current === seqInicio) {
+        setTarefas((data ?? []) as TarefaRegua[])
+        setSalvo(true)
+      }
+    }
     setSaving(false)
   }
+
+  // Auto-save: grava sozinho ~700ms depois da última edição. O debounce reinicia
+  // a cada tecla, então só dispara quando o usuário para de mexer.
+  useEffect(() => {
+    if (!dirty) return
+    const h = window.setTimeout(() => { salvar() }, 700)
+    return () => window.clearTimeout(h)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, tarefas])
+
+  // Tira o "Salvo ✓" da tela depois de alguns segundos.
+  useEffect(() => {
+    if (!salvo) return
+    const h = window.setTimeout(() => setSalvo(false), 2500)
+    return () => window.clearTimeout(h)
+  }, [salvo])
 
   const dias = diasParaEvento(orc.data)
   const concluidas = tarefas.filter(t => t.status === 'Concluído').length
@@ -207,10 +240,10 @@ export const CronogramaRegua: React.FC<{ orc: Orcamento }> = ({ orc }) => {
                     <td className="px-3 py-2 text-muted whitespace-nowrap">{dataPrevista(orc.data, t.dias)}</td>
                     <td className="px-3 py-2">
                       <select className={`${selCls} w-full`} value={t.responsavel} onChange={e => upd(t.id, 'responsavel', e.target.value)}>
-                        <option value="">—</option>
-                        {RESPONSAVEIS_ALLIANCE.map(r => <option key={r} value={r}>{r}</option>)}
+                        <option value="" className="bg-surface text-white">—</option>
+                        {RESPONSAVEIS_ALLIANCE.map(r => <option key={r} value={r} className="bg-surface text-white">{r}</option>)}
                         {t.responsavel && !RESPONSAVEIS_ALLIANCE.includes(t.responsavel as typeof RESPONSAVEIS_ALLIANCE[number]) && (
-                          <option value={t.responsavel}>{t.responsavel}</option>
+                          <option value={t.responsavel} className="bg-surface text-white">{t.responsavel}</option>
                         )}
                       </select>
                     </td>
@@ -240,13 +273,17 @@ export const CronogramaRegua: React.FC<{ orc: Orcamento }> = ({ orc }) => {
             <button onClick={addTarefa} className="flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 transition-colors">
               <Plus className="w-3.5 h-3.5" /> Adicionar tarefa
             </button>
-            <button
-              onClick={salvar}
-              disabled={saving || !dirty}
-              className="flex items-center gap-2 bg-accent hover:bg-accent/90 disabled:opacity-40 text-white text-sm font-semibold py-1.5 px-4 rounded-lg transition-colors"
-            >
-              <Save className="w-4 h-4" /> {saving ? 'Salvando…' : 'Salvar cronograma'}
-            </button>
+            <div className="text-xs">
+              {saving ? (
+                <span className="flex items-center gap-1.5 text-muted"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando…</span>
+              ) : salvo ? (
+                <span className="flex items-center gap-1.5 text-success"><Check className="w-3.5 h-3.5" /> Salvo</span>
+              ) : dirty ? (
+                <span className="text-muted">Alterações não salvas…</span>
+              ) : (
+                <span className="text-muted/60">Salva automaticamente</span>
+              )}
+            </div>
           </div>
         </div>
       )}
