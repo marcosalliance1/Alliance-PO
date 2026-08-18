@@ -15,13 +15,27 @@ const links = [
   { to: '/portal-admin', icon: Users, label: 'Portal Clientes' },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  open: boolean
+  onClose: () => void
+}
+
+export function Sidebar({ open, onClose }: SidebarProps) {
   const { conectado, conectar, desconectar, logando } = useGoogleAuth()
   const { isAdmin, signOut } = useAuth()
   const navigate = useNavigate()
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-56 bg-surface border-r border-white/10 flex flex-col z-30">
+    <aside
+      className={[
+        'w-56 bg-surface border-r border-white/10 flex flex-col shrink-0',
+        // Celular: vira gaveta que desliza — some da tela quando fechada
+        'fixed inset-y-0 left-0 z-40 transition-transform duration-200 ease-in-out',
+        open ? 'translate-x-0' : '-translate-x-full',
+        // Desktop: sempre visível, faz parte do layout normal (sem sobrepor conteúdo)
+        'md:relative md:translate-x-0 md:z-auto',
+      ].join(' ')}
+    >
       <div className="px-5 py-4 border-b border-white/10 flex items-center justify-center">
         <img
           src={allianceLogo}
@@ -30,14 +44,15 @@ export function Sidebar() {
           style={{ mixBlendMode: 'screen' }}
         />
       </div>
-      <nav className="flex-1 py-4 px-3 flex flex-col gap-1">
+      <nav className="flex-1 py-4 px-3 flex flex-col gap-1 overflow-y-auto">
         {links.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
             end
+            onClick={onClose}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
                 isActive
                   ? 'bg-primary/10 text-primary'
                   : 'text-text-muted hover:text-text-main hover:bg-white/5'
@@ -79,7 +94,7 @@ export function Sidebar() {
 
       <div className="px-3 pb-1 border-t border-white/10 pt-2">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => { navigate('/'); onClose() }}
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-text-muted hover:text-text-main hover:bg-white/5 transition-colors"
         >
           <ArrowLeft size={13} /> Voltar à Home
