@@ -24,6 +24,13 @@
   input[type='number']::-webkit-outer-spin-button { opacity: 0.5; }
 }
 
+/* Sem isso, containers com scroll horizontal (tabelas, barra de abas) não respondem
+   a arrastar com o dedo no iOS/Safari mobile — precisa declarar explicitamente. */
+.overflow-x-auto, .overflow-auto {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+
 @layer components {
   .table-po {
     background-color: #ffffff;
