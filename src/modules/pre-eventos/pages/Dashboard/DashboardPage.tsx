@@ -5,12 +5,14 @@ import {
 } from 'recharts'
 import {
   FileText, TrendingUp, DollarSign, BarChart2,
-  ChevronDown, ChevronRight, SlidersHorizontal, Calendar,
+  ChevronDown, ChevronRight, SlidersHorizontal, Calendar, MapPin, Music,
 } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL, formatDate, parseLocalDate } from '../../utils/formatters'
-import type { EventType, OrcamentoStatus } from '../../types'
+import { RankingAgrupado, type RankingItem, type EventoBreakdown } from '../../components/Dashboard/RankingAgrupado'
+import MultiComboboxFornecedor from '../../components/UI/MultiComboboxFornecedor'
+import type { EventType, OrcamentoStatus, ItemOrcamento, Orcamento } from '../../types'
 
 const LINE_COLOR = '#3B82F6'
 
@@ -34,6 +36,41 @@ function orcadoOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
 function pagoOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
   return allItemsOf(o).reduce((s, i) => s + i.totalPagoReal, 0)
 }
+
+function labelEvento(o: Orcamento): string {
+  const t = EVENT_TYPE_LABELS[o.tipo]
+  return o.turma && t ? `${o.turma} — ${t}` : (o.turma || t || 'Sem nome')
+}
+
+// Agrupa itens por uma "chave" (fornecedor, ou nome do item), somando pago/orçado
+// e guardando o breakdown por evento (pra drill-down clicável no ranking).
+function agruparRanking(
+  orcs: Orcamento[],
+  itensDe: (o: Orcamento) => ItemOrcamento[],
+  chavesDe: (i: ItemOrcamento) => string[],
+): RankingItem[] {
+  const map = new Map<string, { pago: number; orcado: number; eventos: Map<string, EventoBreakdown> }>()
+  for (const o of orcs) {
+    const label = labelEvento(o)
+    for (const item of itensDe(o))
+      for (const chave of chavesDe(item)) {
+        if (!chave) continue
+        const g = map.get(chave) ?? { pago: 0, orcado: 0, eventos: new Map<string, EventoBreakdown>() }
+        g.pago += item.totalPagoReal
+        g.orcado += item.totalOrcado
+        const v = item.totalPagoReal || item.totalOrcado
+        const ev = g.eventos.get(o.id) ?? { id: o.id, label, valor: 0 }
+        ev.valor += v
+        g.eventos.set(o.id, ev)
+        map.set(chave, g)
+      }
+  }
+  return [...map.entries()]
+    .map(([nome, g]) => ({ nome, pago: g.pago, orcado: g.orcado, eventos: [...g.eventos.values()].sort((a, b) => b.valor - a.valor) }))
+    .sort((a, b) => (b.pago - a.pago) || (b.orcado - a.orcado))
+}
+
+const fornecedoresDe = (i: ItemOrcamento) => (i.fornecedor || '').split('||').map(f => f.trim()).filter(Boolean)
 
 const BarraPercentualPago: React.FC<{ orcado: number; pago: number }> = ({ orcado, pago }) => {
   const pct = orcado > 0 ? Math.min((pago / orcado) * 100, 100) : 0
@@ -92,14 +129,20 @@ export const DashboardPage: React.FC = () => {
     return [...names].sort()
   }, [orcamentos])
 
+  // Multi-seleção: filtroFornecedor guarda os selecionados separados por "||".
+  const fornsSelecionados = useMemo(
+    () => filtroFornecedor.split('||').map(s => s.trim()).filter(Boolean),
+    [filtroFornecedor],
+  )
+
   const filtered = useMemo(() => orcamentos.filter(o => {
-    if (filtroTipo       && o.tipo        !== filtroTipo)   return false
-    if (filtroStatus     && o.status      !== filtroStatus) return false
-    if (filtroInst       && o.instituicao !== filtroInst)   return false
-    if (filtroTurma      && o.turma       !== filtroTurma)  return false
-    if (filtroFornecedor && !allItemsOf(o).some(i => i.fornecedor?.trim() === filtroFornecedor)) return false
+    if (filtroTipo   && o.tipo        !== filtroTipo)   return false
+    if (filtroStatus && o.status      !== filtroStatus) return false
+    if (filtroInst   && o.instituicao !== filtroInst)   return false
+    if (filtroTurma  && o.turma       !== filtroTurma)  return false
+    if (fornsSelecionados.length && !allItemsOf(o).some(i => fornecedoresDe(i).some(f => fornsSelecionados.includes(f)))) return false
     return true
-  }), [orcamentos, filtroTipo, filtroStatus, filtroInst, filtroTurma, filtroFornecedor])
+  }), [orcamentos, filtroTipo, filtroStatus, filtroInst, filtroTurma, fornsSelecionados])
 
   // ── KPIs ─────────────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -115,6 +158,36 @@ export const DashboardPage: React.FC = () => {
     const totalReceitas = bolsaFolia + sympla
     return { count: filtered.length, totalOrcado, totalPago, totalBV, bolsaFolia, sympla, totalReceitas, saldo: totalReceitas - totalPago }
   }, [filtered])
+
+  // ── Resumo dos fornecedores selecionados: quanto pagamos SÓ a eles ────────────
+  const resumoFornecedor = useMemo(() => {
+    if (fornsSelecionados.length === 0) return null
+    let pago = 0, orcado = 0
+    const festas = new Set<string>()
+    for (const o of filtered)
+      for (const item of allItemsOf(o))
+        if (fornecedoresDe(item).some(f => fornsSelecionados.includes(f))) {
+          pago += item.totalPagoReal; orcado += item.totalOrcado; festas.add(o.id)
+        }
+    return { pago, orcado, festas: festas.size }
+  }, [filtered, fornsSelecionados])
+
+  // ── Ranking de lugares: espaço = fornecedor do item "Locação" ─────────────────
+  const rankingLugares = useMemo(
+    () => agruparRanking(filtered, o => allItemsOf(o).filter(i => /loca[çc][ãa]o/i.test(i.item)), fornecedoresDe),
+    [filtered],
+  )
+
+  // ── Cachês de atrações: agrupa pelo NOME da atração (o item), excluindo "Rider"
+  //    (camarim, não é cachê). ──
+  const rankingAtracoes = useMemo(
+    () => agruparRanking(
+      filtered,
+      o => o.atracao.filter(i => !/rider/i.test(i.item)),
+      i => [i.item.trim()].filter(Boolean),
+    ),
+    [filtered],
+  )
 
   // ── Gráfico 1: Rosca por instituição ─────────────────────────────────────────
   const donutData = useMemo(() => {
@@ -262,10 +335,14 @@ export const DashboardPage: React.FC = () => {
         </select>
 
         {fornecedoresUsados.length > 0 && (
-          <select value={filtroFornecedor} onChange={e => setFiltroFornecedor(e.target.value)} className={selectCls}>
-            <option value="">Todos os fornecedores</option>
-            {fornecedoresUsados.map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
+          <div className="min-w-[220px]">
+            <MultiComboboxFornecedor
+              value={filtroFornecedor}
+              onChange={setFiltroFornecedor}
+              fornecedores={fornecedoresUsados}
+              placeholder="Todos os fornecedores"
+            />
+          </div>
         )}
 
         {(filtroInst || filtroTurma || filtroTipo || filtroStatus || filtroFornecedor) && (
@@ -276,6 +353,34 @@ export const DashboardPage: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* ── Resumo do fornecedor filtrado ── */}
+      {resumoFornecedor && (
+        <div className="bg-accent/5 border-2 border-accent/40 rounded-card p-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-[11px] text-muted uppercase tracking-wide">
+                {fornsSelecionados.length > 1 ? `${fornsSelecionados.length} fornecedores selecionados` : 'Fornecedor selecionado'}
+              </p>
+              <p className="text-white font-bold text-lg truncate" title={fornsSelecionados.join(', ')}>{fornsSelecionados.join(', ')}</p>
+            </div>
+            <div className="flex gap-6">
+              <div>
+                <p className="text-[11px] text-muted">Pago a ele</p>
+                <p className="text-success font-bold text-lg">{formatBRL(resumoFornecedor.pago)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-muted">Orçado</p>
+                <p className="text-white font-bold text-lg">{formatBRL(resumoFornecedor.orcado)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-muted">Festas</p>
+                <p className="text-white font-bold text-lg">{resumoFornecedor.festas}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── KPIs linha 1: receitas ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -473,6 +578,24 @@ export const DashboardPage: React.FC = () => {
         ) : (
           <div className="h-48 flex items-center justify-center text-muted text-sm">Sem dados</div>
         )}
+      </div>
+
+      {/* ── Rankings: Lugares + Cachês de Atrações (lado a lado) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+        <RankingAgrupado
+          titulo="Lugares"
+          subtitulo="quanto pagamos por espaço"
+          icone={<MapPin className="w-4 h-4 text-accent" />}
+          itens={rankingLugares}
+          onAbrirEvento={id => navigate(`/pre-eventos/orcamentos/${id}`)}
+        />
+        <RankingAgrupado
+          titulo="Cachês de Atrações"
+          subtitulo="quanto pagamos por atração"
+          icone={<Music className="w-4 h-4 text-accent" />}
+          itens={rankingAtracoes}
+          onAbrirEvento={id => navigate(`/pre-eventos/orcamentos/${id}`)}
+        />
       </div>
 
       {/* ── Drilldown por instituição → turma ── */}

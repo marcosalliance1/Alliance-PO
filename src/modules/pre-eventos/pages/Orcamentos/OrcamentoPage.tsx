@@ -6,6 +6,9 @@ import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL, newItemId } from '../../utils/formatters'
 import TabelaItens from '../../components/Orcamento/TabelaItens'
 import { ResumoFinanceiro } from '../../components/Orcamento/ResumoFinanceiro'
+import { PainelMargem } from '../../components/Orcamento/PainelMargem'
+import { PainelSugestoes } from '../../components/Orcamento/PainelSugestoes'
+import { criarItemDeSugestao, type ItemEstimado } from '../../utils/estimativa'
 import { SecaoAccordion } from '../../components/Orcamento/SecaoAccordion'
 import { exportarPDF, exportarPendenciasPDF } from '../../utils/exportPDF'
 import { exportarExcel } from '../../utils/exportExcel'
@@ -16,7 +19,7 @@ import { ModalImportarDoDrive } from '../../components/Orcamento/ModalImportarDo
 import { ModalConciliacaoEverest } from '../../components/Everest/ModalConciliacaoEverest'
 import { ModalApagarVazias } from '../../components/Orcamento/ModalApagarVazias'
 import { ModalPreencherVCliente } from '../../components/Orcamento/ModalPreencherVCliente'
-import { aplicarAssociacoes, SECOES as SECOES_EVEREST, type DestinoEverest, type FornecedorEverest } from '../../utils/matchEverest'
+import { aplicarAssociacoes, SECOES as SECOES_EVEREST, type DestinoEverest, type FornecedorEverest, type SecaoKeyEverest } from '../../utils/matchEverest'
 import { salvarDepara } from '../../utils/deparaEverest'
 import { supabase } from '../../lib/supabase'
 import { recalcularItem } from '../../utils/automacoes'
@@ -248,6 +251,14 @@ export const OrcamentoPage: React.FC = () => {
     setDirty(true)
     setShowVClienteModal(false)
     addToast('V. Cliente preenchido nos itens sem BV', 'success')
+  }
+
+  function handleAdicionarSugestao(secao: SecaoKeyEverest, item: ItemEstimado) {
+    if (!orc) return
+    const novoItem = criarItemDeSugestao(item)
+    setOrc({ ...orc, [secao]: [...(orc[secao] as ItemOrcamento[]), novoItem] })
+    setDirty(true)
+    addToast(`"${item.item}" adicionado`, 'success')
   }
 
   // ─── Anexar documento em Cotação ────────────────────────────────────────
@@ -537,6 +548,9 @@ export const OrcamentoPage: React.FC = () => {
         </div>
       </div>
 
+      {/* ── Painel de margem (planejamento: elas veem se fecha) ── */}
+      <PainelMargem orc={orc} />
+
       {/* ── Barra de progresso ── */}
       <BarraProgressoPagamento orc={orc} />
 
@@ -637,6 +651,8 @@ export const OrcamentoPage: React.FC = () => {
       </SecaoAccordion>
 
       {/* ── Resumo Financeiro ── */}
+      <PainelSugestoes orc={orc} onAdicionar={handleAdicionarSugestao} />
+
       <ResumoFinanceiro orc={orc} />
 
       {/* Floating save — desktop only */}

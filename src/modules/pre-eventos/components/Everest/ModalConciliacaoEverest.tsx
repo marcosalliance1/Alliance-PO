@@ -5,7 +5,7 @@ import { formatBRL, formatDate } from '../../utils/formatters'
 import CampoMoeda from '../UI/CampoMoeda'
 import { useCapEverest } from '../../hooks/useCapEverest'
 import {
-  agruparPorFornecedor, sugerirItemPara, dividirProporcional, SECOES,
+  agruparPorFornecedor, sugerirItemPara, dividirProporcional, fornecedorBate, SECOES,
   type DestinoEverest, type FornecedorEverest, type SecaoKeyEverest,
 } from '../../utils/matchEverest'
 import { carregarDepara, type DeparaEntry } from '../../utils/deparaEverest'
@@ -20,7 +20,18 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 
 export const ModalConciliacaoEverest: React.FC<Props> = ({ orc, onAplicar, onFechar }) => {
   const { titulos, loading, erro, contaAlvo, semConta } = useCapEverest(orc.turma, orc.tipo, true)
-  const grupos = useMemo(() => agruparPorFornecedor(titulos), [titulos])
+  // Oculta fornecedores já associados (já lançados num item com Pago > 0), pra
+  // não reaparecerem e evitar duplicata se associar de novo.
+  const { grupos, nJaAssociados } = useMemo(() => {
+    const todos = agruparPorFornecedor(titulos)
+    const fornsPagos: string[] = []
+    for (const s of SECOES) for (const it of orc[s.key])
+      if (it.totalPagoReal > 0)
+        for (const f of (it.fornecedor || '').split('||').map(x => x.trim()).filter(Boolean))
+          fornsPagos.push(f)
+    const visiveis = todos.filter(g => !fornsPagos.some(f => fornecedorBate(f, g.fornecedor)))
+    return { grupos: visiveis, nJaAssociados: todos.length - visiveis.length }
+  }, [titulos, orc])
   const [destinos, setDestinos] = useState<Record<string, DestinoEverest>>({})
   const [autoSet, setAutoSet] = useState<Set<string>>(new Set())
   const [depara, setDepara] = useState<Map<string, DeparaEntry>>(new Map())
@@ -135,16 +146,28 @@ export const ModalConciliacaoEverest: React.FC<Props> = ({ orc, onAplicar, onFec
           )}
           {!loading && !erro && !semConta && grupos.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-2 text-muted py-12">
-              <Search className="w-6 h-6" />
-              <p className="text-sm">Nenhum título encontrado no Everest para <b>{orc.turma}</b> / {contaAlvo}.</p>
-              <p className="text-xs">Confira se a turma está escrita como no Everest.</p>
+              {nJaAssociados > 0 ? (
+                <>
+                  <Sparkles className="w-6 h-6 text-success" />
+                  <p className="text-sm">Todos os {nJaAssociados} custos deste evento já foram associados ✓</p>
+                </>
+              ) : (
+                <>
+                  <Search className="w-6 h-6" />
+                  <p className="text-sm">Nenhum título encontrado no Everest para <b>{orc.turma}</b> / {contaAlvo}.</p>
+                  <p className="text-xs">Confira se a turma está escrita como no Everest.</p>
+                </>
+              )}
             </div>
           )}
 
           {pronto && (
             <>
               <div className="flex items-center justify-between gap-3 flex-wrap text-xs">
-                <p className="text-muted"><b className="text-white">{grupos.length}</b> fornecedores · <b className="text-white">{formatBRL(totalEverest)}</b> no Everest</p>
+                <p className="text-muted">
+                  <b className="text-white">{grupos.length}</b> a associar · <b className="text-white">{formatBRL(totalEverest)}</b>
+                  {nJaAssociados > 0 && <span> · {nJaAssociados} já associado{nJaAssociados !== 1 ? 's' : ''}</span>}
+                </p>
                 {nAuto > 0 && (
                   <p className="flex items-center gap-1.5 text-success"><Sparkles className="w-3.5 h-3.5" /> {nAuto} pré-associado{nAuto !== 1 ? 's' : ''}</p>
                 )}
