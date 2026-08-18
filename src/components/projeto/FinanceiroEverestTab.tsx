@@ -92,7 +92,7 @@ export function FinanceiroEverestTab({ projeto }: { projeto: Projeto }) {
 
       {fp && (centrosEncontrados.length > 0) && (
         <>
-          <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <KPICard title="Receita Real (Boletim)" value={formatBRL(totais.totalReceita)} icon={DollarSign} color="#00b894" />
             <KPICard title="Despesa Real (CAP + Tarifas)" value={formatBRL(totais.despesaTotal)} icon={TrendingDown} color="#e94560" />
             <KPICard title="Resultado Real" value={formatBRL(totais.resultado)} icon={TrendingUp} color={totais.resultado >= 0 ? '#00b894' : '#e94560'} subtitle={`Margem ${totais.margem.toFixed(1)}%`} />
@@ -102,7 +102,7 @@ export function FinanceiroEverestTab({ projeto }: { projeto: Projeto }) {
           <div className="card mb-6">
             <h3 className="text-sm font-semibold text-text-main mb-1">P.O. (itens) vs Everest (real)</h3>
             <p className="text-xs text-text-muted mb-4">Comparação entre o que está lançado nos itens do orçamento e o que de fato foi pago no Everest.</p>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="rounded-inner border border-white/10 p-3">
                 <p className="text-[11px] text-text-muted uppercase tracking-wide mb-1">Custo Contratado (P.O.)</p>
                 <p className="text-lg font-semibold text-text-main">{formatBRL(resumoPO.custoTotal.contratado)}</p>

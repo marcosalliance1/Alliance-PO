@@ -140,7 +140,7 @@ export function ProjectDashboard({ projeto }: Props) {
     <div className="space-y-6">
 
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <KPIBlock label="Receita Vendida (Proj.)" value={formatBRL(receitaVendida)} color="#3B82F6" />
         <KPIBlock label="Custo Total Orçado" value={formatBRL(custoOrcado)} color="#EAB308" />
         <KPIBlock label="Custo Total Contratado" value={formatBRL(custoContratado)} color="#16A34A" />
@@ -149,7 +149,7 @@ export function ProjectDashboard({ projeto }: Props) {
       </div>
 
       {/* ── Margens ───────────────────────────────────────────────────────── */}
-      <div className="card grid grid-cols-4 gap-3">
+      <div className="card grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MargemItem label="Margem Proj. (%)" value={margemProj} />
         <MargemItem label="Margem Orçada (%)" value={margemOrcada} />
         <MargemItem label="Margem Contratada (%)" value={margemContratada} />
@@ -157,7 +157,7 @@ export function ProjectDashboard({ projeto }: Props) {
       </div>
 
       {/* ── Gráfico 1 e 2 ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* Gráfico 1: Custo Projetado por categoria + ref de receita */}
         <div className="card">
@@ -335,7 +335,7 @@ export function ProjectDashboard({ projeto }: Props) {
       {/* ── Orçado × Realizado (Correção 5) ───────────────────────────────── */}
       <div className="card">
         <h3 className="text-sm font-semibold text-text-main mb-4">Orçado × Realizado</h3>
-        <div className="grid grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
           <div className="space-y-3">
             <div className="flex justify-between items-center border-b border-white/5 pb-2">
               <span className="text-xs text-text-muted">Custo Orçado Total</span>

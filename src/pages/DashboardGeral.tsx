@@ -341,7 +341,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
 
       {/* ── KPIs "Todos" — dois blocos separados ──────────────────────── */}
       {filtroStatus === 'todos' && (
-        <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
           {/* Bloco Em Andamento */}
           <div className="card p-4">
             <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Em Andamento · {projetosEmAndamento.length}</p>
@@ -373,7 +373,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
 
       {/* ── KPIs "Em Andamento" ───────────────────────────────────────── */}
       {filtroStatus === 'em_andamento' && (
-        <div className={`grid gap-4 mb-6 ${totalConvidadosEmAndamento > 0 ? 'grid-cols-5' : 'grid-cols-4'}`}>
+        <div className={`grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 ${totalConvidadosEmAndamento > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
           <KPICard title="Projetos" value={String(projetosEmAndamento.length)} icon={FolderOpen} color="#74b9ff" />
           <KPICard title="Receita Orçada" value={formatBRL(kpisEmAndamento.totalReceita)} icon={DollarSign} color="#00b894" />
           <KPICard title="Margem Orçada" value={formatBRL(kpisEmAndamento.margem)} icon={TrendingUp} color={kpisEmAndamento.margem >= 0 ? '#00b894' : '#e17055'} />
@@ -386,7 +386,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
 
       {/* ── KPIs "Realizados" ─────────────────────────────────────────── */}
       {filtroStatus === 'realizados' && (
-        <div className={`grid gap-4 mb-6 ${totalConvidadosRealizados > 0 ? 'grid-cols-5' : 'grid-cols-4'}`}>
+        <div className={`grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 ${totalConvidadosRealizados > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
           <KPICard title="Projetos Realizados" value={String(projetosRealizados.length)} icon={FolderOpen} color="#6366F1" />
           <KPICard title="Total Contratado" value={formatBRL(kpisRealizados.totalContratado)} icon={DollarSign} color="#6366F1" />
           <KPICard title="Total Pago (Everest)" value={formatBRL(kpisRealizados.totalPago)} icon={CheckCircle} color="#00b894" />
@@ -415,7 +415,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
             </div>
           </button>
           {showConvidados && (
-            <div className="mt-4 grid grid-cols-3 gap-4">
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
               {(['SUPERIOR', 'MEDIO', 'FUNDAMENTAL'] as const).map((tipo) => {
                 const cor = tipo === 'SUPERIOR' ? '#74b9ff' : tipo === 'MEDIO' ? '#00b894' : '#fdcb6e'
                 const label = tipo === 'SUPERIOR' ? 'Superior' : tipo === 'MEDIO' ? 'Médio' : 'Fundamental'
@@ -514,7 +514,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
 
           {/* ── Gráficos Em Andamento ─────────────────────────────────── */}
           {showEmAndamentoCharts && barDataPorTipo.length > 0 && (
-            <div className="grid grid-cols-2 gap-6 mb-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               <div className="card">
                 <h3 className="text-sm font-semibold text-text-main mb-3">Receita vs Custo por Turma (Orçado)</h3>
                 {filtroFornecedor && (
