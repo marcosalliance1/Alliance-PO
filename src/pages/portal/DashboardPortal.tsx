@@ -4,7 +4,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
-import { CheckCircle2, AlertTriangle, LogOut, ChevronDown, ChevronRight } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, LogOut, ChevronDown, ChevronRight, Download } from 'lucide-react'
+import { gerarPrestacaoContas } from '../../lib/gerarPrestacaoContas'
 import { supabase } from '../../lib/supabase'
 import { usePortalAuth } from '../../contexts/PortalAuthContext'
 import { calcResumoProjeto, filtrarItensCalculo, projetoVisaoCliente } from '../../utils/calculos'
@@ -75,6 +76,16 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
 
   return (
     <div className="space-y-5">
+      {/* Baixar Prestação de Contas em PDF */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => gerarPrestacaoContas(projeto)}
+          className="flex items-center gap-2 border border-white/15 hover:border-primary/60 hover:bg-white/5 text-text-muted hover:text-text-main text-xs font-medium py-2 px-4 rounded-lg transition-colors"
+        >
+          <Download size={14} /> Baixar Prestação de Contas (PDF)
+        </button>
+      </div>
+
       {/* O que entrou e como está sendo usado */}
       <div>
         <div className="flex items-center gap-2 mb-3">
