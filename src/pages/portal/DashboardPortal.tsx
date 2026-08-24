@@ -790,7 +790,10 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
                 {/* Receitas Sympla */}
                 {((orc.receitasSympla ?? []).length > 0 || (orc.bolsaFolia ?? 0) > 0) && (
                   <div>
-                    <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Receitas</h4>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-1 h-4 bg-success rounded-full" />
+                      <h4 className="text-text-main text-sm font-semibold">Receitas</h4>
+                    </div>
                     <div className="rounded-xl border border-white/8 overflow-hidden">
                       <table className="w-full text-xs">
                         <thead>
@@ -824,6 +827,10 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
                   </div>
                 )}
 
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="w-1 h-4 bg-primary rounded-full" />
+                  <h4 className="text-text-main text-sm font-semibold">Despesas</h4>
+                </div>
                 <PlanilhaSecao
                   titulo="Operação e Estrutura"
                   items={orc.operacaoEstrutura ?? []}
