@@ -75,6 +75,7 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateCustosAdicionai
   const r = projeto.receitas
   const margemPositiva = resumo.margem.vendido >= 0
   const custosAdicionais = projeto.custosAdicionais ?? []
+  const resumoComercial = projeto.resumoComercial ?? []
 
   function addCustoAdicional() {
     onUpdateCustosAdicionais([...custosAdicionais, { id: uuid(), descricao: '', vendido: 0, orcado: 0, contratado: 0, pago: 0 }])
@@ -269,6 +270,39 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateCustosAdicionai
           </tbody>
         </table>
       </div>
+
+      {/* ── FEE / Comercial ─────────────────────────────────────────────────
+          Dado já sincronizado da aba "1.1 RESUMO CUSTOS" (parseResumoComercialFromSheet
+          em sheetsSync.ts), só não era exibido em nenhuma tela do projeto individual —
+          já era consumido pelo dashboard do módulo Comercial (portfólio). Só admin vê:
+          é margem/fee interno da empresa, nunca deve aparecer no portal do cliente. */}
+      {isAdmin && resumoComercial.length > 0 && (
+        <div className="card overflow-x-auto">
+          <h3 className="text-sm font-semibold text-text-main mb-4">FEE / Comercial</h3>
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="bg-surface-2">
+                <th className="text-left px-3 py-2 text-text-muted font-medium text-xs">Descrição</th>
+                <th className="text-right px-3 py-2 text-text-muted font-medium text-xs min-w-[140px]">Prev. Comercial</th>
+                <th className="text-right px-3 py-2 text-text-muted font-medium text-xs min-w-[140px]">Prev. Produção</th>
+                <th className="text-right px-3 py-2 text-text-muted font-medium text-xs min-w-[80px]">%</th>
+                <th className="text-right px-3 py-2 text-text-muted font-medium text-xs min-w-[140px]">Valor Real</th>
+              </tr>
+            </thead>
+            <tbody>
+              {resumoComercial.map((l, i) => (
+                <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+                  <td className="px-3 py-1.5 text-text-main text-sm">{l.descricao}</td>
+                  <ValorCell value={l.valorComercial} />
+                  <ValorCell value={l.valorProducao} />
+                  <td className="text-right px-3 py-1.5 text-sm text-text-main">{l.percentual.toFixed(2)}%</td>
+                  <ValorCell value={l.valorReal} />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* ── Conciliação Everest ────────────────────────────────────────────── */}
       <div className="card flex items-center gap-3">
