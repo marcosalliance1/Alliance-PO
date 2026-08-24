@@ -9,7 +9,7 @@ import { supabase } from '../../lib/supabase'
 import { usePortalAuth } from '../../contexts/PortalAuthContext'
 import { calcResumoProjeto, filtrarItensCalculo, projetoVisaoCliente } from '../../utils/calculos'
 import allianceLogo from '../../assets/alliance-logo.png'
-import type { Projeto, SecaoCusto, TAP, Receitas, CustoAdicional, ConciliacaoEverest } from '../../types'
+import type { Projeto, SecaoCusto, TAP, Receitas, CustoAdicional, ConciliacaoEverest, LinhaResumoComercial } from '../../types'
 import type { Orcamento, ItemOrcamento } from '../../modules/pre-eventos/types'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -31,6 +31,7 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
     secoes: (row.secoes as SecaoCusto[]) ?? [],
     receitas: (row.receitas as Receitas) ?? {},
     custosAdicionais: (row.custos_adicionais as CustoAdicional[]) ?? [],
+    resumoComercial: (row.resumo_comercial as LinhaResumoComercial[]) ?? undefined,
     conciliacaoEverest: (row.conciliacao_everest as ConciliacaoEverest) ?? undefined,
     criadoEm: row.criado_em as string,
     atualizadoEm: row.atualizado_em as string,
@@ -53,98 +54,80 @@ const AXIS_STYLE = { fill: '#8892a4', fontSize: 11 }
 
 // ─── Seção 2: Financeiro ──────────────────────────────────────────────────────
 
+// % do "(CC) Custo Cerimonial" do projeto (o fee que a turma paga pela Alliance),
+// vindo do resumoComercial. percentual já vem na escala 0–100 (ex: 17).
+function feeCerimonialPct(projeto: Projeto): number {
+  const linha = (projeto.resumoComercial ?? []).find(l => /custo cerimonial|\(cc\)/i.test(l.descricao ?? ''))
+  return linha?.percentual ?? 0
+}
+
 function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; vencimentos: CapVencimento[] }) {
   const resumo = useMemo(() => calcResumoProjeto(projeto), [projeto])
-  // Tudo na MESMA coluna por linha, pra Receita − Custo = Saldo fechar na tela.
-  const receitaPrevista = resumo.receitaBaile.orcado
-  const custoPrevisto   = resumo.custoTotal.orcado
-  const saldoPrevisto   = resumo.margem.orcado   // = receitaPrevista − custoPrevisto
   const receitaRecebida = resumo.receitaBaile.pago
-  const custoPago       = resumo.custoTotal.pago
-  const saldoAtual      = resumo.margem.pago     // = receitaRecebida − custoPago
-  const pctExecutado = custoPrevisto > 0 ? Math.min(100, (custoPago / custoPrevisto) * 100) : 0
-
-  const chartData = resumo.custos
-    .filter(c => c.orcado > 0 || c.pago > 0)
-    .map(c => ({ nome: c.nome.split(' ')[0], 'Custo Previsto': Math.round(c.orcado), Pago: Math.round(c.pago) }))
-
-  const linhaPlano = [
-    { label: 'Receita Prevista', value: fmtBRL(receitaPrevista) },
-    { label: 'Custo Previsto',   value: fmtBRL(custoPrevisto) },
-    { label: 'Saldo Previsto',   value: fmtBRL(saldoPrevisto), color: saldoPrevisto >= 0 ? 'text-success' : 'text-danger' },
-  ]
-  const linhaReal = [
-    { label: 'Receita Recebida', value: fmtBRL(receitaRecebida) },
-    { label: 'Custo Pago',       value: fmtBRL(custoPago) },
-    { label: 'Saldo Atual',      value: fmtBRL(saldoAtual), color: saldoAtual >= 0 ? 'text-success' : 'text-danger' },
-  ]
+  const ccPct = feeCerimonialPct(projeto)
+  const fee = receitaRecebida * (ccPct / 100)
+  const arrecadadoLiquido = receitaRecebida - fee
+  const custoContratado = resumo.custoTotal.contratado
+  const custoPago = resumo.custoTotal.pago
+  const faltaPagar = Math.max(0, custoContratado - custoPago)
+  const pctPago = custoContratado > 0 ? Math.min(100, (custoPago / custoContratado) * 100) : 0
 
   return (
-    <div className="space-y-6">
-      {/* Plano (Orçado) — Receita − Custo = Saldo, fecha na horizontal */}
+    <div className="space-y-5">
+      {/* O que entrou e como está sendo usado */}
       <div>
         <div className="flex items-center gap-2 mb-3">
           <span className="w-1 h-4 bg-primary rounded-full" />
-          <h3 className="text-text-main text-sm font-semibold">Plano <span className="text-text-muted font-normal">· orçado</span></h3>
+          <h3 className="text-text-main text-sm font-semibold">O que entrou e como está sendo usado</h3>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          {linhaPlano.map(({ label, value, color }) => (
-            <div key={label} className="bg-bg rounded-xl px-4 py-4">
-              <div className="text-text-muted text-xs mb-1">{label}</div>
-              <div className={`text-lg font-semibold ${color ?? 'text-text-main'}`}>{value}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Recebido (Everest) — Receita − Custo = Saldo, fecha na horizontal */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <span className="w-1 h-4 bg-success rounded-full" />
-          <h3 className="text-text-main text-sm font-semibold">Recebido <span className="text-text-muted font-normal">· Everest</span></h3>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          {linhaReal.map(({ label, value, color }) => (
-            <div key={label} className="bg-bg rounded-xl px-4 py-4">
-              <div className="text-text-muted text-xs mb-1">{label}</div>
-              <div className={`text-lg font-semibold ${color ?? 'text-text-main'}`}>{value}</div>
-            </div>
-          ))}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="bg-bg rounded-xl px-4 py-4">
+            <div className="text-text-muted text-xs mb-1">Arrecadado da turma</div>
+            <div className="text-lg font-semibold text-success">{fmtBRL(arrecadadoLiquido)}</div>
+            <div className="text-text-muted/60 text-[11px] mt-0.5">já sem o fee Alliance</div>
+          </div>
+          <div className="bg-bg rounded-xl px-4 py-4">
+            <div className="text-text-muted text-xs mb-1">Custo do evento</div>
+            <div className="text-lg font-semibold text-text-main">{fmtBRL(custoContratado)}</div>
+            <div className="text-text-muted/60 text-[11px] mt-0.5">contratado até agora</div>
+          </div>
+          <div className="bg-bg rounded-xl px-4 py-4">
+            <div className="text-text-muted text-xs mb-1">Falta pagar</div>
+            <div className="text-lg font-semibold text-warning">{fmtBRL(faltaPagar)}</div>
+            <div className="text-text-muted/60 text-[11px] mt-0.5">{fmtBRL(custoPago)} já pago</div>
+          </div>
         </div>
       </div>
 
-      {/* Gráfico Custo Previsto × Pago por seção */}
-      {chartData.length > 0 && (
-        <div className="bg-bg rounded-xl p-4">
-          <h3 className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-4">Custo Previsto × Pago por Seção</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={chartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="nome" tick={AXIS_STYLE} />
-              <YAxis tick={AXIS_STYLE} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} width={52} />
-              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, name) => [fmtBRL(Number(v)), String(name)]} />
-              <Legend wrapperStyle={{ fontSize: 11, color: '#8892a4' }} />
-              <Bar dataKey="Custo Previsto" fill="#E63329" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="Pago"           fill="#00b894" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+      {/* Receita: bruta − fee Alliance = líquida da turma */}
+      <div className="bg-bg rounded-xl px-4 py-3 text-xs space-y-1.5">
+        <div className="flex justify-between">
+          <span className="text-text-muted">Receita recebida (bruta)</span>
+          <span className="text-text-main tabular-nums">{fmtBRL(receitaRecebida)}</span>
         </div>
-      )}
+        <div className="flex justify-between">
+          <span className="text-text-muted">(−) Fee Alliance ({ccPct.toFixed(ccPct % 1 === 0 ? 0 : 2)}%)</span>
+          <span className="text-danger tabular-nums">−{fmtBRL(fee)}</span>
+        </div>
+        <div className="flex justify-between border-t border-white/8 pt-1.5">
+          <span className="text-text-main font-medium">Arrecadado da turma</span>
+          <span className="text-success font-semibold tabular-nums">{fmtBRL(arrecadadoLiquido)}</span>
+        </div>
+      </div>
 
-      {/* Barra de progresso: quanto do custo previsto já foi pago */}
+      {/* Progresso: pago do que já foi contratado */}
       <div className="bg-bg rounded-xl px-4 py-4">
         <div className="mb-2">
-          <span className="text-text-muted text-xs">Custo pago do previsto</span>
+          <span className="text-text-muted text-xs">Pagamento do que já foi contratado</span>
         </div>
         <div className="h-2.5 bg-white/10 rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all" style={{ width: `${pctExecutado}%`, background: '#00b894' }} />
+          <div className="h-full rounded-full transition-all" style={{ width: `${pctPago}%`, background: '#00b894' }} />
         </div>
         <div className="flex justify-between text-xs text-text-muted mt-1.5">
           <span>{fmtBRL(custoPago)} pago</span>
-          <span>{pctExecutado.toFixed(1)}% de {fmtBRL(custoPrevisto)}</span>
+          <span>{pctPago.toFixed(0)}% de {fmtBRL(custoContratado)}</span>
         </div>
       </div>
-
     </div>
   )
 }
@@ -154,10 +137,8 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
 function SecaoPO({ projeto }: { projeto: Projeto }) {
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
 
-  // `projeto` já chega como visão do cliente (sem "Despesa Fee", spec #1). resumo e
-  // "Saldo em Conta" usam a mesma base — batem com a aba Financeiro.
+  // `projeto` já chega como visão do cliente (sem "Despesa Fee", spec #1).
   const resumo = useMemo(() => calcResumoProjeto(projeto), [projeto])
-  const resumoCompleto = resumo
 
   const anyOpen = Object.values(expandidos).some(Boolean)
 
@@ -227,67 +208,6 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
           </div>
         )}
       </div>
-
-      {/* Saldo em Conta — resumo + drill-down das linhas de receita */}
-      {(() => {
-        const receitaPaga = resumoCompleto.receitaBaile.pago
-        const custoPago = resumoCompleto.custoTotal.pago
-        const saldoConta = resumoCompleto.margem.pago
-        const pctConsumido = receitaPaga > 0 ? Math.min(100, (custoPago / receitaPaga) * 100) : 0
-        const isOpen = expandidos['__saldo_conta__'] ?? false
-        const linhasReceita = resumoCompleto.receitas.filter(r => r.orcado > 0 || r.pago > 0)
-
-        return (
-          <div className={`rounded-xl overflow-hidden transition-all mb-2 ${isOpen ? 'bg-surface ring-1 ring-white/10' : 'bg-bg'}`}>
-            <button
-              onClick={() => toggle('__saldo_conta__')}
-              className="w-full px-4 py-3 text-left hover:bg-white/3 transition-colors"
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-text-muted shrink-0">{isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</span>
-                <span className="flex-1 text-sm font-medium text-text-main">Saldo em Conta</span>
-                <span className={`text-xs font-semibold ${saldoConta >= 0 ? 'text-success' : 'text-danger'}`}>{fmtBRL(saldoConta)}</span>
-                <span className="text-xs text-text-muted">/ Receita Recebida {fmtBRL(receitaPaga)}</span>
-              </div>
-              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${pctConsumido}%`, background: saldoConta >= 0 ? '#00b894' : '#e17055' }}
-                />
-              </div>
-              <div className="text-right text-xs text-text-muted mt-1">{pctConsumido.toFixed(0)}% da receita recebida já utilizada</div>
-            </button>
-
-            {isOpen && (
-              <div className="border-t border-white/8 px-4 pb-4 pt-3 space-y-2">
-                {linhasReceita.length === 0 ? (
-                  <p className="text-text-muted text-xs text-center py-2">Nenhuma linha de receita lançada.</p>
-                ) : linhasReceita.map(r => {
-                  const p = r.orcado > 0 ? Math.min(100, (r.pago / r.orcado) * 100) : 0
-                  return (
-                    <div key={r.descricao} className="space-y-1">
-                      <div className="flex items-center gap-3">
-                        {r.pago > 0
-                          ? <CheckCircle2 size={13} className="text-success shrink-0" />
-                          : <AlertTriangle size={13} className="text-warning/60 shrink-0" />
-                        }
-                        <span className="text-sm text-text-main flex-1">{r.descricao}</span>
-                        <span className="text-xs text-success">{fmtBRL(r.pago)}</span>
-                        <span className="text-xs text-text-muted">/ {fmtBRL(r.orcado)}</span>
-                      </div>
-                      {r.orcado > 0 && (
-                        <div className="ml-[25px] h-1 bg-white/10 rounded-full overflow-hidden">
-                          <div className="h-full bg-success/60 rounded-full" style={{ width: `${p}%` }} />
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )
-      })()}
 
       {/* Lista de seções com drill-down inline */}
       <div className="space-y-2">
@@ -949,11 +869,10 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
 
 // ─── Dashboard Principal ──────────────────────────────────────────────────────
 
-type TabId = 'financeiro' | 'po' | 'pre-eventos'
+type TabId = 'financeiro' | 'pre-eventos'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'financeiro',   label: 'Financeiro' },
-  { id: 'po',           label: 'P.O. Resumido' },
   { id: 'pre-eventos',  label: 'Pré-Eventos' },
 ]
 
@@ -1071,8 +990,12 @@ export function DashboardPortal() {
 
       {/* Conteúdo */}
       <main className={`${tabAtiva === 'pre-eventos' ? 'max-w-7xl' : 'max-w-4xl'} mx-auto px-4 sm:px-8 py-8 transition-[max-width]`}>
-        {tabAtiva === 'financeiro'  && <SecaoFinanceiro projeto={projetoCliente} vencimentos={vencimentos} />}
-        {tabAtiva === 'po'          && <SecaoPO projeto={projetoCliente} />}
+        {tabAtiva === 'financeiro'  && (
+          <div className="space-y-8">
+            <SecaoFinanceiro projeto={projetoCliente} vencimentos={vencimentos} />
+            <SecaoPO projeto={projetoCliente} />
+          </div>
+        )}
         {tabAtiva === 'pre-eventos' && <SecaoPreEventos projeto={projeto} />}
       </main>
     </div>
