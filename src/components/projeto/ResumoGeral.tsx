@@ -50,11 +50,11 @@ function BRLInput({ value, onChange, readOnly }: { value: number; onChange: (v: 
     <span
       onClick={startEdit}
       title={readOnly ? undefined : 'Clique para editar'}
-      className={`block w-full text-right rounded px-1 py-0.5 text-sm transition-colors select-none ${readOnly ? '' : 'cursor-pointer hover:bg-blue-50'}`}
+      className={`flex items-center w-full min-w-[84px] rounded px-1 py-0.5 text-sm transition-colors select-none ${readOnly ? '' : 'cursor-pointer hover:bg-blue-50'}`}
     >
       {value
-        ? <span className="text-text-main">{formatBRL(value)}</span>
-        : <span className="text-text-muted/50 text-xs italic">—</span>
+        ? <ValorContabil value={value} className="text-text-main" />
+        : <span className="text-text-muted/50 text-xs italic mx-auto">—</span>
       }
     </span>
   )
@@ -127,9 +127,7 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateCustosAdicionai
 
             {Object.entries(r).filter(([, linha]) =>
               linha.vendido !== 0 || linha.orcado !== 0 || linha.contratado !== 0 || linha.pago !== 0
-            ).map(([key, linha]) => {
-              const faltaPagar = linha.contratado - linha.pago
-              return (
+            ).map(([key, linha]) => (
                 <tr key={key} className="border-b border-white/5 hover:bg-white/5">
                   <td className="px-3 py-1 text-text-main text-sm">{key}</td>
                   <td className="px-2 py-0.5">
@@ -144,15 +142,10 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateCustosAdicionai
                   <td className="px-2 py-0.5">
                     <BRLInput value={linha.pago}       onChange={(v) => updateLinha(key, 'pago', v)} readOnly={!isAdmin} />
                   </td>
-                  <td className="text-right px-3 py-1 text-sm">
-                    <ValorContabil
-                      value={faltaPagar}
-                      className={faltaPagar > 0 ? 'text-danger font-medium' : faltaPagar < 0 ? 'text-success' : 'text-text-muted'}
-                    />
-                  </td>
+                  {/* Falta Pagar só faz sentido no bloco de Custos (despesas) — em branco aqui */}
+                  <td />
                 </tr>
-              )
-            })}
+              ))}
 
             {/* RECEITA BAILE */}
             <tr className="bg-blue-500/10 border-t-2 border-blue-500/30">
@@ -161,7 +154,7 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateCustosAdicionai
               <ValorCell value={resumo.receitaBaile.orcado}      className="font-bold text-blue-300" />
               <ValorCell value={resumo.receitaBaile.contratado}  className="font-bold text-blue-300" />
               <ValorCell value={resumo.receitaBaile.pago}        className="font-bold text-blue-200" />
-              <ValorCell value={resumo.receitaBaile.faltaPagar}  className={`font-bold ${resumo.receitaBaile.faltaPagar > 0 ? 'text-danger' : 'text-blue-200'}`} />
+              <td />
             </tr>
 
             {/* ── CUSTOS ──────────────────────────────────────────────── */}
