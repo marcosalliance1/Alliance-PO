@@ -1,4 +1,4 @@
-import type { Projeto, SecaoCusto, ItemCusto, StatusItem, StatusPagamento, TipoCusto, TAP, TipoEscola, Receitas, LinhaResumoComercial } from '../types'
+import type { Projeto, SecaoCusto, ItemCusto, StatusItem, StatusPagamento, TipoCusto, TAP, TipoEscola, Receitas, LinhaResumoComercial, CustoAdicional } from '../types'
 import { v4 as uuid } from './uuid'
 
 
@@ -7,6 +7,7 @@ export interface SyncResult {
   tap: Partial<TAP>
   receitas: Receitas
   resumoComercial: LinhaResumoComercial[]
+  custosAdicionais: CustoAdicional[]
   totalConvidadosAtual: number | null
   totalAdesoesAtual: number | null
   avisos: string[]
@@ -408,6 +409,83 @@ function parseReceitasFromResumo(values: unknown[][]): Receitas {
   return result
 }
 
+// Lê as linhas de custo extra na aba "Resumo Geral" — tudo que aparece entre a linha
+// "RECEITA BAILE" e "CUSTO TOTAL" e NÃO é uma das 8 seções fixas (2.1–2.8, já calculadas
+// ao vivo a partir dos itens de cada aba própria). Cobre linhas soltas tipo "Bolsa Folia"
+// ou "Verba extra - CONVITES", que só existem digitadas na planilha, sem aba própria —
+// antes disso, ninguém sincronizava esse valor; tinha que copiar na mão pro "Custos Adicionais".
+function parseCustosAdicionaisFromResumo(values: unknown[][]): Omit<CustoAdicional, 'id'>[] {
+  let headerRow0 = -1
+  for (let r = 0; r < Math.min(values.length, 50); r++) {
+    const colLabel = norm(parseStr(getCell(values, r, 1))) || norm(parseStr(getCell(values, r, 0)))
+    const rowJoined = ((values[r] as unknown[]) ?? []).map(c => norm(parseStr(c))).join(' ')
+    if ((colLabel === 'item' || colLabel === 'receitas') && (rowJoined.includes('vendido') || rowJoined.includes('orcado'))) {
+      headerRow0 = r
+      break
+    }
+  }
+  if (headerRow0 < 0) {
+    for (let r = 0; r < Math.min(values.length, 50); r++) {
+      const joined = ((values[r] as unknown[]) ?? []).map(c => norm(parseStr(c))).join(' ')
+      if (joined.includes('vendido') || joined.includes('orcado')) { headerRow0 = r; break }
+    }
+  }
+
+  let colVendido = 1, colOrcado = 3, colContratado = 5, colPago = 7
+  if (headerRow0 >= 0 && headerRow0 + 1 < values.length) {
+    const row0 = (values[headerRow0] as unknown[]) ?? []
+    const row1 = (values[headerRow0 + 1] as unknown[]) ?? []
+    let currentGroup = ''
+    for (let c = 0; c < Math.max(row0.length, row1.length); c++) {
+      const g = parseStr(row0[c] ?? null)
+      const s = parseStr(row1[c] ?? null)
+      if (g) currentGroup = g
+      if (!currentGroup && !s) continue
+      const key = s ? `${norm(currentGroup)} / ${norm(s)}` : norm(currentGroup)
+      if (key.includes('vendido') && key.includes('valor') && !key.includes('conciliacao')) colVendido = c
+      else if (key.includes('orcado') && key.includes('valor') && !key.includes('contratado') && !key.includes('conciliacao')) colOrcado = c
+      else if (key.includes('contratado') && key.includes('valor') && !key.includes('conciliacao')) colContratado = c
+      else if (key.includes('conciliacao') && key.includes('valor') && !key.includes('falta')) colPago = c
+    }
+  }
+
+  const dataStart = headerRow0 >= 0 ? headerRow0 + 2 : 0
+  const parseCell = (r: number, col: number): number => {
+    const v = getCell(values, r, col)
+    const s = String(v ?? '').trim()
+    if (!s || s === '-' || s === '—') return 0
+    return parseNum(v)
+  }
+
+  const linhas: Omit<CustoAdicional, 'id'>[] = []
+  let dentroCustos = false
+
+  for (let r = dataStart; r < values.length; r++) {
+    const rawLabel = parseStr(getCell(values, r, 1)) || parseStr(getCell(values, r, 0))
+    if (!rawLabel) continue
+    const ln = norm(rawLabel)
+
+    if (!dentroCustos) {
+      if (ln.includes('receita baile')) dentroCustos = true
+      continue
+    }
+
+    if (ln.includes('custo total') || ln === 'total') break
+    if (ln === 'custos' || ln === 'item' || ln === 'descricao') continue
+    if (encontrarSecao(rawLabel)) continue
+
+    linhas.push({
+      descricao: rawLabel,
+      vendido: parseCell(r, colVendido),
+      orcado: parseCell(r, colOrcado),
+      contratado: parseCell(r, colContratado),
+      pago: parseCell(r, colPago),
+    })
+  }
+
+  return linhas
+}
+
 // Lê a aba "1.1 RESUMO CUSTOS" (FEE Alliance, Imposto FEE, etc.) — colunas descobertas
 // dinamicamente. Cobre tanto cabeçalho de uma linha só quanto grupo+subgrupo em duas
 // linhas (ex: "Valor Previsto" numa linha, "Comercial"/"Produção" na linha de baixo —
@@ -590,6 +668,7 @@ export async function sincronizarComSheets(
   let receitasParsed: Partial<Receitas> = {}
   let resumoEncontrado = false
   let resumoComercialParsed: LinhaResumoComercial[] = []
+  let custosAdicionaisParsed: Omit<CustoAdicional, 'id'>[] = []
   let totalConvidadosAtual: number | null = null
   let totalAdesoesAtual: number | null = null
   const avisosItens: string[] = []
@@ -643,7 +722,10 @@ export async function sincronizarComSheets(
       onProgress(`Lendo Resumo Geral (${nomeAba})...`)
       try {
         const values = await fetchAba(spreadsheetId, nomeAba, accessToken, `'${nomeAba}'!A1:Z100`)
-        if (values) receitasParsed = parseReceitasFromResumo(values)
+        if (values) {
+          receitasParsed = parseReceitasFromResumo(values)
+          custosAdicionaisParsed = parseCustosAdicionaisFromResumo(values)
+        }
       } catch (e) {
         if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
         console.warn(`Erro ao ler aba Resumo "${nomeAba}":`, e)
@@ -760,11 +842,38 @@ export async function sincronizarComSheets(
     ? [...secoesAtualizadas, preEventoExtra]
     : secoesAtualizadas
 
+  // Reaproveita o ID existente quando a descrição bate de forma inequívoca (mesma lógica
+  // de preservação de ID dos itens de custo, acima) — evita gerar uma linha nova a cada
+  // sync pra "Bolsa Folia"/"Verba extra - CONVITES" já sincronizadas antes. Só sobrescreve
+  // quando o Resumo Geral foi encontrado; senão preserva os Custos Adicionais do projeto
+  // (podem incluir linhas digitadas manualmente, sem equivalente na planilha).
+  const existingCAByDesc = new Map<string, CustoAdicional[]>()
+  for (const ca of projeto.custosAdicionais ?? []) {
+    const chave = norm(ca.descricao)
+    const arr = existingCAByDesc.get(chave)
+    if (arr) arr.push(ca)
+    else existingCAByDesc.set(chave, [ca])
+  }
+  const novosCAPorDesc = new Map<string, number>()
+  for (const ca of custosAdicionaisParsed) {
+    const chave = norm(ca.descricao)
+    novosCAPorDesc.set(chave, (novosCAPorDesc.get(chave) ?? 0) + 1)
+  }
+  const custosAdicionaisFinais: CustoAdicional[] = resumoEncontrado
+    ? custosAdicionaisParsed.map(ca => {
+        const chave = norm(ca.descricao)
+        const existentes = existingCAByDesc.get(chave)
+        const inequivoco = existentes?.length === 1 && novosCAPorDesc.get(chave) === 1
+        return inequivoco ? { ...ca, id: existentes![0].id } : { ...ca, id: uuid() }
+      })
+    : (projeto.custosAdicionais ?? [])
+
   return {
     secoes: secoesFinais,
     tap: tapParsed,
     receitas: receitasMerged,
     resumoComercial: resumoComercialParsed.length > 0 ? resumoComercialParsed : (projeto.resumoComercial ?? []),
+    custosAdicionais: custosAdicionaisFinais,
     totalConvidadosAtual,
     totalAdesoesAtual,
     avisos,
