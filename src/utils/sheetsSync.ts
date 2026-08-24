@@ -474,6 +474,10 @@ function parseResumoComercialFromSheet(values: unknown[][]): LinhaResumoComercia
       percentual: colPercentual >= 0 ? parseNum(getCell(values, r, colPercentual)) : 0,
       valorReal: colReal >= 0 ? parseNum(getCell(values, r, colReal)) : 0,
     })
+    // A tabela real termina na linha de total "(CC) Custo Cerimonial" — abaixo dela,
+    // na mesma aba, vêm outras tabelas (Sub Total, Acréscimos, Descontos, CTE, MoSCoW,
+    // Custo Fixo/Variável) que não fazem parte deste quadro e não devem ser capturadas.
+    if (descricao.trim().startsWith('(')) break
   }
 
   return linhas
