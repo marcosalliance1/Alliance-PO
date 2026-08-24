@@ -75,7 +75,12 @@ export function ResumoGeral({ projeto, onUpdateReceitas, onUpdateCustosAdicionai
   const r = projeto.receitas
   const margemPositiva = resumo.margem.vendido >= 0
   const custosAdicionais = projeto.custosAdicionais ?? []
-  const resumoComercial = projeto.resumoComercial ?? []
+  // Filtra linha em branco (nenhum valor preenchido) — cobre tanto o caso normal
+  // quanto dados de projetos sincronizados antes do fix do parser (que ainda têm
+  // Sub Total/Acréscimos/MoSCoW/etc. salvos até serem re-sincronizados).
+  const resumoComercial = (projeto.resumoComercial ?? []).filter(
+    (l) => l.valorComercial !== 0 || l.valorProducao !== 0 || l.percentual !== 0 || l.valorReal !== 0
+  )
 
   function addCustoAdicional() {
     onUpdateCustosAdicionais([...custosAdicionais, { id: uuid(), descricao: '', vendido: 0, orcado: 0, contratado: 0, pago: 0 }])
