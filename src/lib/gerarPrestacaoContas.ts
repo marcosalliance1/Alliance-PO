@@ -29,9 +29,10 @@ function finalY(doc: jsPDF): number {
 
 // Itens de uma seção que valem pro cliente: sem N/A/agrupadoras/vazias e só com valor real.
 function itensReais(secao: SecaoCusto): ItemCusto[] {
+  // Só itens com movimento real (contratado ou pago) — esconde as linhas zeradas.
   return filtrarItensCalculo(secao.itens)
-    .filter(i => i.valorOrcado > 0 || i.valorPago > 0 || i.valorContratado > 0)
-    .sort((a, b) => Math.max(b.valorPago, b.valorOrcado) - Math.max(a.valorPago, a.valorOrcado))
+    .filter(i => i.valorContratado > 0 || i.valorPago > 0)
+    .sort((a, b) => Math.max(b.valorPago, b.valorContratado) - Math.max(a.valorPago, a.valorContratado))
 }
 function ehAdministrativa(secao: SecaoCusto): boolean {
   return `${secao.numero} ${secao.nome}`.toLowerCase().includes('administrativ')
