@@ -70,6 +70,7 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
   const custoContratado = resumo.custoTotal.contratado
   const custoPago = resumo.custoTotal.pago
   const faltaPagar = Math.max(0, custoContratado - custoPago)
+  const saldoLiquido = arrecadadoLiquido - custoPago
   const pctPago = custoContratado > 0 ? Math.min(100, (custoPago / custoContratado) * 100) : 0
 
   return (
@@ -80,7 +81,7 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
           <span className="w-1 h-4 bg-primary rounded-full" />
           <h3 className="text-text-main text-sm font-semibold">O que entrou e como está sendo usado</h3>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="bg-bg rounded-xl px-4 py-4">
             <div className="text-text-muted text-xs mb-1">Arrecadado da turma</div>
             <div className="text-lg font-semibold text-success">{fmtBRL(arrecadadoLiquido)}</div>
@@ -95,6 +96,11 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
             <div className="text-text-muted text-xs mb-1">Falta pagar</div>
             <div className="text-lg font-semibold text-warning">{fmtBRL(faltaPagar)}</div>
             <div className="text-text-muted/60 text-[11px] mt-0.5">{fmtBRL(custoPago)} já pago</div>
+          </div>
+          <div className="bg-bg rounded-xl px-4 py-4">
+            <div className="text-text-muted text-xs mb-1">Saldo líquido</div>
+            <div className={`text-lg font-semibold ${saldoLiquido >= 0 ? 'text-success' : 'text-danger'}`}>{fmtBRL(saldoLiquido)}</div>
+            <div className="text-text-muted/60 text-[11px] mt-0.5">arrecadado − já pago</div>
           </div>
         </div>
       </div>
