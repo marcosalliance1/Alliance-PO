@@ -18,6 +18,9 @@ const MAPA_SECOES: Record<string, string> = {
   'custo equipe': '2.3',
   'custo bar': '2.4', 'custo bar&food': '2.4', 'custo bar food': '2.4', 'custo bar & food': '2.4',
   'custo pré-eventos': 'preevento', 'custo pre-eventos': 'preevento', 'custo pre eventos': 'preevento',
+  // A aba costuma se chamar só "PRÉ-EVENTOS" (sem "custo" na frente, diferente das outras seções) —
+  // sem isso, encontrarSecao() nunca reconhecia a aba e ela era pulada em silêncio.
+  'pré-eventos': 'preevento', 'pre-eventos': 'preevento', 'pre eventos': 'preevento', 'pré eventos': 'preevento',
   'cerimonia religiosa': 'cerimonia', 'cerimônia religiosa': 'cerimonia',
   'custo cerimonia': 'cerimonia', 'custo cerimônia': 'cerimonia',
   'colacao de grau': 'colacao', 'colação de grau': 'colacao',
