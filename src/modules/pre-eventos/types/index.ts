@@ -1,5 +1,6 @@
 ﻿export type EventType =
   | 'FESTA_INTEGRACAO'
+  | 'TROTE_ALLIANCE'
   | 'FESTA_START'
   | 'FESTA_1_6'
   | 'FESTA_FIM_CICLO_BASICO'

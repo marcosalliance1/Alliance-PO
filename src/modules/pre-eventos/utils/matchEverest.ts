@@ -9,6 +9,7 @@ import { recalcularItem } from './automacoes'
 // eram lançados como Festa Start ou Festa 1/6), por isso não tem conta própria.
 export const CONTA_GERENCIAL_POR_TIPO: Record<EventType, string | null> = {
   FESTA_INTEGRACAO:       null, // legado — sem conta gerencial no Everest
+  TROTE_ALLIANCE:         'TROTE ALLIANCE',
   FESTA_START:            'FESTA START',
   FESTA_1_6:              'FESTA 1/6',
   FESTA_FIM_CICLO_BASICO: 'FESTA FIM DO CICLO BASICO',

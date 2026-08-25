@@ -6,6 +6,7 @@
 
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   FESTA_INTEGRACAO:      'Festa de Integração',
+  TROTE_ALLIANCE:        'Trote Alliance',
   FESTA_START:           'Festa Start',
   FESTA_1_6:             'Festa 1/6',
   FESTA_FIM_CICLO_BASICO:'Festa Fim de Ciclo Básico',
@@ -17,6 +18,7 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
 
 export const EVENT_TYPES: EventType[] = [
   'FESTA_INTEGRACAO',
+  'TROTE_ALLIANCE',
   'FESTA_START',
   'FESTA_1_6',
   'FESTA_FIM_CICLO_BASICO',
@@ -29,6 +31,7 @@ export const EVENT_TYPES: EventType[] = [
 export function getEventCategory(tipo: EventType, qtde: number): TipoEvento | null {
   switch (tipo) {
     case 'FESTA_INTEGRACAO':
+    case 'TROTE_ALLIANCE':
     case 'FESTA_START':
     case 'FESTA_1_6':
     case 'FESTA_FIM_CICLO_BASICO':
