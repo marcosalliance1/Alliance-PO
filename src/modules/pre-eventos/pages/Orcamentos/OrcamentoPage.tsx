@@ -87,12 +87,15 @@ const BarraProgressoPagamento: React.FC<{ orc: Orcamento }> = ({ orc }) => {
 export const OrcamentoPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { buscarOrcamento, salvarOrcamento, addToast, atualizarEquipe, config, recalcularSecao } = useAppContext()
+  const { buscarOrcamento, salvarOrcamento, salvarOrcamentoComGuarda, addToast, atualizarEquipe, config, recalcularSecao } = useAppContext()
 
   const [orc, setOrc] = useState<Orcamento | null>(null)
   const [abaAtiva, setAbaAtiva] = useState<'orcamento' | 'evento' | 'cronograma'>('orcamento')
   const [dirty, setDirty] = useState(false)
   const [salvo, setSalvo] = useState(false)
+  const [conflito, setConflito] = useState<{ servidor: string } | null>(null)
+  // Versão (atualizado_em) que este cliente tinha ao abrir — trava de concorrência.
+  const baseVersion = useRef<string | null>(null)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showDriveModal, setShowDriveModal] = useState(false)
   const [showEverestModal, setShowEverestModal] = useState(false)
@@ -104,7 +107,7 @@ export const OrcamentoPage: React.FC = () => {
   useEffect(() => {
     if (!id) return
     const found = buscarOrcamento(id)
-    if (found) setOrc(found)
+    if (found) { setOrc(found); baseVersion.current = found.atualizadoEm }
     else navigate('/pre-eventos/orcamentos')
   }, [id, buscarOrcamento, navigate])
 
@@ -127,26 +130,42 @@ export const OrcamentoPage: React.FC = () => {
     setDirty(true)
   }, [orc, atualizarEquipe, config])
 
-  function handleSave() {
+  // Grava com trava de concorrência. Se outra pessoa salvou desde que abri,
+  // NÃO sobrescreve — sinaliza conflito pra decidir (recarregar ou forçar).
+  async function persistir(manual: boolean) {
     if (!orc) return
-    salvarOrcamento(orc)
-    setDirty(false)
-    setSalvo(true)
-    addToast('Orçamento salvo com sucesso!', 'success')
-  }
-
-  // Auto-save (tipo Sheets): grava sozinho ~1s depois da última edição. O
-  // salvarOrcamento é barato — localStorage na hora + Supabase fire-and-forget —
-  // então não trava a UI nem recarrega a tela. O botão "Salvar" segue como reforço manual.
-  useEffect(() => {
-    if (!dirty || !orc) return
-    const h = window.setTimeout(() => {
-      salvarOrcamento(orc)
+    const res = await salvarOrcamentoComGuarda(orc, baseVersion.current)
+    if (res.conflito) {
+      setConflito({ servidor: res.servidor ?? '' })
+      return
+    }
+    if (res.ok) {
+      baseVersion.current = res.updated.atualizadoEm
       setDirty(false)
       setSalvo(true)
-    }, 1000)
+      if (manual) addToast('Orçamento salvo com sucesso!', 'success')
+    }
+  }
+
+  function handleSave() { void persistir(true) }
+
+  // Força a gravação por cima da versão do servidor (decisão consciente do usuário).
+  function forcarSalvar() {
+    if (!orc) return
+    const updated = salvarOrcamento(orc) // upsert simples, sem trava
+    baseVersion.current = updated.atualizadoEm
+    setConflito(null); setDirty(false); setSalvo(true)
+    addToast('Salvo (sobrescreveu a outra versão).', 'success')
+  }
+
+  // Auto-save (tipo Sheets): grava sozinho ~1s depois da última edição. Pausa
+  // enquanto houver conflito aberto (pra não ficar tentando atropelar em loop).
+  useEffect(() => {
+    if (!dirty || !orc || conflito) return
+    const h = window.setTimeout(() => { void persistir(false) }, 1000)
     return () => window.clearTimeout(h)
-  }, [dirty, orc, salvarOrcamento])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, orc, conflito])
 
   // Tira o "Salvo ✓" da tela depois de alguns segundos.
   useEffect(() => {
@@ -519,6 +538,28 @@ export const OrcamentoPage: React.FC = () => {
           <Save className="w-4 h-4" /> Salvar
         </button>
       </div>
+
+      {/* Aviso de conflito — outra pessoa salvou este orçamento no meio */}
+      {conflito && (
+        <div className="bg-danger/10 border border-danger/40 rounded-card p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex-1">
+            <p className="text-danger font-semibold text-sm flex items-center gap-2">
+              <FileWarning className="w-4 h-4" /> Outra pessoa salvou este orçamento
+            </p>
+            <p className="text-xs text-muted mt-1">
+              Suas alterações <b>não foram gravadas</b> pra não apagar o trabalho dela. Recarregue pra ver a versão atual, ou force a sua (sobrescreve a dela).
+            </p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button onClick={() => window.location.reload()} className="border border-bordercol text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors">
+              Recarregar
+            </button>
+            <button onClick={forcarSalvar} className="bg-danger/80 hover:bg-danger text-white text-sm font-semibold py-2 px-3 rounded-lg transition-colors">
+              Forçar minha versão
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── 1. Informações Gerais ── */}
       <div className="bg-surface-2 border border-bordercol rounded-card p-5">

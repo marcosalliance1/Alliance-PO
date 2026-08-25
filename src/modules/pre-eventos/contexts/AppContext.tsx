@@ -21,6 +21,7 @@ interface AppContextValue {
   orcamentos: ReturnType<typeof useOrcamentos>['orcamentos']
   loadingOrcamentos: boolean
   salvarOrcamento: ReturnType<typeof useOrcamentos>['salvar']
+  salvarOrcamentoComGuarda: ReturnType<typeof useOrcamentos>['salvarComGuarda']
   excluirOrcamento: ReturnType<typeof useOrcamentos>['excluir']
   buscarOrcamento: ReturnType<typeof useOrcamentos>['buscarPorId']
   atualizarEquipe: ReturnType<typeof useOrcamentos>['atualizarEquipe']
@@ -47,7 +48,7 @@ const AppContext = createContext<AppContextValue | null>(null)
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { toasts, addToast, removeToast } = useToast()
   const { confirmState, confirm, accept, cancel } = useConfirm()
-  const { orcamentos, loading: loadingOrcamentos, salvar, excluir, buscarPorId, atualizarEquipe, recalcularSecao } = useOrcamentos()
+  const { orcamentos, loading: loadingOrcamentos, salvar, salvarComGuarda, excluir, buscarPorId, atualizarEquipe, recalcularSecao } = useOrcamentos()
   const { config, salvarConfig, resetarConfig } = useConfiguracoes()
   const { fornecedores, adicionarFornecedor, removerFornecedor, salvarFornecedores } = useFornecedores()
   const {
@@ -65,6 +66,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       orcamentos,
       loadingOrcamentos,
       salvarOrcamento: salvar,
+      salvarOrcamentoComGuarda: salvarComGuarda,
       excluirOrcamento: excluir,
       buscarOrcamento: buscarPorId,
       atualizarEquipe,
