@@ -1,6 +1,6 @@
 ﻿import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning, Database, Wallet, Eraser, Ticket } from 'lucide-react'
+import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning, Database, Wallet, Eraser, Ticket, Check } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL, newItemId } from '../../utils/formatters'
@@ -92,6 +92,7 @@ export const OrcamentoPage: React.FC = () => {
   const [orc, setOrc] = useState<Orcamento | null>(null)
   const [abaAtiva, setAbaAtiva] = useState<'orcamento' | 'evento' | 'cronograma'>('orcamento')
   const [dirty, setDirty] = useState(false)
+  const [salvo, setSalvo] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showDriveModal, setShowDriveModal] = useState(false)
   const [showEverestModal, setShowEverestModal] = useState(false)
@@ -130,8 +131,29 @@ export const OrcamentoPage: React.FC = () => {
     if (!orc) return
     salvarOrcamento(orc)
     setDirty(false)
+    setSalvo(true)
     addToast('Orçamento salvo com sucesso!', 'success')
   }
+
+  // Auto-save (tipo Sheets): grava sozinho ~1s depois da última edição. O
+  // salvarOrcamento é barato — localStorage na hora + Supabase fire-and-forget —
+  // então não trava a UI nem recarrega a tela. O botão "Salvar" segue como reforço manual.
+  useEffect(() => {
+    if (!dirty || !orc) return
+    const h = window.setTimeout(() => {
+      salvarOrcamento(orc)
+      setDirty(false)
+      setSalvo(true)
+    }, 1000)
+    return () => window.clearTimeout(h)
+  }, [dirty, orc, salvarOrcamento])
+
+  // Tira o "Salvo ✓" da tela depois de alguns segundos.
+  useEffect(() => {
+    if (!salvo) return
+    const h = window.setTimeout(() => setSalvo(false), 2500)
+    return () => window.clearTimeout(h)
+  }, [salvo])
 
   async function handlePDF() {
     if (!orc) return
@@ -429,11 +451,15 @@ export const OrcamentoPage: React.FC = () => {
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>
         <div className="flex-1" />
-        {dirty && (
-          <span className="text-xs text-warning border border-warning/30 bg-warning/10 rounded px-2 py-1">
-            Não salvo
+        {dirty ? (
+          <span className="text-xs text-muted border border-bordercol/60 rounded px-2 py-1 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" /> Salvando…
           </span>
-        )}
+        ) : salvo ? (
+          <span className="text-xs text-success border border-success/30 bg-success/10 rounded px-2 py-1 flex items-center gap-1">
+            <Check className="w-3 h-3" /> Salvo
+          </span>
+        ) : null}
         <button
           onClick={() => setShowImportModal(true)}
           className="hidden md:flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors"
@@ -704,18 +730,6 @@ export const OrcamentoPage: React.FC = () => {
 
       <ResumoFinanceiro orc={orc} />
       </>)}
-
-      {/* Floating save — desktop only */}
-      {dirty && (
-        <div className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
-          <button
-            onClick={handleSave}
-            className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-white font-semibold py-3 px-6 rounded-full shadow-lg transition-colors text-sm"
-          >
-            <Save className="w-4 h-4" /> Salvar alterações
-          </button>
-        </div>
-      )}
 
       {/* Input oculto para upload de documento de cotação */}
       <input ref={cotFileRef} type="file" className="hidden" onChange={handleFileCotacao} />
