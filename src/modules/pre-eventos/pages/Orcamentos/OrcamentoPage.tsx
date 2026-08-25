@@ -12,6 +12,8 @@ import { AbaInfoEvento } from '../../components/Evento/AbaInfoEvento'
 import { CronogramaRegua } from '../../components/Evento/CronogramaRegua'
 import { gerarLotesIngresso, custoVariavelPorPessoa } from '../../utils/lotesIngresso'
 import { criarItemDeSugestao, type ItemEstimado } from '../../utils/estimativa'
+import { useAuth } from '../../../../contexts/AuthContext'
+import { PresencaBar } from '../../../../components/PresencaBar'
 import { SecaoAccordion } from '../../components/Orcamento/SecaoAccordion'
 import { exportarPDF, exportarPendenciasPDF } from '../../utils/exportPDF'
 import { exportarExcel } from '../../utils/exportExcel'
@@ -88,6 +90,7 @@ export const OrcamentoPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { buscarOrcamento, salvarOrcamento, salvarOrcamentoComGuarda, addToast, atualizarEquipe, config, recalcularSecao } = useAppContext()
+  const { usuario } = useAuth()
 
   const [orc, setOrc] = useState<Orcamento | null>(null)
   const [abaAtiva, setAbaAtiva] = useState<'orcamento' | 'evento' | 'cronograma'>('orcamento')
@@ -134,13 +137,15 @@ export const OrcamentoPage: React.FC = () => {
   // NÃO sobrescreve — sinaliza conflito pra decidir (recarregar ou forçar).
   async function persistir(manual: boolean) {
     if (!orc) return
-    const res = await salvarOrcamentoComGuarda(orc, baseVersion.current)
+    const orcAutor = { ...orc, atualizadoPor: usuario?.nome ?? orc.atualizadoPor }
+    const res = await salvarOrcamentoComGuarda(orcAutor, baseVersion.current)
     if (res.conflito) {
       setConflito({ servidor: res.servidor ?? '' })
       return
     }
     if (res.ok) {
       baseVersion.current = res.updated.atualizadoEm
+      setOrc(prev => prev ? { ...prev, atualizadoPor: res.updated.atualizadoPor, atualizadoEm: res.updated.atualizadoEm } : prev)
       setDirty(false)
       setSalvo(true)
       if (manual) addToast('Orçamento salvo com sucesso!', 'success')
@@ -152,8 +157,9 @@ export const OrcamentoPage: React.FC = () => {
   // Força a gravação por cima da versão do servidor (decisão consciente do usuário).
   function forcarSalvar() {
     if (!orc) return
-    const updated = salvarOrcamento(orc) // upsert simples, sem trava
+    const updated = salvarOrcamento({ ...orc, atualizadoPor: usuario?.nome ?? orc.atualizadoPor }) // upsert simples, sem trava
     baseVersion.current = updated.atualizadoEm
+    setOrc(prev => prev ? { ...prev, atualizadoPor: updated.atualizadoPor, atualizadoEm: updated.atualizadoEm } : prev)
     setConflito(null); setDirty(false); setSalvo(true)
     addToast('Salvo (sobrescreveu a outra versão).', 'success')
   }
@@ -470,6 +476,7 @@ export const OrcamentoPage: React.FC = () => {
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>
         <div className="flex-1" />
+        {orc.id && <PresencaBar canal={`orcamento:${orc.id}`} usuario={usuario} />}
         {dirty ? (
           <span className="text-xs text-muted border border-bordercol/60 rounded px-2 py-1 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" /> Salvando…
@@ -478,6 +485,8 @@ export const OrcamentoPage: React.FC = () => {
           <span className="text-xs text-success border border-success/30 bg-success/10 rounded px-2 py-1 flex items-center gap-1">
             <Check className="w-3 h-3" /> Salvo
           </span>
+        ) : orc.atualizadoPor ? (
+          <span className="text-xs text-muted hidden sm:inline">Editado por {orc.atualizadoPor}</span>
         ) : null}
         <button
           onClick={() => setShowImportModal(true)}

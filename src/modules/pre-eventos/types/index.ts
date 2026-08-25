@@ -97,6 +97,7 @@ export interface Orcamento {
   status: OrcamentoStatus
   criadoEm: string
   atualizadoEm: string
+  atualizadoPor?: string // nome de quem salvou por último (autoria)
   bolsaFolia: number
   receitasSympla: SymplaLote[]
   operacaoEstrutura: ItemOrcamento[]
