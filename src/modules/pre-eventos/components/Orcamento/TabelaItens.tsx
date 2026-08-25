@@ -1,5 +1,5 @@
 ﻿import React, { memo, useCallback, useRef, useState, useMemo } from 'react'
-import { Plus, Trash2, Paperclip, Download, X, Eye, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, Paperclip, Download, X, Eye, ChevronDown, ChevronRight, GripVertical } from 'lucide-react'
 import type { ItemOrcamento, ItemStatus, NotaFiscal } from '../../types'
 import { formatBRL, newItemId } from '../../utils/formatters'
 import { recalcularItem } from '../../utils/automacoes'
@@ -108,7 +108,14 @@ const LinhaItem: React.FC<{
   onUpdate: (id: string, field: keyof ItemOrcamento, val: string | number) => void
   onUpdateNF: (id: string, nf: NotaFiscal | undefined) => void
   onRemove: (id: string) => void
-}> = ({ item, idx, indentado = false, fornecedores, onUpdate, onUpdateNF, onRemove }) => {
+  onDragStartRow: (id: string) => void
+  onDragOverRow: (id: string) => void
+  onDropRow: (id: string) => void
+  onDragEndRow: () => void
+  isDragging: boolean
+  isOver: boolean
+}> = ({ item, idx, indentado = false, fornecedores, onUpdate, onUpdateNF, onRemove,
+       onDragStartRow, onDragOverRow, onDropRow, onDragEndRow, isDragging, isOver }) => {
   const tdBase   = 'px-2 py-1.5 text-xs text-gray-300 border-b border-bordercol'
   const inputCls = 'w-full bg-transparent text-xs text-white outline-none border border-transparent hover:border-bordercol focus:border-accent rounded px-1 py-0.5 transition-colors'
   const numCls   = `${inputCls} text-right`
@@ -120,13 +127,28 @@ const LinhaItem: React.FC<{
   }
 
   return (
-    <tr className="hover:bg-white/[0.02] group">
-      {/* # / badge AUTO */}
-      <td className={`${tdBase} text-center`}>
-        {item.automatico
-          ? <span className="inline-block bg-accent/20 text-accent border border-accent/30 rounded px-1 text-[10px] font-bold">A</span>
-          : <span className="text-muted">{idx + 1}</span>
-        }
+    <tr
+      className={`hover:bg-white/[0.02] group transition-colors ${isDragging ? 'opacity-40' : ''} ${isOver ? 'border-t-2 border-accent' : ''}`}
+      onDragOver={e => { e.preventDefault(); onDragOverRow(item.id) }}
+      onDrop={e => { e.preventDefault(); onDropRow(item.id) }}
+    >
+      {/* # / badge AUTO — vira puxador (arrastar pra reordenar) no hover */}
+      <td className={`${tdBase} text-center relative`}>
+        <span className="group-hover:opacity-0 transition-opacity">
+          {item.automatico
+            ? <span className="inline-block bg-accent/20 text-accent border border-accent/30 rounded px-1 text-[10px] font-bold">A</span>
+            : <span className="text-muted">{idx + 1}</span>
+          }
+        </span>
+        <span
+          draggable
+          onDragStart={() => onDragStartRow(item.id)}
+          onDragEnd={onDragEndRow}
+          className="absolute inset-0 hidden group-hover:flex items-center justify-center cursor-grab active:cursor-grabbing text-muted hover:text-white"
+          title="Arrastar pra reordenar"
+        >
+          <GripVertical className="w-3.5 h-3.5" />
+        </span>
       </td>
       {/* Item */}
       <td className={tdBase}>
@@ -234,6 +256,27 @@ const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true })
   const addRow    = useCallback(() => onChange([...items, emptyItem()]), [items, onChange])
   const removeRow = useCallback((id: string) => onChange(items.filter(i => i.id !== id)), [items, onChange])
 
+  // ─── Reordenar linhas por arrastar (drag & drop) ───
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
+  const onDragStartRow = useCallback((id: string) => setDragId(id), [])
+  const onDragOverRow  = useCallback((id: string) => setOverId(prev => (prev === id ? prev : id)), [])
+  const onDragEndRow   = useCallback(() => { setDragId(null); setOverId(null) }, [])
+  const onDropRow = useCallback((targetId: string) => {
+    if (dragId && dragId !== targetId) {
+      const from = items.findIndex(i => i.id === dragId)
+      const to   = items.findIndex(i => i.id === targetId)
+      // Só reordena dentro do mesmo contexto (itens soltos entre si, ou dentro do mesmo grupo).
+      if (from !== -1 && to !== -1 && (items[from].grupo ?? '') === (items[to].grupo ?? '')) {
+        const copy = [...items]
+        const [movido] = copy.splice(from, 1)
+        copy.splice(to, 0, movido)
+        onChange(copy)
+      }
+    }
+    setDragId(null); setOverId(null)
+  }, [dragId, items, onChange])
+
   const totOrcado  = items.reduce((s, i) => s + i.totalOrcado, 0)
   const totPago    = items.reduce((s, i) => s + i.totalPagoReal, 0)
   const totCliente = items.reduce((s, i) => s + i.valorPassadoCliente, 0)
@@ -323,6 +366,12 @@ const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true })
                 onUpdate={update}
                 onUpdateNF={updateNF}
                 onRemove={removeRow}
+                onDragStartRow={onDragStartRow}
+                onDragOverRow={onDragOverRow}
+                onDropRow={onDropRow}
+                onDragEndRow={onDragEndRow}
+                isDragging={dragId === row.item.id}
+                isOver={overId === row.item.id && dragId !== row.item.id}
               />
             )
           })}
