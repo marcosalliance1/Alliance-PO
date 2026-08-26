@@ -85,6 +85,29 @@ const BarraProgressoPagamento: React.FC<{ orc: Orcamento }> = ({ orc }) => {
   )
 }
 
+// Item Contratado cuja Data de Pagamento já chegou/passou (≤ hoje) vira Pago.
+// Status não afeta cálculo (BV/cards usam Total Pago), então é seguro.
+function aplicarPagoPorData(o: Orcamento): Orcamento {
+  const hoje = new Date().toISOString().slice(0, 10) // YYYY-MM-DD (compara lexicográfico = cronológico)
+  let mudou = false
+  const flip = (itens: ItemOrcamento[]) => itens.map(it => {
+    if (it.status === 'CONTRATADO' && it.dataPagamento && it.dataPagamento <= hoje) {
+      mudou = true
+      return { ...it, status: 'PAGO' as const }
+    }
+    return it
+  })
+  const novo: Orcamento = {
+    ...o,
+    operacaoEstrutura: flip(o.operacaoEstrutura),
+    equipe: flip(o.equipe),
+    atracao: flip(o.atracao),
+    abBebidas: flip(o.abBebidas),
+    extras: flip(o.extras),
+  }
+  return mudou ? novo : o
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export const OrcamentoPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -110,7 +133,12 @@ export const OrcamentoPage: React.FC = () => {
   useEffect(() => {
     if (!id) return
     const found = buscarOrcamento(id)
-    if (found) { setOrc(found); baseVersion.current = found.atualizadoEm }
+    if (found) {
+      baseVersion.current = found.atualizadoEm
+      const ajustado = aplicarPagoPorData(found)
+      setOrc(ajustado)
+      if (ajustado !== found) setDirty(true) // houve flip Contratado→Pago → auto-save persiste
+    }
     else navigate('/pre-eventos/orcamentos')
   }, [id, buscarOrcamento, navigate])
 
