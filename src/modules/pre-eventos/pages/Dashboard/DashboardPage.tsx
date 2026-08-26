@@ -225,7 +225,12 @@ export const DashboardPage: React.FC = () => {
         const diffDias = Math.ceil((d.getTime() - hoje.getTime()) / 86400000)
         return { ...o, _date: d, _diffDias: diffDias }
       })
-      .sort((a, b) => a._date.getTime() - b._date.getTime()),
+      .sort((a, b) => {
+        const fa = a._diffDias >= 0, fb = b._diffDias >= 0
+        if (fa !== fb) return fa ? -1 : 1                    // futuros antes dos passados
+        return fa ? a._date.getTime() - b._date.getTime()    // futuros: mais próximo primeiro
+                  : b._date.getTime() - a._date.getTime()    // passados: mais recente primeiro
+      }),
   [filtered, hoje])
 
   // ── Gráfico 4: Eventos por mês ────────────────────────────────────────────────
@@ -539,7 +544,7 @@ export const DashboardPage: React.FC = () => {
                   className={`w-full flex items-center gap-2 text-left px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors ${past ? 'opacity-40' : ''}`}>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-xs font-medium truncate">{o.turma || '—'}</p>
-                    <p className="text-muted text-[10px] truncate">{o.instituicao}</p>
+                    <p className="text-muted text-[10px] truncate">{EVENT_TYPE_LABELS[o.tipo]}{o.instituicao ? ` · ${o.instituicao}` : ''}</p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-muted text-[10px]">{formatDate(o.data)}</p>
