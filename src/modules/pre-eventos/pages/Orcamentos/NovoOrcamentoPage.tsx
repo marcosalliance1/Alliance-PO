@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, FileText, Users } from 'lucide-react'
+import { Sparkles, FileText, Users, AlertTriangle } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { criarOrcamentoVazio } from '../../hooks/useOrcamentos'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
@@ -35,6 +35,13 @@ export const NovoOrcamentoPage: React.FC = () => {
     () => [...new Set(orcamentos.map(o => (o.instituicao || '').trim()).filter(Boolean))].sort(),
     [orcamentos],
   )
+
+  // Já existe um orçamento do mesmo tipo + turma? (evita criar duplicado)
+  const existente = useMemo(() => {
+    const t = turma.trim().toLowerCase()
+    if (!t) return null
+    return orcamentos.find(o => o.tipo === tipo && (o.turma || '').trim().toLowerCase() === t) ?? null
+  }, [orcamentos, tipo, turma])
 
   // Preview ao vivo do que o histórico geraria.
   const preview = useMemo(
@@ -140,6 +147,27 @@ export const NovoOrcamentoPage: React.FC = () => {
             <p className="text-[10px] text-muted mt-1">Usado na fórmula dos lotes de ingresso.</p>
           </div>
         </div>
+
+        {/* Aviso de orçamento já existente (mesmo tipo + turma) */}
+        {existente && (
+          <div className="bg-warning/10 border border-warning/40 rounded-lg p-4 mb-5">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white font-medium">Já existe um orçamento desse evento</p>
+                <p className="text-xs text-muted mt-0.5">
+                  <b className="text-gray-300">{EVENT_TYPE_LABELS[tipo]}</b> para a turma <b className="text-gray-300">{existente.turma}</b> já foi criado. Talvez você queira abrir ele em vez de criar outro.
+                </p>
+                <button
+                  onClick={() => navigate(`/pre-eventos/orcamentos/${existente.id}`)}
+                  className="mt-2 text-xs font-semibold text-warning hover:underline"
+                >
+                  Abrir o orçamento existente →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Preview do que o histórico gera */}
         {temHistorico ? (
