@@ -1,6 +1,6 @@
 ﻿import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning, Database, Wallet, Eraser, Ticket, Check } from 'lucide-react'
+import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning, Database, Wallet, Eraser, Ticket, Check, Users } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL, newItemId } from '../../utils/formatters'
@@ -15,7 +15,7 @@ import { criarItemDeSugestao, type ItemEstimado } from '../../utils/estimativa'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { PresencaBar } from '../../../../components/PresencaBar'
 import { SecaoAccordion } from '../../components/Orcamento/SecaoAccordion'
-import { exportarPDF, exportarPendenciasPDF } from '../../utils/exportPDF'
+import { exportarPDF, exportarPendenciasPDF, exportarRelatorioCliente } from '../../utils/exportPDF'
 import { exportarExcel } from '../../utils/exportExcel'
 import CampoMoeda from '../../components/UI/CampoMoeda'
 import TabelaLotes from '../../components/UI/TabelaLotes'
@@ -190,6 +190,12 @@ export const OrcamentoPage: React.FC = () => {
     if (!orc) return
     await exportarPendenciasPDF(orc)
     addToast('Relatório de pendências gerado!', 'success')
+  }
+
+  async function handleRelatorioCliente() {
+    if (!orc) return
+    await exportarRelatorioCliente(orc)
+    addToast('Relatório do cliente gerado!', 'success')
   }
 
   function handleExcel() {
@@ -533,6 +539,13 @@ export const OrcamentoPage: React.FC = () => {
           className="hidden md:flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors"
         >
           <FileDown className="w-4 h-4" /> PDF
+        </button>
+        <button
+          onClick={handleRelatorioCliente}
+          title="Relatório para a turma — só o valor do cliente (sem orçado, custo ou margem)"
+          className="hidden md:flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors"
+        >
+          <Users className="w-4 h-4" /> Rel. Cliente
         </button>
         <button
           onClick={handleExcel}

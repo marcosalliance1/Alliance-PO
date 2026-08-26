@@ -20,6 +20,10 @@ function temDados(i: ItemOrcamento): boolean {
   return i.custoUnitario > 0 || i.fornecedor.trim() !== '' || i.totalPagoReal > 0 || i.item.trim() !== ''
 }
 
+function fornecedorDisplay(f: string): string {
+  return f ? f.split('||').map(s => s.trim()).filter(Boolean).join(', ') : '—'
+}
+
 function secaoTable(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
   const filtered = items.filter(temDados)
   if (filtered.length === 0) return
@@ -411,5 +415,137 @@ export async function exportarPendenciasPDF(orc: Orcamento) {
   }
 
   const filename = `pendencias_${orc.instituicao}_${orc.turma}`.replace(/[\s/]/g, '_').toLowerCase()
+  doc.save(`${filename}.pdf`)
+}
+
+// ─── Relatório Cliente ────────────────────────────────────────────────────────
+// Visão da TURMA: só o que o cliente paga (V. Cliente). Esconde o orçado interno,
+// o custo real (Total Pago) e a margem (BV) — evita a dúvida "orçou 30k, pagou 46.7k".
+function secaoTableCliente(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
+  const filtered = items.filter(i => i.valorPassadoCliente > 0)
+  if (filtered.length === 0) return
+
+  let y = (doc as any).lastAutoTable?.finalY ?? 40
+  const estimatedH = 20 + (filtered.length + 1) * 7
+  if (200 - y < Math.min(estimatedH, 45)) {
+    doc.addPage(); y = 8; (doc as any).lastAutoTable = { finalY: 8 }
+  }
+
+  doc.setFillColor(...HDR_BG)
+  doc.rect(10, y + 3, 277, 7, 'F')
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...HDR_TEXT)
+  doc.text(titulo, 13, y + 8.5)
+
+  const rows = filtered.map(i => [
+    i.item,
+    fornecedorDisplay(i.fornecedor),
+    String(i.qtde),
+    formatBRL(i.valorPassadoCliente),
+  ])
+  const subtotal = ['SUBTOTAL', '', '', formatBRL(filtered.reduce((s, i) => s + i.valorPassadoCliente, 0))]
+
+  autoTable(doc, {
+    startY: y + 12,
+    head: [['Item', 'Fornecedor', 'Qtde', 'Valor']],
+    body: rows,
+    foot: [subtotal],
+    theme: 'grid',
+    headStyles: { fillColor: [60, 60, 90] as [number,number,number], textColor: HDR_TEXT, fontSize: 9, fontStyle: 'bold' },
+    bodyStyles: { textColor: TEXT, fontSize: 9, fillColor: ROW_ODD },
+    alternateRowStyles: { fillColor: ROW_EVEN },
+    footStyles: { fillColor: SUB_BG, textColor: TEXT, fontStyle: 'bold', fontSize: 9 },
+    styles: { lineColor: [220, 220, 230] as [number,number,number], lineWidth: 0.1 },
+    margin: { left: 10, right: 10 },
+    columnStyles: {
+      0: { cellWidth: 90 },
+      1: { cellWidth: 110 },
+      2: { cellWidth: 25, halign: 'right' },
+      3: { cellWidth: 52, halign: 'right' },
+    },
+  })
+}
+
+export async function exportarRelatorioCliente(orc: Orcamento) {
+  const logoImg = await new Promise<HTMLImageElement>((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(img)
+    img.src = allianceLogo
+  })
+  const hasLogo    = logoImg.naturalWidth > 0
+  const logoRatio  = hasLogo ? logoImg.naturalWidth / logoImg.naturalHeight : 4
+  const logoBranco = hasLogo ? logoParaBranco(logoImg) : ''
+  const logoH = 11, logoW = logoH * logoRatio, logoHF = 4.5, logoWF = logoHF * logoRatio
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  doc.setFillColor(255, 255, 255); doc.rect(0, 0, 297, 210, 'F')
+
+  // Cabeçalho (voltado ao cliente — sem "Confidencial")
+  doc.setFillColor(...ACC); doc.rect(0, 0, 297, 16, 'F')
+  if (hasLogo) doc.addImage(logoBranco, 'PNG', 10, 2.5, logoW, logoH)
+  doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(...HDR_TEXT)
+  doc.text('ALLIANCE FORMATURAS', hasLogo ? 10 + logoW + 3 : 10, 11)
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal')
+  doc.text('Relatório da Turma — Valores do Evento', 287, 11, { align: 'right' })
+
+  // Info evento
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...TEXT)
+  doc.text(`${orc.instituicao || '—'} — ${orc.turma || '—'}`, 10, 24)
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...TEXT_MUT)
+  doc.text(
+    `${EVENT_TYPE_LABELS[orc.tipo]}  |  Data: ${formatDate(orc.data)}  |  Convidados: ${orc.quantidadeConvidados}  |  Emitido em ${new Date().toLocaleDateString('pt-BR')}`,
+    10, 30,
+  )
+  doc.setDrawColor(220, 220, 230); doc.setLineWidth(0.3); doc.line(10, 33, 287, 33)
+  ;(doc as any).lastAutoTable = { finalY: 33 }
+
+  // Seções — só o valor do cliente
+  secaoTableCliente(doc, 'OPERAÇÃO / ESTRUTURA',     orc.operacaoEstrutura)
+  secaoTableCliente(doc, 'EQUIPE',                    orc.equipe)
+  secaoTableCliente(doc, 'ATRAÇÃO',                   orc.atracao)
+  secaoTableCliente(doc, 'A&B — ALIMENTOS E BEBIDAS', orc.abBebidas)
+  secaoTableCliente(doc, 'EXTRAS',                    orc.extras)
+  receitasTable(doc, orc)
+
+  // Resumo da turma (sem orçado, sem custo real, sem margem)
+  const finalY = (doc as any).lastAutoTable?.finalY ?? 140
+  const sy = finalY + 6
+  if (sy < 165) {
+    const totalReceitas = orc.bolsaFolia + orc.receitasSympla.reduce((s, l) => s + l.total, 0)
+    const allItems      = [...orc.operacaoEstrutura, ...orc.equipe, ...orc.atracao, ...orc.abBebidas, ...orc.extras]
+    const totalCliente  = allItems.reduce((s, i) => s + i.valorPassadoCliente, 0)
+    const saldo         = totalReceitas - totalCliente
+
+    doc.setFillColor(...HDR_BG); doc.rect(10, sy, 120, 7, 'F')
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...HDR_TEXT)
+    doc.text('RESUMO DA TURMA', 13, sy + 5.5)
+
+    const linhas: [string, number][] = [
+      ['Total Arrecadado (Receitas)', totalReceitas],
+      ['Total Investido no Evento',   totalCliente],
+      ['Saldo da Turma',              saldo],
+    ]
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal')
+    linhas.forEach(([k, v], i) => {
+      const ry = sy + 13 + i * 6
+      doc.setTextColor(...TEXT_MUT); doc.text(k, 13, ry)
+      const isColor = k.startsWith('Saldo') || k.startsWith('Total Arrecadado')
+      doc.setTextColor(...(isColor ? (v >= 0 ? GREEN : RED) : TEXT))
+      doc.text(formatBRL(v), 128, ry, { align: 'right' })
+    })
+  }
+
+  // Rodapé (sem "Confidencial")
+  const total = doc.getNumberOfPages()
+  for (let p = 1; p <= total; p++) {
+    doc.setPage(p)
+    doc.setFillColor(245, 245, 248); doc.rect(0, 203, 297, 7, 'F')
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...TEXT_MUT)
+    if (hasLogo) doc.addImage(logoImg, 'PNG', 10, 204, logoWF, logoHF)
+    doc.text('Alliance Formaturas', hasLogo ? 10 + logoWF + 2 : 10, 207.5)
+    doc.text(`Página ${p} de ${total}`, 287, 207.5, { align: 'right' })
+  }
+
+  const filename = `relatorio_cliente_${orc.instituicao}_${orc.turma}`.replace(/[\s/]/g, '_').toLowerCase()
   doc.save(`${filename}.pdf`)
 }
