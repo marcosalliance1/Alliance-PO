@@ -66,7 +66,17 @@ export interface Cotacao {
 // ─── Info do Evento (operacional) ─────────────────────────────────────────────
 // Criada/editada no próprio sistema (salva no orçamento). A leitura da planilha
 // "Operacional" do Drive é só migração dos eventos passados pra cá.
-export interface InfoEventoFornecedor { categoria: string; fornecedor: string; fechado: boolean }
+export type FornecedorStatus = 'aberto' | 'aguardando' | 'fechado'
+export interface InfoEventoFornecedor {
+  categoria: string
+  fornecedor: string
+  status?: FornecedorStatus // 3 estados (aberto | aguardando assinatura | fechado)
+  fechado?: boolean         // legado — dados antigos; ler via statusFornecedor()
+}
+// Deriva o status novo, cobrindo dados antigos que só tinham `fechado`.
+export function statusFornecedor(f: InfoEventoFornecedor): FornecedorStatus {
+  return f.status ?? (f.fechado ? 'fechado' : 'aberto')
+}
 export interface InfoEventoLineup { horario: string; artista: string; obs: string }
 export interface InfoEvento {
   nomeEvento: string

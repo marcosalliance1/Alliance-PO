@@ -1,7 +1,17 @@
 import React, { useState } from 'react'
 import { Calendar, Music, Users, Plus, Trash2, Download } from 'lucide-react'
-import type { Orcamento, InfoEvento } from '../../types'
+import type { Orcamento, InfoEvento, FornecedorStatus } from '../../types'
+import { statusFornecedor } from '../../types'
 import { ModalImportarEvento } from './ModalImportarEvento'
+
+const STATUS_LABEL: Record<FornecedorStatus, string> = {
+  aberto: 'em aberto', aguardando: 'aguardando assinatura', fechado: 'fechado',
+}
+const STATUS_COR: Record<FornecedorStatus, string> = {
+  aberto: 'text-muted border-bordercol',
+  aguardando: 'text-warning border-warning/30 bg-warning/10',
+  fechado: 'text-success border-success/30 bg-success/10',
+}
 
 export const INFO_EVENTO_VAZIO: InfoEvento = {
   nomeEvento: '', tipo: '', data: '', diaSemana: '', local: '', horario: '', tematica: '',
@@ -83,7 +93,7 @@ export const AbaInfoEvento: React.FC<Props> = ({ orc, onChange }) => {
       <div className="bg-surface-2 border border-bordercol rounded-card p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-white font-semibold text-sm flex items-center gap-2"><Users className="w-4 h-4 text-accent" /> Fornecedores</h3>
-          <button onClick={() => upd({ fornecedores: [...info.fornecedores, { categoria: '', fornecedor: '', fechado: false }] })}
+          <button onClick={() => upd({ fornecedores: [...info.fornecedores, { categoria: '', fornecedor: '', status: 'aberto' }] })}
             className="flex items-center gap-1 text-xs text-accent hover:underline"><Plus className="w-3.5 h-3.5" /> fornecedor</button>
         </div>
         <div className="space-y-2">
@@ -94,10 +104,13 @@ export const AbaInfoEvento: React.FC<Props> = ({ orc, onChange }) => {
                 onChange={e => upd({ fornecedores: info.fornecedores.map((x, j) => j === i ? { ...x, categoria: e.target.value } : x) })} />
               <input className={`${inputCls} flex-1`} placeholder="Fornecedor" value={f.fornecedor}
                 onChange={e => upd({ fornecedores: info.fornecedores.map((x, j) => j === i ? { ...x, fornecedor: e.target.value } : x) })} />
-              <button onClick={() => upd({ fornecedores: info.fornecedores.map((x, j) => j === i ? { ...x, fechado: !x.fechado } : x) })}
-                className={`text-[11px] font-medium border rounded px-2 py-1.5 shrink-0 ${f.fechado ? 'text-success border-success/30 bg-success/10' : 'text-muted border-bordercol'}`}>
-                {f.fechado ? 'fechado' : 'em aberto'}
-              </button>
+              <select value={statusFornecedor(f)}
+                onChange={e => upd({ fornecedores: info.fornecedores.map((x, j) => j === i ? { ...x, status: e.target.value as FornecedorStatus } : x) })}
+                className={`text-[11px] font-medium border rounded px-2 py-1.5 shrink-0 outline-none cursor-pointer ${STATUS_COR[statusFornecedor(f)]}`}>
+                {(['aberto', 'aguardando', 'fechado'] as FornecedorStatus[]).map(s => (
+                  <option key={s} value={s} className="bg-surface text-white">{STATUS_LABEL[s]}</option>
+                ))}
+              </select>
               <button onClick={() => upd({ fornecedores: info.fornecedores.filter((_, j) => j !== i) })} className="text-muted hover:text-danger shrink-0"><Trash2 className="w-4 h-4" /></button>
             </div>
           ))}

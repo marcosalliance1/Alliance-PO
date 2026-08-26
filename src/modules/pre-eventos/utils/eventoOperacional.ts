@@ -1,7 +1,7 @@
 // Leitura/parsing da planilha "Operacional" de eventos (Drive). Cada ABA = um
 // evento/turma. Extraído do src/pages/Operacional.tsx pra reuso no Pré-Eventos.
 import { matchCentroCusto } from './matchEverest'
-import type { InfoEvento, InfoEventoFornecedor, InfoEventoLineup } from '../types'
+import type { InfoEvento, InfoEventoFornecedor, InfoEventoLineup, FornecedorStatus } from '../types'
 
 export const SHEET_EVENTOS_ID = '1VpA4_lRcZlJ75Qc93VZZZvwW748Xnw-UsmQVCB-tRjc'
 
@@ -52,6 +52,15 @@ function secaoRows(rows: unknown[][], headerLabel: string): unknown[][] {
 }
 
 type CanonicalCat = 'Buffet' | 'Bar' | 'Cerveja' | 'Destilados' | 'Japa' | 'Hamburgueria'
+// Mapeia o texto de status da planilha ("Contrato ok" / "Contrato a assinar" / …)
+// para os 3 estados. Sem texto, cai no status pela presença do fornecedor.
+function mapearStatusPlanilha(texto: string, temForn: boolean): FornecedorStatus {
+  const n = nm(texto)
+  if (n.includes('assinar') || n.includes('aguard') || n.includes('assinatura')) return 'aguardando'
+  if (n.includes('ok') || n.includes('fechado') || n.includes('assinado') || n.includes('pago') || n.includes('confirmado')) return 'fechado'
+  return temForn ? 'fechado' : 'aberto'
+}
+
 function canonicalCat(cat: string): CanonicalCat | null {
   const n = nm(cat)
   if (n.includes('buffet')) return 'Buffet'
@@ -79,13 +88,16 @@ export function parseEventoDetalhes(rows: unknown[][], tabName: string): EventoD
     if (!canon || fornMap[canon]) continue
     const fornecedor = cel(row, 1)
     const nForn = nm(fornecedor)
+    const temForn = !!fornecedor && fornecedor !== '-' && fornecedor !== '—'
+      && nForn !== 'nao tem' && nForn !== 'nao' && nForn !== 'nao ha' && fornecedor.length > 1
+    const statusTexto = cel(row, 2) || cel(row, 3)
     fornMap[canon] = {
-      categoria: canon, fornecedor,
-      fechado: !!fornecedor && fornecedor !== '-' && fornecedor !== '—'
-        && nForn !== 'nao tem' && nForn !== 'nao' && nForn !== 'nao ha' && fornecedor.length > 1,
+      categoria: canon,
+      fornecedor: temForn ? fornecedor : '',
+      status: mapearStatusPlanilha(statusTexto, temForn),
     }
   }
-  const fornecedores = CATS.map(cat => fornMap[cat] ?? { categoria: cat, fornecedor: '', fechado: false })
+  const fornecedores = CATS.map(cat => fornMap[cat] ?? { categoria: cat, fornecedor: '', status: 'aberto' as const })
 
   let lineupSection = secaoRows(rows, 'Lineup Artístico')
   if (lineupSection.length === 0) lineupSection = secaoRows(rows, 'Artístico')
