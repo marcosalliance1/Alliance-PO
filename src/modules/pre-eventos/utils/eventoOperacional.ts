@@ -61,6 +61,14 @@ function mapearStatusPlanilha(texto: string, temForn: boolean): FornecedorStatus
   return temForn ? 'fechado' : 'aberto'
 }
 
+// "23:00 a 00:30" / "23:00 as 00:30 - Fulano" → ["23:00", "00:30"]
+function parseHorarios(txt: string): [string, string] {
+  const m = txt.match(/(\d{1,2}:\d{2})\D+(\d{1,2}:\d{2})/)
+  if (m) return [m[1], m[2]]
+  const m2 = txt.match(/(\d{1,2}:\d{2})/)
+  return [m2 ? m2[1] : '', '']
+}
+
 function canonicalCat(cat: string): CanonicalCat | null {
   const n = nm(cat)
   if (n.includes('buffet')) return 'Buffet'
@@ -112,7 +120,8 @@ export function parseEventoDetalhes(rows: unknown[][], tabName: string): EventoD
     if (!artista || (!passedHeader && !cel(row, 0))) continue
     passedHeader = true
     const obsL = cel(row, 2) || cel(row, 3) || ''
-    lineup.push({ horario: cel(row, 0), artista, obs: obsL, status: mapearStatusPlanilha(obsL, false) })
+    const [ini, fim] = parseHorarios(cel(row, 0))
+    lineup.push({ atracao: artista, horarioInicio: ini, horarioTermino: fim, obs: obsL, status: mapearStatusPlanilha(obsL, false) })
   }
 
   return {

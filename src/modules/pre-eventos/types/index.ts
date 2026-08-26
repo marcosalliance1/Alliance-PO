@@ -77,7 +77,30 @@ export interface InfoEventoFornecedor {
 export function statusFornecedor(f: InfoEventoFornecedor): FornecedorStatus {
   return f.status ?? (f.fechado ? 'fechado' : 'aberto')
 }
-export interface InfoEventoLineup { horario: string; artista: string; obs: string; status?: FornecedorStatus }
+export interface InfoEventoLineup {
+  atracao: string
+  horarioInicio: string   // "23:00"
+  horarioTermino: string  // "00:30"
+  status?: FornecedorStatus
+  rider?: NotaFiscal       // arquivo do rider anexado
+  // legado (dados antigos): ler via lineupView()
+  artista?: string
+  horario?: string
+  obs?: string
+}
+
+// Normaliza um item de lineup, cobrindo dados antigos (artista/horario texto).
+export function lineupView(l: InfoEventoLineup): { atracao: string; inicio: string; termino: string; status: FornecedorStatus } {
+  const atracao = l.atracao || l.artista || ''
+  let inicio = l.horarioInicio || ''
+  let termino = l.horarioTermino || ''
+  if (!inicio && !termino && l.horario) {
+    const m = l.horario.match(/(\d{1,2}:\d{2})\D+(\d{1,2}:\d{2})/)
+    if (m) { inicio = m[1]; termino = m[2] }
+    else { const m2 = l.horario.match(/(\d{1,2}:\d{2})/); if (m2) inicio = m2[1] }
+  }
+  return { atracao, inicio, termino, status: l.status ?? 'aberto' }
+}
 export interface InfoEvento {
   nomeEvento: string
   tipo: string
