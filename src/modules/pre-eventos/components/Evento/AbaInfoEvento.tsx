@@ -24,7 +24,7 @@ const RiderAnexo: React.FC<{ rider?: NotaFiscal; onChange: (nf?: NotaFiscal) => 
   }
   if (rider) return (
     <div className="flex items-center gap-1">
-      <span className="text-[10px] text-success truncate max-w-[80px] cursor-pointer hover:underline" title={rider.nome} onClick={ver}>{rider.nome}</span>
+      <span className="text-[10px] text-success truncate max-w-[110px] cursor-pointer hover:underline" title={rider.nome} onClick={ver}>{rider.nome}</span>
       <button onClick={() => onChange(undefined)} className="text-muted hover:text-danger shrink-0" title="Remover"><X className="w-3 h-3" /></button>
     </div>
   )
@@ -87,12 +87,24 @@ export const AbaInfoEvento: React.FC<Props> = ({ orc, onChange }) => {
       <div className="bg-surface-2 border border-bordercol rounded-card p-5">
         <h3 className="text-white font-semibold text-sm mb-3 flex items-center gap-2"><Calendar className="w-4 h-4 text-accent" /> Dados do Evento</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {CAMPOS.map(([campo, label]) => (
-            <div key={campo}>
-              <label className={labelCls}>{label}</label>
-              <input className={inputCls} value={String(info[campo] ?? '')} onChange={e => upd({ [campo]: e.target.value } as Partial<InfoEvento>)} />
-            </div>
-          ))}
+          {CAMPOS.map(([campo, label]) => {
+            // Data e Total de convidados vêm de "Informações Gerais" (cabeçalho) — não redigitar.
+            const doCabecalho = campo === 'data'
+              ? (orc.data ? orc.data.split('-').reverse().join('/') : '')
+              : campo === 'totalConvidados' ? String(orc.quantidadeConvidados || '') : null
+            if (doCabecalho !== null) return (
+              <div key={campo}>
+                <label className={labelCls}>{label} <span className="text-[9px] text-muted/50">· do cabeçalho</span></label>
+                <input className={`${inputCls} opacity-60 cursor-not-allowed`} value={doCabecalho} readOnly title="Vem de Informações Gerais (edite lá em cima)" />
+              </div>
+            )
+            return (
+              <div key={campo}>
+                <label className={labelCls}>{label}</label>
+                <input className={inputCls} value={String(info[campo] ?? '')} onChange={e => upd({ [campo]: e.target.value } as Partial<InfoEvento>)} />
+              </div>
+            )
+          })}
           <div className="sm:col-span-2 lg:col-span-3">
             <label className={labelCls}>Link de venda</label>
             <input className={inputCls} value={info.linkVenda ?? ''} onChange={e => upd({ linkVenda: e.target.value || null })} placeholder="https://..." />
@@ -115,7 +127,7 @@ export const AbaInfoEvento: React.FC<Props> = ({ orc, onChange }) => {
             return (
               <div key={i} className="border border-bordercol/50 rounded-lg p-3">
                 <div className="flex items-end gap-2 flex-wrap">
-                  <div className="flex-1 min-w-[160px]">
+                  <div className="flex-1 min-w-[140px] max-w-[420px]">
                     <label className={labelCls}>Atração</label>
                     <input className={inputCls} placeholder="Nome da atração" value={v.atracao} onChange={e => setL({ atracao: e.target.value })} />
                   </div>
@@ -136,7 +148,7 @@ export const AbaInfoEvento: React.FC<Props> = ({ orc, onChange }) => {
                       ))}
                     </select>
                   </div>
-                  <div>
+                  <div className="min-w-[120px]">
                     <label className={labelCls}>Rider</label>
                     <div className="h-[38px] flex items-center"><RiderAnexo rider={l.rider} onChange={nf => setL({ rider: nf })} /></div>
                   </div>

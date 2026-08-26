@@ -1,4 +1,4 @@
-﻿import React, { useRef, useState, useEffect, useCallback } from 'react'
+﻿import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning, Database, Wallet, Eraser, Ticket, Check, Users } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
@@ -120,8 +120,19 @@ export const OrcamentoPage: React.FC = () => {
   const [dirty, setDirty] = useState(false)
   const [salvo, setSalvo] = useState(false)
   const [conflito, setConflito] = useState<{ servidor: string } | null>(null)
+  const [filtroFornecedor, setFiltroFornecedor] = useState('')
   // Versão (atualizado_em) que este cliente tinha ao abrir — trava de concorrência.
   const baseVersion = useRef<string | null>(null)
+
+  // Fornecedores usados neste orçamento (pro filtro interno).
+  const fornecedoresDoOrc = useMemo(() => {
+    if (!orc) return [] as string[]
+    const secs = [orc.operacaoEstrutura, orc.equipe, orc.atracao, orc.abBebidas, orc.extras]
+    const set = new Set<string>()
+    for (const sec of secs) for (const it of sec)
+      for (const f of (it.fornecedor || '').split('||').map(x => x.trim()).filter(Boolean)) set.add(f)
+    return [...set].sort()
+  }, [orc])
   const [showImportModal, setShowImportModal] = useState(false)
   const [showDriveModal, setShowDriveModal] = useState(false)
   const [showEverestModal, setShowEverestModal] = useState(false)
@@ -750,6 +761,19 @@ export const OrcamentoPage: React.FC = () => {
         />
       </SecaoAccordion>
 
+      {/* Filtro de fornecedor (dentro do orçamento) */}
+      {fornecedoresDoOrc.length > 0 && (
+        <div className="flex items-center gap-2 text-xs flex-wrap">
+          <span className="text-muted">Filtrar por fornecedor:</span>
+          <select value={filtroFornecedor} onChange={e => setFiltroFornecedor(e.target.value)}
+            className="bg-surface border border-bordercol rounded px-2 py-1.5 text-white outline-none focus:border-accent max-w-[240px]">
+            <option value="" className="bg-surface text-white">Todos</option>
+            {fornecedoresDoOrc.map(f => <option key={f} value={f} className="bg-surface text-white">{f}</option>)}
+          </select>
+          {filtroFornecedor && <button onClick={() => setFiltroFornecedor('')} className="text-accent hover:underline">limpar</button>}
+        </div>
+      )}
+
       {/* ── 3. Operação / Estrutura ── */}
       <SecaoAccordion
         title="Operação / Estrutura"
@@ -758,6 +782,7 @@ export const OrcamentoPage: React.FC = () => {
         <TabelaItens
           items={orc.operacaoEstrutura}
           onChange={items => updateSecao('operacaoEstrutura', items)}
+          filtroFornecedor={filtroFornecedor}
         />
       </SecaoAccordion>
 
@@ -777,6 +802,7 @@ export const OrcamentoPage: React.FC = () => {
         <TabelaItens
           items={orc.equipe}
           onChange={items => updateSecao('equipe', items)}
+          filtroFornecedor={filtroFornecedor}
         />
       </SecaoAccordion>
 
@@ -785,6 +811,7 @@ export const OrcamentoPage: React.FC = () => {
         <TabelaItens
           items={orc.atracao}
           onChange={items => updateSecao('atracao', items)}
+          filtroFornecedor={filtroFornecedor}
         />
       </SecaoAccordion>
 
@@ -793,6 +820,7 @@ export const OrcamentoPage: React.FC = () => {
         <TabelaItens
           items={orc.abBebidas}
           onChange={items => updateSecao('abBebidas', items)}
+          filtroFornecedor={filtroFornecedor}
         />
       </SecaoAccordion>
 
@@ -801,6 +829,7 @@ export const OrcamentoPage: React.FC = () => {
         <TabelaItens
           items={orc.extras}
           onChange={items => updateSecao('extras', items)}
+          filtroFornecedor={filtroFornecedor}
         />
       </SecaoAccordion>
 

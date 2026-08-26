@@ -11,6 +11,7 @@ interface Props {
   items: ItemOrcamento[]
   onChange: (items: ItemOrcamento[]) => void
   podeAdicionar?: boolean
+  filtroFornecedor?: string // se setado, mostra só itens desse fornecedor
 }
 
 const STATUS_COLORS: Record<ItemStatus, string> = {
@@ -238,8 +239,13 @@ const LinhaItem: React.FC<{
 }
 
 // ─── Tabela Principal ─────────────────────────────────────────────────────────
-const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true }) => {
+const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true, filtroFornecedor }) => {
   const { fornecedores } = useAppContext()
+  // Itens exibidos (aplica o filtro de fornecedor). Edições/add/remove usam `items` cheio.
+  const itemsView = useMemo(() => {
+    if (!filtroFornecedor) return items
+    return items.filter(i => (i.fornecedor || '').split('||').map(f => f.trim()).includes(filtroFornecedor))
+  }, [items, filtroFornecedor])
   const [gruposAbertos, setGruposAbertos] = useState<Set<string>>(new Set(['Time Alliance']))
 
   const toggleGrupo = (g: string) =>
@@ -277,10 +283,10 @@ const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true })
     setDragId(null); setOverId(null)
   }, [dragId, items, onChange])
 
-  const totOrcado  = items.reduce((s, i) => s + i.totalOrcado, 0)
-  const totPago    = items.reduce((s, i) => s + i.totalPagoReal, 0)
-  const totCliente = items.reduce((s, i) => s + i.valorPassadoCliente, 0)
-  const totBV      = items.reduce((s, i) => s + i.bvAbsoluto, 0)
+  const totOrcado  = itemsView.reduce((s, i) => s + i.totalOrcado, 0)
+  const totPago    = itemsView.reduce((s, i) => s + i.totalPagoReal, 0)
+  const totCliente = itemsView.reduce((s, i) => s + i.valorPassadoCliente, 0)
+  const totBV      = itemsView.reduce((s, i) => s + i.bvAbsoluto, 0)
   const totBVPct   = totPago > 0 ? (totBV / totPago) * 100 : 0
 
   type RenderRow =
@@ -291,11 +297,11 @@ const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true })
     const list: RenderRow[] = []
     const seen = new Set<string>()
     let nonGroupIdx = 0
-    for (const item of items) {
+    for (const item of itemsView) {
       if (item.grupo) {
         if (!seen.has(item.grupo)) {
           seen.add(item.grupo)
-          list.push({ kind: 'header', grupo: item.grupo, children: items.filter(i => i.grupo === item.grupo) })
+          list.push({ kind: 'header', grupo: item.grupo, children: itemsView.filter(i => i.grupo === item.grupo) })
         }
         if (gruposAbertos.has(item.grupo))
           list.push({ kind: 'item', item, idx: nonGroupIdx++, indentado: true })
@@ -304,7 +310,7 @@ const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true })
       }
     }
     return list
-  }, [items, gruposAbertos])
+  }, [itemsView, gruposAbertos])
 
   const thCls = 'px-2 py-2 text-left text-muted font-medium text-xs'
 
