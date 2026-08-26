@@ -70,7 +70,7 @@ export const AbaInfoEvento: React.FC<Props> = ({ orc, onChange }) => {
       <div className="bg-surface-2 border border-bordercol rounded-card p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-white font-semibold text-sm flex items-center gap-2"><Music className="w-4 h-4 text-accent" /> Lineup Artístico</h3>
-          <button onClick={() => upd({ lineup: [...info.lineup, { horario: '', artista: '', obs: '' }] })}
+          <button onClick={() => upd({ lineup: [...info.lineup, { horario: '', artista: '', obs: '', status: 'aberto' }] })}
             className="flex items-center gap-1 text-xs text-accent hover:underline"><Plus className="w-3.5 h-3.5" /> linha</button>
         </div>
         <div className="space-y-2">
@@ -83,6 +83,13 @@ export const AbaInfoEvento: React.FC<Props> = ({ orc, onChange }) => {
                 onChange={e => upd({ lineup: info.lineup.map((x, j) => j === i ? { ...x, artista: e.target.value } : x) })} />
               <input className={`${inputCls} flex-1`} placeholder="Obs" value={l.obs}
                 onChange={e => upd({ lineup: info.lineup.map((x, j) => j === i ? { ...x, obs: e.target.value } : x) })} />
+              <select value={l.status ?? 'aberto'}
+                onChange={e => upd({ lineup: info.lineup.map((x, j) => j === i ? { ...x, status: e.target.value as FornecedorStatus } : x) })}
+                className={`text-[11px] font-medium border rounded px-2 py-1.5 shrink-0 outline-none cursor-pointer ${STATUS_COR[l.status ?? 'aberto']}`}>
+                {(['aberto', 'aguardando', 'fechado'] as FornecedorStatus[]).map(s => (
+                  <option key={s} value={s} className="bg-surface text-white">{STATUS_LABEL[s]}</option>
+                ))}
+              </select>
               <button onClick={() => upd({ lineup: info.lineup.filter((_, j) => j !== i) })} className="text-muted hover:text-danger shrink-0"><Trash2 className="w-4 h-4" /></button>
             </div>
           ))}

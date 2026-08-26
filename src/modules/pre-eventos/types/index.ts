@@ -77,7 +77,7 @@ export interface InfoEventoFornecedor {
 export function statusFornecedor(f: InfoEventoFornecedor): FornecedorStatus {
   return f.status ?? (f.fechado ? 'fechado' : 'aberto')
 }
-export interface InfoEventoLineup { horario: string; artista: string; obs: string }
+export interface InfoEventoLineup { horario: string; artista: string; obs: string; status?: FornecedorStatus }
 export interface InfoEvento {
   nomeEvento: string
   tipo: string

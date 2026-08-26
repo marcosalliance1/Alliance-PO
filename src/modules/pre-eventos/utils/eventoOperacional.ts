@@ -111,7 +111,8 @@ export function parseEventoDetalhes(rows: unknown[][], tabName: string): EventoD
     const artista = cel(row, 1) || cel(row, 0)
     if (!artista || (!passedHeader && !cel(row, 0))) continue
     passedHeader = true
-    lineup.push({ horario: cel(row, 0), artista, obs: cel(row, 2) || cel(row, 3) || '' })
+    const obsL = cel(row, 2) || cel(row, 3) || ''
+    lineup.push({ horario: cel(row, 0), artista, obs: obsL, status: mapearStatusPlanilha(obsL, false) })
   }
 
   return {
