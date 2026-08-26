@@ -5,7 +5,7 @@ import { formatBRL, formatDate } from '../../utils/formatters'
 import CampoMoeda from '../UI/CampoMoeda'
 import { useCapEverest } from '../../hooks/useCapEverest'
 import {
-  agruparPorFornecedor, sugerirItemPara, dividirProporcional, fornecedorBate, SECOES,
+  agruparPorFornecedor, sugerirItemPara, dividirProporcional, fornecedorBate, nucleoCompartilhado, SECOES,
   type DestinoEverest, type FornecedorEverest, type SecaoKeyEverest,
 } from '../../utils/matchEverest'
 import { carregarDepara, type DeparaEntry } from '../../utils/deparaEverest'
@@ -24,12 +24,21 @@ export const ModalConciliacaoEverest: React.FC<Props> = ({ orc, onAplicar, onFec
   // não reaparecerem e evitar duplicata se associar de novo.
   const { grupos, nJaAssociados } = useMemo(() => {
     const todos = agruparPorFornecedor(titulos)
-    const fornsPagos: string[] = []
-    for (const s of SECOES) for (const it of orc[s.key])
-      if (it.totalPagoReal > 0)
-        for (const f of (it.fornecedor || '').split('||').map(x => x.trim()).filter(Boolean))
-          fornsPagos.push(f)
-    const visiveis = todos.filter(g => !fornsPagos.some(f => fornecedorBate(f, g.fornecedor)))
+    // Itens já lançados (Pago > 0), com seus fornecedores e valor pago.
+    const pagos: { forns: string[]; valor: number }[] = []
+    for (const s of SECOES) for (const it of orc[s.key]) {
+      if (it.totalPagoReal > 0) {
+        const forns = (it.fornecedor || '').split('||').map(x => x.trim()).filter(Boolean)
+        if (forns.length) pagos.push({ forns, valor: it.totalPagoReal })
+      }
+    }
+    const jaAssociado = (g: FornecedorEverest) => pagos.some(p =>
+      // match direto por nome (igualdade/substring)
+      p.forns.some(f => fornecedorBate(f, g.fornecedor)) ||
+      // OU núcleo de palavras em comum (≥2) + valor batendo (trava contra falso-positivo)
+      (Math.abs(p.valor - g.total) < 0.5 && p.forns.some(f => nucleoCompartilhado(f, g.fornecedor) >= 2))
+    )
+    const visiveis = todos.filter(g => !jaAssociado(g))
     return { grupos: visiveis, nJaAssociados: todos.length - visiveis.length }
   }, [titulos, orc])
   const [destinos, setDestinos] = useState<Record<string, DestinoEverest>>({})

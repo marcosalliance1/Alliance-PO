@@ -60,6 +60,18 @@ export function fornecedorBate(a: string, b: string): boolean {
   return na.includes(nb) || nb.includes(na)
 }
 
+// Quantas palavras significativas (≥3 letras, sem sufixos de razão social) dois
+// nomes compartilham. Usado (com trava de valor) pra detectar o mesmo fornecedor
+// escrito de forma diferente — ex.: "RENATO PENA - FENIX 360 CORPORATE" vs
+// "FENIX 360 CORPORATE INTELLIGENCE LTDA" compartilham 3 (fenix, 360, corporate).
+export function nucleoCompartilhado(a: string, b: string): number {
+  const toks = (s: string) => normFornecedor(s).split(/\s+/).filter(t => t.length >= 3)
+  const ta = new Set(toks(a))
+  let n = 0
+  for (const t of toks(b)) if (ta.has(t)) n++
+  return n
+}
+
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export interface CapTitulo {
