@@ -303,7 +303,7 @@ export async function exportarPDF(orc: Orcamento) {
 
     const linhas: [string, number][] = [
       ['Bolsa Folia',      orc.bolsaFolia],
-      ['Total Sympla',     totalSympla],
+      ['Total Ingressos',  totalSympla],
       ['Total Receitas',   totalReceitas],
       ['Total Orçado',     totalOrcado],
       ['Total Pago',       totalPago],

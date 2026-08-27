@@ -403,7 +403,7 @@ export const DashboardPage: React.FC = () => {
             <TrendingUp className="w-4 h-4 text-success" />
           </div>
           <div className="min-w-0">
-            <p className="text-muted text-xs">Sympla</p>
+            <p className="text-muted text-xs">Ingressos</p>
             <p className="text-success font-bold text-sm truncate">{formatBRL(kpis.sympla)}</p>
           </div>
         </div>

@@ -729,7 +729,7 @@ export const OrcamentoPage: React.FC = () => {
           />
           <div className="flex items-end">
             <div className="text-xs text-muted">
-              <p>Total Sympla:</p>
+              <p>Total Ingressos:</p>
               <p className="text-white font-semibold text-base">
                 {formatBRL(orc.receitasSympla.reduce((s, l) => s + l.total, 0))}
               </p>
@@ -738,7 +738,7 @@ export const OrcamentoPage: React.FC = () => {
         </div>
         <div className="flex items-end justify-between gap-2 mb-3 flex-wrap">
           <div>
-            <p className="text-xs text-muted">Lotes Sympla</p>
+            <p className="text-xs text-muted">Lotes de Ingresso</p>
             {(() => {
               const cv = custoVariavelPorPessoa(orc)
               return cv.formandos > 0 && cv.totalAB > 0 ? (
@@ -756,7 +756,7 @@ export const OrcamentoPage: React.FC = () => {
         <TabelaLotes
           lotes={orc.receitasSympla}
           onChange={l => set('receitasSympla', l)}
-          labelTotal="TOTAL SYMPLA"
+          labelTotal="TOTAL INGRESSOS"
           nomeItem="Lote"
         />
       </SecaoAccordion>

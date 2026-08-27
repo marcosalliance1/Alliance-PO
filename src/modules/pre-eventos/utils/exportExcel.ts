@@ -50,7 +50,7 @@ export function exportarExcel(orc: Orcamento) {
     [],
     ['RESUMO FINANCEIRO'],
     ['Bolsa Folia',    orc.bolsaFolia],
-    ['Total Sympla',   totalSympla],
+    ['Total Ingressos', totalSympla],
     ['Total Receitas', totalReceitas],
     ['Total Orçado',   totalOrcado],
     ['Total Pago',     totalPago],
