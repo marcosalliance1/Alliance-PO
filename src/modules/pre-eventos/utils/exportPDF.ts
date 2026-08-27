@@ -283,39 +283,38 @@ export async function exportarPDF(orc: Orcamento) {
 
   // Resumo financeiro
   const finalY = (doc as any).lastAutoTable?.finalY ?? 140
-  const sy = finalY + 6
+  let sy = finalY + 6
+  if (sy > 155) { doc.addPage(); sy = 12 } // sempre renderiza o resumo — nova página se faltar espaço
 
-  if (sy < 165) {
-    const totalSympla   = orc.receitasSympla.reduce((s, l) => s + l.total, 0)
-    const totalReceitas = orc.bolsaFolia + totalSympla
-    const allItems      = [...orc.operacaoEstrutura, ...orc.equipe, ...orc.atracao, ...orc.abBebidas, ...orc.extras]
-    const totalOrcado   = allItems.reduce((s, i) => s + i.totalOrcado, 0)
-    const totalPago     = allItems.reduce((s, i) => s + i.totalPagoReal, 0)
-    const saldo         = totalReceitas - totalPago
+  const totalSympla   = orc.receitasSympla.reduce((s, l) => s + l.total, 0)
+  const totalReceitas = orc.bolsaFolia + totalSympla
+  const allItems      = [...orc.operacaoEstrutura, ...orc.equipe, ...orc.atracao, ...orc.abBebidas, ...orc.extras]
+  const totalOrcado   = allItems.reduce((s, i) => s + i.totalOrcado, 0)
+  const totalPago     = allItems.reduce((s, i) => s + i.totalPagoReal, 0)
+  const saldo         = totalReceitas - totalPago
 
-    doc.setFillColor(...HDR_BG)
-    doc.rect(10, sy, 120, 7, 'F')
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...HDR_TEXT)
-    doc.text('RESUMO FINANCEIRO', 13, sy + 5.5)
+  doc.setFillColor(...HDR_BG)
+  doc.rect(10, sy, 120, 7, 'F')
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...HDR_TEXT)
+  doc.text('RESUMO FINANCEIRO', 13, sy + 5.5)
 
-    const linhas: [string, number][] = [
-      ['Bolsa Folia',      orc.bolsaFolia],
-      ['Total Ingressos',  totalSympla],
-      ['Total Receitas',   totalReceitas],
-      ['Total Orçado',     totalOrcado],
-      ['Total Pago',       totalPago],
-      ['Saldo da Turma',   saldo],
-    ]
+  const linhas: [string, number][] = [
+    ['Bolsa Folia',      orc.bolsaFolia],
+    ['Total Ingressos',  totalSympla],
+    ['Total Receitas',   totalReceitas],
+    ['Total Orçado',     totalOrcado],
+    ['Total Pago',       totalPago],
+    ['Saldo da Turma',   saldo],
+  ]
 
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal')
-    linhas.forEach(([k, v], i) => {
-      const ry = sy + 13 + i * 6
-      doc.setTextColor(...TEXT_MUT); doc.text(k, 13, ry)
-      const isColor = k.startsWith('Saldo') || k.startsWith('Total Receitas')
-      doc.setTextColor(...(isColor ? (v >= 0 ? GREEN : RED) : TEXT))
-      doc.text(formatBRL(v), 128, ry, { align: 'right' })
-    })
-  }
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal')
+  linhas.forEach(([k, v], i) => {
+    const ry = sy + 13 + i * 6
+    doc.setTextColor(...TEXT_MUT); doc.text(k, 13, ry)
+    const isColor = k.startsWith('Saldo') || k.startsWith('Total Receitas')
+    doc.setTextColor(...(isColor ? (v >= 0 ? GREEN : RED) : TEXT))
+    doc.text(formatBRL(v), 128, ry, { align: 'right' })
+  })
 
   // Rodapé
   const total = doc.getNumberOfPages()
@@ -506,33 +505,33 @@ export async function exportarRelatorioCliente(orc: Orcamento) {
   secaoTableCliente(doc, 'A&B — ALIMENTOS E BEBIDAS', orc.abBebidas)
   secaoTableCliente(doc, 'EXTRAS',                    orc.extras)
 
-  // Resumo da turma (sem orçado, sem custo real, sem margem)
+  // Resumo da turma (sem orçado, sem custo real, sem margem) — SEMPRE renderiza
+  // (é o "resultado da festa": Receita − V. Cliente = Saldo). Nova página se faltar espaço.
   const finalY = (doc as any).lastAutoTable?.finalY ?? 140
-  const sy = finalY + 6
-  if (sy < 165) {
-    const totalReceitas = orc.bolsaFolia + orc.receitasSympla.reduce((s, l) => s + l.total, 0)
-    const allItems      = [...orc.operacaoEstrutura, ...orc.equipe, ...orc.atracao, ...orc.abBebidas, ...orc.extras]
-    const totalCliente  = allItems.reduce((s, i) => s + i.valorPassadoCliente, 0)
-    const saldo         = totalReceitas - totalCliente
+  let sy = finalY + 6
+  if (sy > 165) { doc.addPage(); sy = 12 }
+  const totalReceitas = orc.bolsaFolia + orc.receitasSympla.reduce((s, l) => s + l.total, 0)
+  const allItems      = [...orc.operacaoEstrutura, ...orc.equipe, ...orc.atracao, ...orc.abBebidas, ...orc.extras]
+  const totalCliente  = allItems.reduce((s, i) => s + i.valorPassadoCliente, 0)
+  const saldo         = totalReceitas - totalCliente
 
-    doc.setFillColor(...HDR_BG); doc.rect(10, sy, 120, 7, 'F')
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...HDR_TEXT)
-    doc.text('RESUMO DA TURMA', 13, sy + 5.5)
+  doc.setFillColor(...HDR_BG); doc.rect(10, sy, 120, 7, 'F')
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...HDR_TEXT)
+  doc.text('RESUMO DA TURMA', 13, sy + 5.5)
 
-    const linhas: [string, number][] = [
-      ['Total Arrecadado (Receitas)', totalReceitas],
-      ['Total Investido no Evento',   totalCliente],
-      ['Saldo da Turma',              saldo],
-    ]
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal')
-    linhas.forEach(([k, v], i) => {
-      const ry = sy + 13 + i * 6
-      doc.setTextColor(...TEXT_MUT); doc.text(k, 13, ry)
-      const isColor = k.startsWith('Saldo') || k.startsWith('Total Arrecadado')
-      doc.setTextColor(...(isColor ? (v >= 0 ? GREEN : RED) : TEXT))
-      doc.text(formatBRL(v), 128, ry, { align: 'right' })
-    })
-  }
+  const linhas: [string, number][] = [
+    ['Total Arrecadado (Receitas)', totalReceitas],
+    ['Total Investido no Evento',   totalCliente],
+    ['Saldo da Turma',              saldo],
+  ]
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal')
+  linhas.forEach(([k, v], i) => {
+    const ry = sy + 13 + i * 6
+    doc.setTextColor(...TEXT_MUT); doc.text(k, 13, ry)
+    const isColor = k.startsWith('Saldo') || k.startsWith('Total Arrecadado')
+    doc.setTextColor(...(isColor ? (v >= 0 ? GREEN : RED) : TEXT))
+    doc.text(formatBRL(v), 128, ry, { align: 'right' })
+  })
 
   // Rodapé (sem "Confidencial")
   const total = doc.getNumberOfPages()
