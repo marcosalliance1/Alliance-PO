@@ -20,9 +20,6 @@ function temDados(i: ItemOrcamento): boolean {
   return i.custoUnitario > 0 || i.fornecedor.trim() !== '' || i.totalPagoReal > 0 || i.item.trim() !== ''
 }
 
-function fornecedorDisplay(f: string): string {
-  return f ? f.split('||').map(s => s.trim()).filter(Boolean).join(', ') : '—'
-}
 
 function secaoTable(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
   const filtered = items.filter(temDados)
@@ -118,8 +115,8 @@ function receitasTable(doc: jsPDF, orc: Orcamento) {
   ]
 
   let y = (doc as any).lastAutoTable?.finalY ?? 40
-  const estimatedH = 20 + (rows.length + 1) * 7
-  if (200 - y < Math.min(estimatedH, 45)) {
+  const estimatedH = 20 + (rows.length + 2) * 8
+  if (200 - y < estimatedH && estimatedH <= 165) {
     doc.addPage()
     y = 8
     ;(doc as any).lastAutoTable = { finalY: 8 }
@@ -426,8 +423,11 @@ function secaoTableCliente(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
   if (filtered.length === 0) return
 
   let y = (doc as any).lastAutoTable?.finalY ?? 40
-  const estimatedH = 20 + (filtered.length + 1) * 7
-  if (200 - y < Math.min(estimatedH, 45)) {
+  // Altura estimada da seção inteira (cabeçalho + linhas + subtotal).
+  const estimatedH = 20 + (filtered.length + 2) * 8
+  // Mantém a seção inteira na MESMA página: se não couber no que resta e couber
+  // numa página nova, começa numa nova. Só divide se for maior que uma página.
+  if (200 - y < estimatedH && estimatedH <= 165) {
     doc.addPage(); y = 8; (doc as any).lastAutoTable = { finalY: 8 }
   }
 
@@ -438,18 +438,18 @@ function secaoTableCliente(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
 
   const rows = filtered.map(i => [
     i.item,
-    fornecedorDisplay(i.fornecedor),
     String(i.qtde),
     formatBRL(i.valorPassadoCliente),
   ])
-  const subtotal = ['SUBTOTAL', '', '', formatBRL(filtered.reduce((s, i) => s + i.valorPassadoCliente, 0))]
+  const subtotal = ['SUBTOTAL', '', formatBRL(filtered.reduce((s, i) => s + i.valorPassadoCliente, 0))]
 
   autoTable(doc, {
     startY: y + 12,
-    head: [['Item', 'Fornecedor', 'Qtde', 'Valor']],
+    head: [['Item', 'Qtde', 'Valor']],
     body: rows,
     foot: [subtotal],
     theme: 'grid',
+    rowPageBreak: 'avoid',
     headStyles: { fillColor: [60, 60, 90] as [number,number,number], textColor: HDR_TEXT, fontSize: 9, fontStyle: 'bold' },
     bodyStyles: { textColor: TEXT, fontSize: 9, fillColor: ROW_ODD },
     alternateRowStyles: { fillColor: ROW_EVEN },
@@ -457,10 +457,9 @@ function secaoTableCliente(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
     styles: { lineColor: [220, 220, 230] as [number,number,number], lineWidth: 0.1 },
     margin: { left: 10, right: 10 },
     columnStyles: {
-      0: { cellWidth: 90 },
-      1: { cellWidth: 110 },
-      2: { cellWidth: 25, halign: 'right' },
-      3: { cellWidth: 52, halign: 'right' },
+      0: { cellWidth: 190 },
+      1: { cellWidth: 35, halign: 'right' },
+      2: { cellWidth: 52, halign: 'right' },
     },
   })
 }
@@ -500,12 +499,12 @@ export async function exportarRelatorioCliente(orc: Orcamento) {
   ;(doc as any).lastAutoTable = { finalY: 33 }
 
   // Seções — só o valor do cliente
+  receitasTable(doc, orc)
   secaoTableCliente(doc, 'OPERAÇÃO / ESTRUTURA',     orc.operacaoEstrutura)
   secaoTableCliente(doc, 'EQUIPE',                    orc.equipe)
   secaoTableCliente(doc, 'ATRAÇÃO',                   orc.atracao)
   secaoTableCliente(doc, 'A&B — ALIMENTOS E BEBIDAS', orc.abBebidas)
   secaoTableCliente(doc, 'EXTRAS',                    orc.extras)
-  receitasTable(doc, orc)
 
   // Resumo da turma (sem orçado, sem custo real, sem margem)
   const finalY = (doc as any).lastAutoTable?.finalY ?? 140
