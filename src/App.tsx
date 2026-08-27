@@ -32,6 +32,7 @@ import { ListaOrcamentosPage } from './modules/pre-eventos/pages/Orcamentos/List
 import { NovoOrcamentoPage } from './modules/pre-eventos/pages/Orcamentos/NovoOrcamentoPage'
 import { OrcamentoPage } from './modules/pre-eventos/pages/Orcamentos/OrcamentoPage'
 import { ConfiguracoesPage } from './modules/pre-eventos/pages/Configuracoes/ConfiguracoesPage'
+import { CatalogoPage } from './modules/pre-eventos/pages/Catalogo/CatalogoPage'
 import { ListaSimuladorPage } from './modules/pre-eventos/pages/Simulador/ListaSimuladorPage'
 import { SimuladorPage } from './modules/pre-eventos/pages/Simulador/SimuladorPage'
 import { Operacional } from './pages/Operacional'
@@ -323,6 +324,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="catalogo" element={<CatalogoPage />} />
         <Route path="orcamentos" element={<ListaOrcamentosPage />} />
         <Route path="orcamentos/novo" element={<NovoOrcamentoPage />} />
         <Route path="orcamentos/:id" element={<OrcamentoPage />} />
