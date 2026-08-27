@@ -565,8 +565,8 @@ export const DashboardPage: React.FC = () => {
       <div className="bg-surface-2 border border-bordercol rounded-card p-5">
         <h2 className="text-white font-semibold text-sm mb-4">Eventos por Mês</h2>
         {eventosPorMes.length > 0 ? (
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={eventosPorMes} margin={{ top: 36, right: 20, left: 20, bottom: 0 }}>
+          <ResponsiveContainer width="100%" height={360}>
+            <LineChart data={eventosPorMes} margin={{ top: 100, right: 44, left: 44, bottom: 0 }}>
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#8892a4' }} axisLine={false} tickLine={false} />
               <YAxis hide allowDecimals={false} />
               <Tooltip
