@@ -133,6 +133,7 @@ export interface Orcamento {
   atualizadoPor?: string // nome de quem salvou por último (autoria)
   bolsaFolia: number
   receitasSympla: SymplaLote[]
+  plataformasVenda?: string[] // por onde os ingressos são vendidos (Sympla, PIX, …) — múltiplo
   operacaoEstrutura: ItemOrcamento[]
   equipe: ItemOrcamento[]
   atracao: ItemOrcamento[]

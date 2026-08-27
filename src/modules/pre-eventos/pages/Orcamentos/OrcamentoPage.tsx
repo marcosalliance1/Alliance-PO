@@ -108,6 +108,9 @@ function aplicarPagoPorData(o: Orcamento): Orcamento {
   return mudou ? novo : o
 }
 
+// Plataformas/formas de venda sugeridas (múltiplo — um pré-evento pode usar várias).
+const PLATAFORMAS_PADRAO = ['Sympla', 'PIX', 'Dinheiro', 'Cartão', 'Transferência']
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export const OrcamentoPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -133,6 +136,21 @@ export const OrcamentoPage: React.FC = () => {
       for (const f of (it.fornecedor || '').split('||').map(x => x.trim()).filter(Boolean)) set.add(f)
     return [...set].sort()
   }, [orc])
+
+  // Plataformas/formas de venda dos ingressos (múltiplo).
+  const plataformasChips = useMemo(() => {
+    const custom = (orc?.plataformasVenda ?? []).filter(p => !PLATAFORMAS_PADRAO.includes(p))
+    return [...PLATAFORMAS_PADRAO, ...custom]
+  }, [orc])
+  function togglePlataforma(p: string) {
+    const cur = orc?.plataformasVenda ?? []
+    set('plataformasVenda', cur.includes(p) ? cur.filter(x => x !== p) : [...cur, p])
+  }
+  function adicionarPlataforma() {
+    const nova = window.prompt('Outra plataforma ou forma de venda:')?.trim()
+    const cur = orc?.plataformasVenda ?? []
+    if (nova && !cur.includes(nova)) set('plataformasVenda', [...cur, nova])
+  }
   const [showImportModal, setShowImportModal] = useState(false)
   const [showDriveModal, setShowDriveModal] = useState(false)
   const [showEverestModal, setShowEverestModal] = useState(false)
@@ -721,6 +739,20 @@ export const OrcamentoPage: React.FC = () => {
         subtitle={`Total: ${formatBRL(totalReceitas)}`}
         defaultOpen
       >
+        {/* Vendido via (plataformas/formas — múltiplo) */}
+        <div className="flex items-center gap-2 flex-wrap mb-5">
+          <span className="text-xs text-muted">Vendido via:</span>
+          {plataformasChips.map(p => {
+            const on = (orc.plataformasVenda ?? []).includes(p)
+            return (
+              <button key={p} type="button" onClick={() => togglePlataforma(p)}
+                className={`text-xs border rounded-full px-2.5 py-1 transition-colors ${on ? 'bg-accent/20 text-accent border-accent/40' : 'text-muted border-bordercol hover:text-white'}`}>
+                {on ? '✓ ' : ''}{p}
+              </button>
+            )
+          })}
+          <button type="button" onClick={adicionarPlataforma} className="text-xs text-accent hover:underline">+ outra</button>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
           <CampoComLabel
             label="Bolsa Folia (R$)"
