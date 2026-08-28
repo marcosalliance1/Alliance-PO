@@ -136,6 +136,16 @@ export function ProjectDashboard({ projeto }: Props) {
     (r) => r.vendido === 0 && r.orcado === 0 && r.contratado === 0 && r.pago === 0,
   )
 
+  // ── Despesa Fee (itens com Sub Cat. "Despesa Fee" dentro de Custos Administrativos) ──
+  const despesaFeePago = useMemo(() => {
+    const secaoAdmin = projeto.secoes.find((s) => `${s.numero} ${s.nome}`.toLowerCase().includes('administrativ'))
+    const pago = (secaoAdmin?.itens ?? [])
+      .filter((i) => i.subcategoria.trim().toLowerCase() === 'despesa fee')
+      .reduce((s, i) => s + i.valorPago, 0)
+    return pago
+  }, [projeto.secoes])
+  const despesaFeePct = pct(despesaFeePago, valorPago)
+
   return (
     <div className="space-y-6">
 
@@ -154,6 +164,12 @@ export function ProjectDashboard({ projeto }: Props) {
         <MargemItem label="Margem Orçada (%)" value={margemOrcada} />
         <MargemItem label="Margem Contratada (%)" value={margemContratada} />
         <MargemItem label="Margem Real Everest (%)" value={margemEverest} gold />
+      </div>
+
+      {/* ── Despesa Fee (2.8 Custos Administrativos, Sub Cat. "Despesa Fee") ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <KPIBlock label="Despesa Fee — Já Pago" value={formatBRL(despesaFeePago)} color="#8B5CF6" />
+        <KPIBlock label="Despesa Fee — % do Total Pago" value={`${despesaFeePct.toFixed(1)}%`} color="#8B5CF6" />
       </div>
 
       {/* ── Gráfico 1 e 2 ─────────────────────────────────────────────────── */}
