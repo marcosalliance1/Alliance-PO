@@ -279,9 +279,8 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
                               ? <CheckCircle2 size={13} className="text-success shrink-0" />
                               : <AlertTriangle size={13} className="text-warning/60 shrink-0" />
                             }
-                            <span className="text-sm text-text-main flex-1">{sub}</span>
-                            <span className="text-xs text-success">{fmtBRL(vals.pago)}</span>
-                            <span className="text-xs text-text-muted">/ {fmtBRL(vals.contratado)}</span>
+                            <span className="text-sm text-text-main font-semibold flex-1">{sub}</span>
+                            <span className="text-xs text-text-main font-medium tabular-nums shrink-0">{fmtBRL(vals.contratado)}</span>
                           </div>
                           {vals.contratado > 0 && (
                             <div className="ml-[25px] h-1 bg-white/10 rounded-full overflow-hidden">
@@ -298,8 +297,7 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
                                   <div key={item.id} className="space-y-0.5">
                                     <div className="flex items-center gap-2">
                                       <span className="text-xs text-text-muted flex-1 truncate">{item.item || sub}</span>
-                                      <span className="text-[11px] text-success shrink-0">{fmtBRL(item.valorPago)}</span>
-                                      <span className="text-[11px] text-text-muted shrink-0">/ {fmtBRL(item.valorContratado)}</span>
+                                      <span className="text-[11px] text-text-main tabular-nums shrink-0">{fmtBRL(item.valorContratado)}</span>
                                     </div>
                                     {item.valorContratado > 0 && (
                                       <div className="h-0.5 bg-white/10 rounded-full overflow-hidden">
