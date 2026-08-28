@@ -10,7 +10,7 @@ import { supabase } from '../../lib/supabase'
 import { usePortalAuth } from '../../contexts/PortalAuthContext'
 import { calcResumoProjeto, filtrarItensCalculo, projetoVisaoCliente } from '../../utils/calculos'
 import allianceLogo from '../../assets/alliance-logo.png'
-import type { Projeto, SecaoCusto, TAP, Receitas, CustoAdicional, ConciliacaoEverest, LinhaResumoComercial } from '../../types'
+import type { Projeto, SecaoCusto, TAP, Receitas, CustoAdicional, ConciliacaoEverest, LinhaResumoComercial, ItemCusto } from '../../types'
 import type { Orcamento, ItemOrcamento } from '../../modules/pre-eventos/types'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -260,9 +260,26 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
                 // Regra #2 da spec: só itens com dado real (esconde linhas de template R$0).
                 const itensFiltrados = filtrarItensCalculo(secao.itens)
                   .filter(i => i.valorContratado > 0 || i.valorPago > 0 || i.valorOrcado > 0)
+                // Mapa código → item (itens brutos), pra achar o item-mãe pelo prefixo do código.
+                // Ex.: filho "2.7.16.1" (Diogo) → pai "2.7.16" (Rescisões). O pai carrega o nome do grupo.
+                const porCodigo = new Map<string, ItemCusto>()
+                for (const it of secao.itens) {
+                  const c = it.codigo?.trim()
+                  if (c) porCodigo.set(c, it)
+                }
+                const grupoDe = (item: ItemCusto): string => {
+                  const cod = item.codigo?.trim() ?? ''
+                  const idx = cod.lastIndexOf('.')
+                  if (idx > 0) {
+                    const pai = porCodigo.get(cod.slice(0, idx))
+                    const nomePai = pai?.item?.trim()
+                    if (nomePai) return nomePai
+                  }
+                  return item.subcategoria?.trim() || item.area?.trim() || 'Geral'
+                }
                 const porSubcat: Record<string, { contratado: number; pago: number; itens: typeof itensFiltrados }> = {}
                 for (const item of itensFiltrados) {
-                  const sub = item.subcategoria?.trim() || item.area?.trim() || 'Geral'
+                  const sub = grupoDe(item)
                   if (!porSubcat[sub]) porSubcat[sub] = { contratado: 0, pago: 0, itens: [] }
                   porSubcat[sub].contratado += item.valorContratado
                   porSubcat[sub].pago += item.valorPago
