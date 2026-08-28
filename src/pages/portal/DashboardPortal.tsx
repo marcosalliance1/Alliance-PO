@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
-import { CheckCircle2, AlertTriangle, LogOut, ChevronDown, ChevronRight, Download } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, LogOut, ChevronDown, ChevronRight, Download, Wallet, CalendarDays, ArrowRight } from 'lucide-react'
 import { gerarPrestacaoContas } from '../../lib/gerarPrestacaoContas'
 import { supabase } from '../../lib/supabase'
 import { usePortalAuth } from '../../contexts/PortalAuthContext'
@@ -900,6 +900,41 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'pre-eventos',  label: 'Pré-Eventos' },
 ]
 
+// ─── Capa do portal (tela inicial: turma + caminhos) ──────────────────────────
+
+function CapaPortal({ projeto, onIr }: { projeto: Projeto; onIr: (t: TabId) => void }) {
+  const inst = projeto.tap.instituicao || ''
+  const turma = projeto.tap.turma || 'Sua turma'
+  const cardCls = 'bg-surface border border-white/8 rounded-2xl p-6 text-left transition-colors'
+  return (
+    <div className="max-w-2xl mx-auto px-4 sm:px-8 py-14">
+      <div className="text-center mb-10">
+        {inst && <div className="text-text-muted text-xs uppercase tracking-widest">{inst}</div>}
+        <div className="text-text-main text-3xl font-bold mt-1">{turma}</div>
+        <div className="text-text-muted text-sm mt-2">Bem-vindos, comissão de formatura 👋</div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <button onClick={() => onIr('financeiro')} className={`${cardCls} hover:border-success/50`}>
+          <div className="w-11 h-11 rounded-xl bg-success/15 flex items-center justify-center mb-4">
+            <Wallet size={22} className="text-success" />
+          </div>
+          <div className="text-text-main text-lg font-semibold">Financeiro</div>
+          <div className="text-text-muted text-xs mt-1 leading-relaxed">Receitas, custos e a prestação de contas da turma.</div>
+          <div className="text-primary text-xs mt-4 flex items-center gap-1">Abrir <ArrowRight size={13} /></div>
+        </button>
+        <button onClick={() => onIr('pre-eventos')} className={`${cardCls} hover:border-warning/50`}>
+          <div className="w-11 h-11 rounded-xl bg-warning/15 flex items-center justify-center mb-4">
+            <CalendarDays size={22} className="text-warning" />
+          </div>
+          <div className="text-text-main text-lg font-semibold">Pré-Eventos</div>
+          <div className="text-text-muted text-xs mt-1 leading-relaxed">Cronograma e orçamento de cada festa da turma.</div>
+          <div className="text-primary text-xs mt-4 flex items-center gap-1">Abrir <ArrowRight size={13} /></div>
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function DashboardPortal() {
   const { session, signOut } = usePortalAuth()
   const { isAdmin } = useAuth()
@@ -908,6 +943,7 @@ export function DashboardPortal() {
   const [vencimentos, setVencimentos] = useState<CapVencimento[]>([])
   const [loading, setLoading] = useState(true)
   const [tabAtiva, setTabAtiva] = useState<TabId>('financeiro')
+  const [naCapa, setNaCapa] = useState(true)
 
   function handleSignOut() {
     signOut()
@@ -979,7 +1015,7 @@ export function DashboardPortal() {
 
       {/* Header */}
       <header className="sticky top-0 z-20 bg-surface border-b border-white/10 px-4 sm:px-8 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <button onClick={() => setNaCapa(true)} className="flex items-center gap-4 text-left hover:opacity-80 transition-opacity" title="Voltar ao início">
           <img src={allianceLogo} alt="Alliance" className="h-7 w-auto" style={{ mixBlendMode: 'screen' }} />
           <div>
             <div className="text-text-main font-semibold text-sm">{nomeEvento}</div>
@@ -989,39 +1025,45 @@ export function DashboardPortal() {
               </div>
             )}
           </div>
-        </div>
+        </button>
         <button onClick={handleSignOut} className="flex items-center gap-1.5 text-text-muted hover:text-text-main text-xs transition-colors">
           <LogOut size={13} /> Sair
         </button>
       </header>
 
-      {/* Tabs */}
-      <div className="border-b border-white/10 px-4 sm:px-8 overflow-x-auto">
-        <div className="flex gap-0 min-w-max">
-          {TABS.map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => setTabAtiva(id)}
-              className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-                tabAtiva === id ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text-main'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Conteúdo */}
-      <main className={`${tabAtiva === 'pre-eventos' ? 'max-w-7xl' : 'max-w-4xl'} mx-auto px-4 sm:px-8 py-8 transition-[max-width]`}>
-        {tabAtiva === 'financeiro'  && (
-          <div className="space-y-8">
-            <SecaoFinanceiro projeto={projetoCliente} vencimentos={vencimentos} />
-            <SecaoPO projeto={projetoCliente} />
+      {naCapa ? (
+        <CapaPortal projeto={projeto} onIr={(t) => { setTabAtiva(t); setNaCapa(false) }} />
+      ) : (
+        <>
+          {/* Tabs */}
+          <div className="border-b border-white/10 px-4 sm:px-8 overflow-x-auto">
+            <div className="flex gap-0 min-w-max">
+              {TABS.map(({ id, label }) => (
+                <button
+                  key={id}
+                  onClick={() => setTabAtiva(id)}
+                  className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+                    tabAtiva === id ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text-main'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-        )}
-        {tabAtiva === 'pre-eventos' && <SecaoPreEventos projeto={projeto} />}
-      </main>
+
+          {/* Conteúdo */}
+          <main className={`${tabAtiva === 'pre-eventos' ? 'max-w-7xl' : 'max-w-4xl'} mx-auto px-4 sm:px-8 py-8 transition-[max-width]`}>
+            {tabAtiva === 'financeiro'  && (
+              <div className="space-y-8">
+                <SecaoFinanceiro projeto={projetoCliente} vencimentos={vencimentos} />
+                <SecaoPO projeto={projetoCliente} />
+              </div>
+            )}
+            {tabAtiva === 'pre-eventos' && <SecaoPreEventos projeto={projeto} />}
+          </main>
+        </>
+      )}
     </div>
   )
 }
