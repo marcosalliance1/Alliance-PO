@@ -10,7 +10,7 @@ import { supabase } from '../../lib/supabase'
 import { usePortalAuth } from '../../contexts/PortalAuthContext'
 import { calcResumoProjeto, filtrarItensCalculo, projetoVisaoCliente } from '../../utils/calculos'
 import allianceLogo from '../../assets/alliance-logo.png'
-import type { Projeto, SecaoCusto, TAP, Receitas, CustoAdicional, ConciliacaoEverest, LinhaResumoComercial, ItemCusto } from '../../types'
+import type { Projeto, SecaoCusto, TAP, Receitas, CustoAdicional, ConciliacaoEverest, LinhaResumoComercial } from '../../types'
 import type { Orcamento, ItemOrcamento } from '../../modules/pre-eventos/types'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -260,43 +260,50 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
                 // Regra #2 da spec: só itens com dado real (esconde linhas de template R$0).
                 const itensFiltrados = filtrarItensCalculo(secao.itens)
                   .filter(i => i.valorContratado > 0 || i.valorPago > 0 || i.valorOrcado > 0)
-                // Mapa código → item (itens brutos), pra achar o item-mãe pelo prefixo do código.
-                // Ex.: filho "2.7.16.1" (Diogo) → pai "2.7.16" (Rescisões). O pai carrega o nome do grupo.
-                const porCodigo = new Map<string, ItemCusto>()
-                for (const it of secao.itens) {
-                  const c = it.codigo?.trim()
-                  if (c) porCodigo.set(c, it)
-                }
-                const grupoDe = (item: ItemCusto): string => {
-                  const cod = item.codigo?.trim() ?? ''
-                  const idx = cod.lastIndexOf('.')
-                  if (idx > 0) {
-                    const pai = porCodigo.get(cod.slice(0, idx))
-                    const nomePai = pai?.item?.trim()
-                    if (nomePai) return nomePai
+                // Item-mãe por POSIÇÃO: na planilha, o item-mãe é a linha com "Sub Categoria"
+                // vazia (mas com código e nome) logo acima dos filhos. Os códigos são
+                // inconsistentes entre turmas (P.O. combinada tem códigos duplicados/resetados),
+                // então a POSIÇÃO é o sinal confiável — não a hierarquia de código.
+                // Cabeçalho de TURMA (nome terminando em número, ex.: "DIREITO UNI 27") NÃO vira
+                // grupo: reseta o item-mãe pros itens soltos caírem na própria subcategoria.
+                const ehCabecalhoTurma = (nome: string) => /\d{1,3}$/.test(nome.trim())
+                const grupoPorId = new Map<string, { key: string; label: string }>()
+                let maeAtual: { key: string; label: string } | null = null
+                secao.itens.forEach((it, i) => {
+                  const temCodigo = (it.codigo?.trim() ?? '') !== ''
+                  const nome = (it.item ?? '').trim()
+                  const semSubcat = (it.subcategoria?.trim() ?? '') === ''
+                  if (semSubcat && temCodigo && nome) {
+                    // linha de item-mãe (ou cabeçalho de turma)
+                    maeAtual = ehCabecalhoTurma(nome) ? null : { key: `mae:${i}`, label: nome }
+                    return
                   }
-                  return item.subcategoria?.trim() || item.area?.trim() || 'Geral'
-                }
-                const porSubcat: Record<string, { contratado: number; pago: number; itens: typeof itensFiltrados }> = {}
+                  if (semSubcat && !temCodigo) return // linha de nota/comentário — ignora
+                  const label = maeAtual?.label ?? (it.subcategoria?.trim() || it.area?.trim() || 'Geral')
+                  const key = maeAtual?.key ?? `sub:${label}`
+                  grupoPorId.set(it.id, { key, label })
+                })
+                const porSubcat: Record<string, { label: string; contratado: number; pago: number; itens: typeof itensFiltrados }> = {}
                 for (const item of itensFiltrados) {
-                  const sub = grupoDe(item)
-                  if (!porSubcat[sub]) porSubcat[sub] = { contratado: 0, pago: 0, itens: [] }
-                  porSubcat[sub].contratado += item.valorContratado
-                  porSubcat[sub].pago += item.valorPago
-                  porSubcat[sub].itens.push(item)
+                  const fallback = item.subcategoria?.trim() || item.area?.trim() || 'Geral'
+                  const g = grupoPorId.get(item.id) ?? { key: `sub:${fallback}`, label: fallback }
+                  if (!porSubcat[g.key]) porSubcat[g.key] = { label: g.label, contratado: 0, pago: 0, itens: [] }
+                  porSubcat[g.key].contratado += item.valorContratado
+                  porSubcat[g.key].pago += item.valorPago
+                  porSubcat[g.key].itens.push(item)
                 }
                 return (
                   <div className="border-t border-white/8 px-4 pb-4 pt-3">
-                    {Object.entries(porSubcat).map(([sub, vals]) => {
+                    {Object.entries(porSubcat).map(([key, vals]) => {
                       const p = vals.contratado > 0 ? Math.min(100, (vals.pago / vals.contratado) * 100) : 0
                       return (
-                        <div key={sub} className="space-y-1 border-t border-white/8 pt-3 mt-3 first:border-t-0 first:pt-0 first:mt-0">
+                        <div key={key} className="space-y-1 border-t border-white/8 pt-3 mt-3 first:border-t-0 first:pt-0 first:mt-0">
                           <div className="flex items-center gap-3">
                             {vals.contratado > 0
                               ? <CheckCircle2 size={13} className="text-success shrink-0" />
                               : <AlertTriangle size={13} className="text-warning/60 shrink-0" />
                             }
-                            <span className="text-sm text-text-main font-semibold flex-1">{sub}</span>
+                            <span className="text-sm text-text-main font-semibold flex-1">{vals.label}</span>
                             <span className="text-xs text-text-main font-medium tabular-nums shrink-0">{fmtBRL(vals.contratado)}</span>
                           </div>
                           {vals.contratado > 0 && (
@@ -313,7 +320,7 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
                                 return (
                                   <div key={item.id} className="space-y-0.5">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xs text-text-muted flex-1 truncate">{item.item || sub}</span>
+                                      <span className="text-xs text-text-muted flex-1 truncate">{item.item || vals.label}</span>
                                       <span className="text-[11px] text-text-main tabular-nums shrink-0">{fmtBRL(item.valorContratado)}</span>
                                     </div>
                                     {item.valorContratado > 0 && (
