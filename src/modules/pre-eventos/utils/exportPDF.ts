@@ -437,14 +437,13 @@ function secaoTableCliente(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
 
   const rows = filtered.map(i => [
     i.item,
-    String(i.qtde),
     formatBRL(i.valorPassadoCliente),
   ])
-  const subtotal = ['SUBTOTAL', '', formatBRL(filtered.reduce((s, i) => s + i.valorPassadoCliente, 0))]
+  const subtotal = ['SUBTOTAL', formatBRL(filtered.reduce((s, i) => s + i.valorPassadoCliente, 0))]
 
   autoTable(doc, {
     startY: y + 12,
-    head: [['Item', 'Qtde', 'Valor']],
+    head: [['Item', 'Valor']],
     body: rows,
     foot: [subtotal],
     theme: 'grid',
@@ -456,9 +455,8 @@ function secaoTableCliente(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
     styles: { lineColor: [220, 220, 230] as [number,number,number], lineWidth: 0.1 },
     margin: { left: 10, right: 10 },
     columnStyles: {
-      0: { cellWidth: 190 },
-      1: { cellWidth: 35, halign: 'right' },
-      2: { cellWidth: 52, halign: 'right' },
+      0: { cellWidth: 225 },
+      1: { cellWidth: 52, halign: 'right' },
     },
   })
 }
