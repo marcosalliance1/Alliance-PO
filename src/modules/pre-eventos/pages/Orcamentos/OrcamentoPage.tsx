@@ -1,6 +1,6 @@
 ﻿import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning, Database, Wallet, Eraser, Ticket, Check, Users } from 'lucide-react'
+import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning, Database, Wallet, Eraser, Ticket, Check, Users, Boxes } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL, newItemId } from '../../utils/formatters'
@@ -151,6 +151,20 @@ export const OrcamentoPage: React.FC = () => {
     const cur = orc?.plataformasVenda ?? []
     if (nova && !cur.includes(nova)) set('plataformasVenda', [...cur, nova])
   }
+
+  // Custos de "Estoque Alliance" (bebidas do próprio estoque) — agrega itens cujo
+  // fornecedor contém "estoque". Não vem do Everest (é lançado à mão), mas some num card.
+  const estoqueAlliance = useMemo(() => {
+    const secs = orc ? [orc.operacaoEstrutura, orc.equipe, orc.atracao, orc.abBebidas, orc.extras] : []
+    const itens: ItemOrcamento[] = []
+    for (const sec of secs) for (const it of sec)
+      if ((it.fornecedor || '').toLowerCase().includes('estoque')) itens.push(it)
+    return {
+      itens,
+      pago:    itens.reduce((s, i) => s + i.totalPagoReal, 0),
+      cliente: itens.reduce((s, i) => s + i.valorPassadoCliente, 0),
+    }
+  }, [orc])
   const [showImportModal, setShowImportModal] = useState(false)
   const [showDriveModal, setShowDriveModal] = useState(false)
   const [showEverestModal, setShowEverestModal] = useState(false)
@@ -729,6 +743,42 @@ export const OrcamentoPage: React.FC = () => {
       {abaAtiva === 'orcamento' && (<>
       {/* ── Painel de margem (planejamento: elas veem se fecha) ── */}
       <PainelMargem orc={orc} />
+
+      {/* ── Card Estoque Alliance (bebidas do próprio estoque, lançadas à mão) ── */}
+      {estoqueAlliance.itens.length > 0 && (
+        <div className="bg-surface-2 border border-bordercol rounded-card p-4">
+          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+            <h3 className="text-white font-semibold text-sm flex items-center gap-2">
+              <Boxes className="w-4 h-4 text-accent" /> Estoque Alliance
+            </h3>
+            <span className="text-[11px] text-muted">{estoqueAlliance.itens.length} item(ns) — bebidas do próprio estoque</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg border border-bordercol/50 p-3">
+              <p className="text-[11px] text-muted uppercase tracking-wide">Custo (Pago)</p>
+              <p className="text-lg font-bold text-white">{formatBRL(estoqueAlliance.pago)}</p>
+            </div>
+            <div className="rounded-lg border border-bordercol/50 p-3">
+              <p className="text-[11px] text-muted uppercase tracking-wide">Passado à Turma</p>
+              <p className="text-lg font-bold text-white">{formatBRL(estoqueAlliance.cliente)}</p>
+            </div>
+            <div className="rounded-lg border border-bordercol/50 p-3">
+              <p className="text-[11px] text-muted uppercase tracking-wide">Margem (BV)</p>
+              <p className={`text-lg font-bold ${estoqueAlliance.cliente - estoqueAlliance.pago >= 0 ? 'text-success' : 'text-danger'}`}>
+                {formatBRL(estoqueAlliance.cliente - estoqueAlliance.pago)}
+              </p>
+            </div>
+          </div>
+          <div className="mt-3">
+            {estoqueAlliance.itens.map(it => (
+              <div key={it.id} className="flex items-center justify-between text-xs border-t border-bordercol/40 py-1">
+                <span className="text-gray-300 truncate">{it.item || '(sem nome)'}</span>
+                <span className="text-muted shrink-0">{formatBRL(it.totalPagoReal)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Barra de progresso ── */}
       <BarraProgressoPagamento orc={orc} />

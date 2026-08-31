@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Projeto, ItemCusto, ItemCatalogo, TAP, Receitas, ConciliacaoEverest, CustoAdicional } from '../types'
+import { formatBRL } from '../utils/formatters'
 import { TAPForm } from '../components/projeto/TAPForm'
 import { SecaoCusto } from '../components/projeto/SecaoCusto'
 import { ResumoGeral } from '../components/projeto/ResumoGeral'
@@ -10,7 +11,7 @@ import { Header } from '../components/layout/Header'
 import { BadgeEscola } from '../components/ui/Badge'
 import { useAuth } from '../contexts/AuthContext'
 import { gerarRelatorioPendencias } from '../lib/gerarRelatorioPendencias'
-import { ArrowLeft, Save, Check, Loader, FileWarning } from 'lucide-react'
+import { ArrowLeft, Save, Check, Loader, FileWarning, Boxes } from 'lucide-react'
 
 interface ViewProjetoProps {
   projeto: Projeto
@@ -67,6 +68,15 @@ export function ViewProjeto({
     { id: 'resumo', label: 'Resumo Geral' },
     { id: 'financeiro-everest', label: 'Financeiro Everest' },
   ]
+
+  // Custos de "Estoque Alliance" (bebidas do próprio estoque, lançadas à mão):
+  // agrega itens de todas as seções cujo fornecedor contém "estoque".
+  const estoqueAlliance = useMemo(() => {
+    const itens: ItemCusto[] = []
+    for (const s of projeto.secoes) for (const it of s.itens)
+      if ((it.fornecedor || '').toLowerCase().includes('estoque')) itens.push(it)
+    return { itens, pago: itens.reduce((s, i) => s + (i.valorPago || 0), 0) }
+  }, [projeto])
 
   const handleUpdateItem = useCallback(
     (secaoId: string, itemId: string, changes: Partial<ItemCusto>) => {
@@ -143,6 +153,28 @@ export function ViewProjeto({
           )
         })}
       </div>
+
+      {/* Card Estoque Alliance (bebidas do próprio estoque, lançadas à mão) */}
+      {estoqueAlliance.itens.length > 0 && (
+        <div className="bg-surface-2 border border-white/10 rounded-lg p-4 mb-5">
+          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+            <h3 className="text-text-main font-semibold text-sm flex items-center gap-2">
+              <Boxes size={16} className="text-primary" /> Estoque Alliance
+            </h3>
+            <span className="text-[11px] text-text-muted">{estoqueAlliance.itens.length} item(ns) — bebidas do próprio estoque</span>
+          </div>
+          <p className="text-2xl font-bold text-text-main">{formatBRL(estoqueAlliance.pago)}</p>
+          <p className="text-[11px] text-text-muted mb-2">custo total (pago) das bebidas do estoque neste projeto</p>
+          <div>
+            {estoqueAlliance.itens.map((it) => (
+              <div key={it.id} className="flex items-center justify-between text-xs border-t border-white/8 py-1">
+                <span className="text-text-main/80 truncate">{it.item || '(sem nome)'}</span>
+                <span className="text-text-muted shrink-0">{formatBRL(it.valorPago || 0)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {abaAtiva === 'tap' && (
         <TAPForm
