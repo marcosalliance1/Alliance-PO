@@ -190,19 +190,19 @@ export const OrcamentoPage: React.FC = () => {
     setDirty(true)
   }
 
+  // Mudar convidados/tipo NÃO regenera mais a equipe automaticamente (evitava
+  // perder os ajustes manuais). Pra regenerar, use o botão "Recalcular automações".
   const handleConvidadosChange = useCallback((qtde: number) => {
     if (!orc) return
-    const updated = atualizarEquipe({ ...orc, quantidadeConvidados: qtde }, config)
-    setOrc(updated)
+    setOrc({ ...orc, quantidadeConvidados: qtde })
     setDirty(true)
-  }, [orc, atualizarEquipe, config])
+  }, [orc])
 
   const handleTipoChange = useCallback((tipo: EventType) => {
     if (!orc) return
-    const updated = atualizarEquipe({ ...orc, tipo }, config)
-    setOrc(updated)
+    setOrc({ ...orc, tipo })
     setDirty(true)
-  }, [orc, atualizarEquipe, config])
+  }, [orc])
 
   // Grava com trava de concorrência. Se outra pessoa salvou desde que abri,
   // NÃO sobrescreve — sinaliza conflito pra decidir (recarregar ou forçar).
