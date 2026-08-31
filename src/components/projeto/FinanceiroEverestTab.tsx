@@ -111,14 +111,14 @@ export function FinanceiroEverestTab({ projeto }: { projeto: Projeto }) {
                 <p className="text-[11px] text-text-muted uppercase tracking-wide mb-1">Pago (itens do P.O.)</p>
                 <p className="text-lg font-semibold text-text-main">{formatBRL(resumoPO.custoTotal.pago)}</p>
               </div>
-              <div className="rounded-inner border border-primary/30 bg-primary/5 p-3">
-                <p className="text-[11px] text-text-muted uppercase tracking-wide mb-1">Pago (Everest — CAP real)</p>
-                <p className="text-lg font-semibold text-primary">{formatBRL(totais.totalCAP)}</p>
+              <div className="rounded-inner border border-white/10 p-3">
+                <p className="text-[11px] text-text-muted uppercase tracking-wide mb-1">Despesa Real (Everest)</p>
+                <p className="text-lg font-semibold text-text-main">{formatBRL(totais.despesaTotal)}</p>
               </div>
             </div>
-            {Math.abs(resumoPO.custoTotal.pago - totais.totalCAP) > 0.01 && (
+            {Math.abs(resumoPO.custoTotal.pago - totais.despesaTotal) > 0.01 && (
               <p className="text-xs mt-3 flex items-center gap-1.5" style={{ color: '#F59E0B' }}>
-                <AlertTriangle size={13} /> Diferença de {formatBRL(Math.abs(resumoPO.custoTotal.pago - totais.totalCAP))} entre o "pago" registrado nos itens do P.O. e o total pago no Everest.
+                <AlertTriangle size={13} /> Diferença de {formatBRL(Math.abs(resumoPO.custoTotal.pago - totais.despesaTotal))} entre o "pago" registrado nos itens do P.O. e a despesa real no Everest (CAP + Tarifas).
               </p>
             )}
           </div>
