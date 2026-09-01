@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react'
-import { Calendar, Music, Users, Plus, Trash2, Download, Paperclip, X } from 'lucide-react'
+import { Calendar, Music, Users, Plus, Trash2, Download, Paperclip, X, FileText } from 'lucide-react'
 import type { Orcamento, InfoEvento, FornecedorStatus, NotaFiscal } from '../../types'
 import { statusFornecedor, lineupView } from '../../types'
+import { exportarOS } from '../../utils/exportPDF'
 import { ModalImportarEvento } from './ModalImportarEvento'
 
 // Anexo de arquivo (rider) — mesma ideia da NF: guarda base64 no orçamento.
@@ -77,10 +78,16 @@ export const AbaInfoEvento: React.FC<Props> = ({ orc, onChange }) => {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-xs text-muted">Preencha as informações do evento — ou importe da planilha antiga.</p>
-        <button onClick={() => setImportar(true)}
-          className="flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors">
-          <Download className="w-4 h-4" /> Importar da planilha
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => exportarOS(orc)}
+            className="flex items-center gap-2 border border-accent/40 text-accent hover:bg-accent/10 text-sm py-2 px-3 rounded-lg transition-colors">
+            <FileText className="w-4 h-4" /> Gerar OS
+          </button>
+          <button onClick={() => setImportar(true)}
+            className="flex items-center gap-2 border border-bordercol text-muted hover:text-white hover:bg-white/5 text-sm py-2 px-3 rounded-lg transition-colors">
+            <Download className="w-4 h-4" /> Importar da planilha
+          </button>
+        </div>
       </div>
 
       {/* Dados gerais */}

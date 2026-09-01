@@ -1,6 +1,7 @@
 ﻿import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { Orcamento, ItemOrcamento } from '../types'
+import { statusFornecedor, lineupView } from '../types'
 import { EVENT_TYPE_LABELS } from '../data/defaults'
 import { formatBRL, formatDate } from './formatters'
 import allianceLogo from '../../../assets/alliance-logo.png'
@@ -570,5 +571,129 @@ export async function exportarRelatorioCliente(orc: Orcamento) {
     .join('')
   const turmaSlug = (orc.turma || '').replace(/\s+/g, '')
   const filename = `${tipoSlug}_${turmaSlug}`.replace(/[/\\:*?"<>|]/g, '') || 'relatorio_cliente'
+  doc.save(`${filename}.pdf`)
+}
+
+// ─── Ordem de Serviço (OS) ────────────────────────────────────────────────────
+// Documento operacional: fornecedores e atrações do evento com responsável e
+// contato. Responsável/Contato ficam em branco por enquanto — serão preenchidos
+// automaticamente pelo Catálogo quando a integração for ligada.
+const SIT_LABEL_OS: Record<string, string> = {
+  aberto: 'Em aberto', aguardando: 'Aguardando assinatura', fechado: 'Fechado',
+}
+
+// Faixa de título (barra escura) em página retrato (largura 190). Quebra de página
+// se estiver muito perto do rodapé, pra não deixar o título órfão.
+function faixaOS(doc: jsPDF, titulo: string) {
+  let y = (doc as any).lastAutoTable?.finalY ?? 40
+  if (y > 255) { doc.addPage(); y = 8 }
+  doc.setFillColor(...HDR_BG)
+  doc.rect(10, y + 4, 190, 7, 'F')
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...HDR_TEXT)
+  doc.text(titulo, 13, y + 9)
+  ;(doc as any).lastAutoTable = { finalY: y + 11 }
+}
+
+export async function exportarOS(orc: Orcamento) {
+  const logoImg = await new Promise<HTMLImageElement>((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(img)
+    img.src = allianceLogo
+  })
+  const hasLogo    = logoImg.naturalWidth > 0
+  const logoRatio  = hasLogo ? logoImg.naturalWidth / logoImg.naturalHeight : 4
+  const logoBranco = hasLogo ? logoParaBranco(logoImg) : ''
+  const logoH = 11, logoW = logoH * logoRatio, logoHF = 4.5, logoWF = logoHF * logoRatio
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  doc.setFillColor(255, 255, 255); doc.rect(0, 0, 210, 297, 'F')
+
+  // Cabeçalho
+  doc.setFillColor(...ACC); doc.rect(0, 0, 210, 16, 'F')
+  if (hasLogo) doc.addImage(logoBranco, 'PNG', 10, 2.5, logoW, logoH)
+  doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(...HDR_TEXT)
+  doc.text('ALLIANCE FORMATURAS', hasLogo ? 10 + logoW + 3 : 10, 11)
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal')
+  doc.text('Ordem de Serviço', 200, 11, { align: 'right' })
+
+  // Info do evento
+  const info = orc.infoEvento
+  doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(...TEXT)
+  doc.text(`${orc.instituicao || '—'} — ${orc.turma || '—'}`, 10, 25)
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...TEXT_MUT)
+  doc.text(`${EVENT_TYPE_LABELS[orc.tipo]}  |  Data: ${formatDate(orc.data)}  |  Convidados: ${orc.quantidadeConvidados}`, 10, 31)
+  const local = info?.local?.trim() || ''
+  const horario = info?.horario?.trim() || ''
+  if (local || horario) {
+    doc.text([local && `Local: ${local}`, horario && `Horário: ${horario}`].filter(Boolean).join('  |  '), 10, 36)
+  }
+  doc.setDrawColor(220, 220, 230); doc.setLineWidth(0.3); doc.line(10, 39, 200, 39)
+  ;(doc as any).lastAutoTable = { finalY: 39 }
+
+  const tabelaStyle = {
+    theme: 'grid' as const,
+    headStyles: { fillColor: [60, 60, 90] as [number,number,number], textColor: HDR_TEXT, fontSize: 9, fontStyle: 'bold' as const },
+    bodyStyles: { textColor: TEXT, fontSize: 9, fillColor: ROW_ODD },
+    alternateRowStyles: { fillColor: ROW_EVEN },
+    styles: { lineColor: [220, 220, 230] as [number,number,number], lineWidth: 0.1 },
+    margin: { left: 10, right: 10 },
+  }
+
+  // Fornecedores
+  const forn = info?.fornecedores ?? []
+  const fornRows = forn.map(f => [f.categoria || '—', f.fornecedor || '—', SIT_LABEL_OS[statusFornecedor(f)] || '', '', ''])
+  faixaOS(doc, 'FORNECEDORES')
+  autoTable(doc, {
+    startY: (doc as any).lastAutoTable.finalY + 2,
+    head: [['Categoria', 'Fornecedor', 'Situação', 'Responsável', 'Contato']],
+    body: fornRows.length ? fornRows : [['—', 'Nenhum fornecedor cadastrado', '', '', '']],
+    ...tabelaStyle,
+    columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 55 }, 2: { cellWidth: 35 }, 3: { cellWidth: 35 }, 4: { cellWidth: 30 } },
+  })
+
+  // Line-up / Atrações
+  const lineup = info?.lineup ?? []
+  if (lineup.length) {
+    const luRows = lineup.map(l => {
+      const v = lineupView(l)
+      const hor = (v.inicio || v.termino) ? `${v.inicio || '—'} - ${v.termino || '—'}` : ''
+      return [v.atracao || '—', hor, SIT_LABEL_OS[v.status] || '', '', '']
+    })
+    faixaOS(doc, 'LINE-UP / ATRAÇÕES')
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 2,
+      head: [['Atração', 'Horário', 'Situação', 'Responsável', 'Contato']],
+      body: luRows,
+      ...tabelaStyle,
+      columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: 30 }, 2: { cellWidth: 35 }, 3: { cellWidth: 35 }, 4: { cellWidth: 35 } },
+    })
+  }
+
+  // Nota sobre o preenchimento pendente (Catálogo)
+  {
+    const y = (doc as any).lastAutoTable?.finalY ?? 40
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(...TEXT_MUT)
+    doc.text('Responsável e Contato serão preenchidos automaticamente pelo Catálogo (integração em andamento).', 10, y + 6)
+  }
+
+  // Rodapé
+  const total = doc.getNumberOfPages()
+  for (let p = 1; p <= total; p++) {
+    doc.setPage(p)
+    doc.setFillColor(245, 245, 248); doc.rect(0, 290, 210, 7, 'F')
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...TEXT_MUT)
+    if (hasLogo) doc.addImage(logoImg, 'PNG', 10, 291, logoWF, logoHF)
+    doc.text('Alliance Formaturas — Ordem de Serviço', hasLogo ? 10 + logoWF + 2 : 10, 294.5)
+    doc.text(`Página ${p} de ${total}`, 200, 294.5, { align: 'right' })
+  }
+
+  const tipoSlug = (EVENT_TYPE_LABELS[orc.tipo] || orc.tipo)
+    .split(/\s+/)
+    .filter(w => !['de', 'da', 'do', 'das', 'dos', 'e'].includes(w.toLowerCase()))
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join('')
+  const turmaSlug = (orc.turma || '').replace(/\s+/g, '')
+  const filename = `OS_${tipoSlug}_${turmaSlug}`.replace(/[/\\:*?"<>|]/g, '') || 'OS'
   doc.save(`${filename}.pdf`)
 }
