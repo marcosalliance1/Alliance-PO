@@ -80,7 +80,6 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
   const previsaoLiquida = receitaPrevista * (1 - ccPct / 100)
   const aReceber = Math.max(0, previsaoLiquida - arrecadadoLiquido)
   const pctArrecadado = previsaoLiquida > 0 ? Math.min(100, (arrecadadoLiquido / previsaoLiquida) * 100) : 0
-  const saldoPrevisto = previsaoLiquida - custoContratado
   const temPrevisao = receitaPrevista > 0
 
   return (
@@ -158,11 +157,6 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
           <div className="flex justify-between text-xs border-t border-white/8 pt-2">
             <span className="text-text-muted">Ainda a receber (estimado)</span>
             <span className="text-text-main tabular-nums">{fmtBRL(aReceber)}</span>
-          </div>
-          <div className={`text-[11px] leading-relaxed rounded-lg px-3 py-2 ${saldoPrevisto >= 0 ? 'bg-success/10 text-success/90' : 'bg-warning/10 text-warning'}`}>
-            {saldoPrevisto >= 0
-              ? `Pela previsão, a receita cobre todo o custo já contratado e ainda sobra ${fmtBRL(saldoPrevisto)}.`
-              : `Pela previsão atual, a receita fica ${fmtBRL(-saldoPrevisto)} abaixo do custo já contratado — vale revisar vendas e custos com o time Alliance.`}
           </div>
           <div className="text-text-muted/50 text-[10px]">Estimativa pela receita orçada da P.O., já sem o fee. Não considera inadimplência.</div>
         </div>
