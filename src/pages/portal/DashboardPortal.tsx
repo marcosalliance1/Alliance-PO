@@ -74,6 +74,15 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
   const saldoLiquido = arrecadadoLiquido - custoPago
   const pctPago = custoContratado > 0 ? Math.min(100, (custoPago / custoContratado) * 100) : 0
 
+  // Previsão de receita: sai do ORÇADO da P.O. (fallback contratado), já líquido do fee —
+  // comparável ao "Arrecadado da turma". Mostra o que ainda vai entrar sem assustar.
+  const receitaPrevista = resumo.receitaBaile.orcado || resumo.receitaBaile.contratado
+  const previsaoLiquida = receitaPrevista * (1 - ccPct / 100)
+  const aReceber = Math.max(0, previsaoLiquida - arrecadadoLiquido)
+  const pctArrecadado = previsaoLiquida > 0 ? Math.min(100, (arrecadadoLiquido / previsaoLiquida) * 100) : 0
+  const saldoPrevisto = previsaoLiquida - custoContratado
+  const temPrevisao = receitaPrevista > 0
+
   return (
     <div className="space-y-5">
       {/* Baixar Prestação de Contas em PDF */}
@@ -131,6 +140,33 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
           <span className="text-success font-semibold tabular-nums">{fmtBRL(arrecadadoLiquido)}</span>
         </div>
       </div>
+
+      {/* Previsão de receita (estimativa) — o que ainda vai entrar, sem assustar */}
+      {temPrevisao && (
+        <div className="bg-bg rounded-xl px-4 py-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-text-main text-xs font-medium">Previsão de receita da turma</span>
+            <span className="text-[10px] uppercase tracking-wide text-text-muted/70 border border-white/10 rounded px-1.5 py-0.5">estimativa</span>
+          </div>
+          <div className="h-2.5 bg-white/10 rounded-full overflow-hidden">
+            <div className="h-full rounded-full transition-all" style={{ width: `${pctArrecadado}%`, background: '#00b894' }} />
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-success">{fmtBRL(arrecadadoLiquido)} já entraram</span>
+            <span className="text-text-muted">{pctArrecadado.toFixed(0)}% de {fmtBRL(previsaoLiquida)} previstos</span>
+          </div>
+          <div className="flex justify-between text-xs border-t border-white/8 pt-2">
+            <span className="text-text-muted">Ainda a receber (estimado)</span>
+            <span className="text-text-main tabular-nums">{fmtBRL(aReceber)}</span>
+          </div>
+          <div className={`text-[11px] leading-relaxed rounded-lg px-3 py-2 ${saldoPrevisto >= 0 ? 'bg-success/10 text-success/90' : 'bg-warning/10 text-warning'}`}>
+            {saldoPrevisto >= 0
+              ? `Pela previsão, a receita cobre todo o custo já contratado e ainda sobra ${fmtBRL(saldoPrevisto)}.`
+              : `Pela previsão atual, a receita fica ${fmtBRL(-saldoPrevisto)} abaixo do custo já contratado — vale revisar vendas e custos com o time Alliance.`}
+          </div>
+          <div className="text-text-muted/50 text-[10px]">Estimativa pela receita orçada da P.O., já sem o fee. Não considera inadimplência.</div>
+        </div>
+      )}
 
       {/* Progresso: pago do que já foi contratado */}
       <div className="bg-bg rounded-xl px-4 py-4">
