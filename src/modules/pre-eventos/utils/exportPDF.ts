@@ -467,6 +467,14 @@ function secaoTableCliente(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
   })
 }
 
+// Faixa de título (barra escura), mesmo estilo do cabeçalho de RECEITAS.
+function faixaTitulo(doc: jsPDF, titulo: string, y: number) {
+  doc.setFillColor(...HDR_BG)
+  doc.rect(10, y + 3, 277, 7, 'F')
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...HDR_TEXT)
+  doc.text(titulo, 13, y + 8.5)
+}
+
 export async function exportarRelatorioCliente(orc: Orcamento) {
   const logoImg = await new Promise<HTMLImageElement>((resolve) => {
     const img = new Image()
@@ -501,8 +509,14 @@ export async function exportarRelatorioCliente(orc: Orcamento) {
   doc.setDrawColor(220, 220, 230); doc.setLineWidth(0.3); doc.line(10, 33, 287, 33)
   ;(doc as any).lastAutoTable = { finalY: 33 }
 
-  // Seções — só o valor do cliente
+  // Seções — só o valor do cliente. Receitas na 1ª página; despesas começam
+  // em página nova, sob um cabeçalho DESPESAS (mesmo estilo do RECEITAS).
   receitasTable(doc, orc)
+
+  doc.addPage()
+  faixaTitulo(doc, 'DESPESAS', 8)
+  ;(doc as any).lastAutoTable = { finalY: 18 }
+
   secaoTableCliente(doc, 'OPERAÇÃO / ESTRUTURA',     orc.operacaoEstrutura)
   secaoTableCliente(doc, 'EQUIPE',                    orc.equipe)
   secaoTableCliente(doc, 'ATRAÇÃO',                   orc.atracao)
@@ -548,6 +562,13 @@ export async function exportarRelatorioCliente(orc: Orcamento) {
     doc.text(`Página ${p} de ${total}`, 287, 207.5, { align: 'right' })
   }
 
-  const filename = `relatorio_cliente_${orc.instituicao}_${orc.turma}`.replace(/[\s/]/g, '_').toLowerCase()
+  // Nome do arquivo: TipoDeEvento_Turma (ex: FestaMeioCurso_UNIFENAS42).
+  const tipoSlug = (EVENT_TYPE_LABELS[orc.tipo] || orc.tipo)
+    .split(/\s+/)
+    .filter(w => !['de', 'da', 'do', 'das', 'dos', 'e'].includes(w.toLowerCase()))
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join('')
+  const turmaSlug = (orc.turma || '').replace(/\s+/g, '')
+  const filename = `${tipoSlug}_${turmaSlug}`.replace(/[/\\:*?"<>|]/g, '') || 'relatorio_cliente'
   doc.save(`${filename}.pdf`)
 }
