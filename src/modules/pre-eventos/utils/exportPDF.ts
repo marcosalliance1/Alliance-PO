@@ -284,14 +284,17 @@ export async function exportarPDF(orc: Orcamento) {
   // Resumo financeiro
   const finalY = (doc as any).lastAutoTable?.finalY ?? 140
   let sy = finalY + 6
-  if (sy > 155) { doc.addPage(); sy = 12 } // sempre renderiza o resumo — nova página se faltar espaço
+  if (sy > 133) { doc.addPage(); sy = 12 } // sempre renderiza o resumo — nova página se faltar espaço (bloco tem 9 linhas)
 
   const totalSympla   = orc.receitasSympla.reduce((s, l) => s + l.total, 0)
   const totalReceitas = orc.bolsaFolia + totalSympla
   const allItems      = [...orc.operacaoEstrutura, ...orc.equipe, ...orc.atracao, ...orc.abBebidas, ...orc.extras]
   const totalOrcado   = allItems.reduce((s, i) => s + i.totalOrcado, 0)
   const totalPago     = allItems.reduce((s, i) => s + i.totalPagoReal, 0)
-  const saldo         = totalReceitas - totalPago
+  const totalCliente  = allItems.reduce((s, i) => s + i.valorPassadoCliente, 0)
+  const totalPagoComissao = allItems.reduce((s, i) => s + (i.status === 'PAGO_COMISSAO' ? i.valorPassadoCliente : 0), 0)
+  const totalBV       = allItems.reduce((s, i) => s + (i.status === 'PAGO_COMISSAO' ? 0 : i.valorPassadoCliente - i.totalPagoReal), 0)
+  const saldo         = totalReceitas - totalCliente // Saldo da Turma = Receitas − Passado ao Cliente
 
   doc.setFillColor(...HDR_BG)
   doc.rect(10, sy, 120, 7, 'F')
@@ -303,7 +306,10 @@ export async function exportarPDF(orc: Orcamento) {
     ['Total Ingressos',  totalSympla],
     ['Total Receitas',   totalReceitas],
     ['Total Orçado',     totalOrcado],
-    ['Total Pago',       totalPago],
+    ['Pago Alliance',    totalPago],
+    ['Pago Comissão',    totalPagoComissao],
+    ['Passado ao Cliente', totalCliente],
+    ['Resultado Alliance (BV)', totalBV],
     ['Saldo da Turma',   saldo],
   ]
 
