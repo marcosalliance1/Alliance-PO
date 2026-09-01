@@ -670,6 +670,37 @@ export async function exportarOS(orc: Orcamento) {
     })
   }
 
+  // Itens × Fornecedor (das seções do orçamento) — só itens com fornecedor preenchido.
+  const ITEM_SIT_LABEL: Record<string, string> = {
+    PENDENTE: 'Pendente', CONTRATADO: 'Contratado', PAGO: 'Pago', PAGO_COMISSAO: 'Pago (Comissão)',
+  }
+  const secoesOrc: [string, ItemOrcamento[]][] = [
+    ['OPERAÇÃO / ESTRUTURA',     orc.operacaoEstrutura],
+    ['EQUIPE',                   orc.equipe],
+    ['ATRAÇÃO',                  orc.atracao],
+    ['A&B — ALIMENTOS E BEBIDAS', orc.abBebidas],
+    ['EXTRAS',                   orc.extras],
+  ]
+  for (const [titulo, itens] of secoesOrc) {
+    const rows = itens
+      .filter(i => (i.fornecedor || '').trim() !== '')
+      .map(i => [
+        i.item || '—',
+        (i.fornecedor || '').split('||').map(f => f.trim()).filter(Boolean).join(' / '),
+        ITEM_SIT_LABEL[i.status] || '',
+        '', '',
+      ])
+    if (!rows.length) continue
+    faixaOS(doc, titulo)
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 2,
+      head: [['Item', 'Fornecedor', 'Situação', 'Responsável', 'Contato']],
+      body: rows,
+      ...tabelaStyle,
+      columnStyles: { 0: { cellWidth: 50 }, 1: { cellWidth: 55 }, 2: { cellWidth: 30 }, 3: { cellWidth: 30 }, 4: { cellWidth: 25 } },
+    })
+  }
+
   // Nota sobre o preenchimento pendente (Catálogo)
   {
     const y = (doc as any).lastAutoTable?.finalY ?? 40
