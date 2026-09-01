@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList,
+  PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, Legend,
 } from 'recharts'
 import {
   FileText, TrendingUp, DollarSign, BarChart2,
@@ -35,6 +35,10 @@ function orcadoOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
 }
 function pagoOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
   return allItemsOf(o).reduce((s, i) => s + i.totalPagoReal, 0)
+}
+// Resultado Alliance (BV) = V. Cliente − Total Pago. Itens "Pago (Comissão)" não geram BV.
+function bvOf(o: ReturnType<typeof useAppContext>['orcamentos'][0]) {
+  return allItemsOf(o).reduce((s, i) => s + (i.status === 'PAGO_COMISSAO' ? 0 : i.valorPassadoCliente - i.totalPagoReal), 0)
 }
 
 function labelEvento(o: Orcamento): string {
@@ -201,16 +205,19 @@ export const DashboardPage: React.FC = () => {
       .sort((a, b) => b.value - a.value)
   }, [filtered])
 
-  // ── Gráfico 2: Barras horizontais por instituição ─────────────────────────────
+  // ── Gráfico 2: Total Pago × Resultado Alliance (BV) por instituição ───────────
   const barInstData = useMemo(() => {
-    const map = new Map<string, number>()
+    const map = new Map<string, { pago: number; bv: number }>()
     for (const o of filtered) {
       const k = o.instituicao || 'Sem instituição'
-      map.set(k, (map.get(k) ?? 0) + orcadoOf(o))
+      const g = map.get(k) ?? { pago: 0, bv: 0 }
+      g.pago += pagoOf(o)
+      g.bv   += bvOf(o)
+      map.set(k, g)
     }
     return [...map.entries()]
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
+      .map(([name, g]) => ({ name, pago: g.pago, bv: g.bv }))
+      .sort((a, b) => b.pago - a.pago)
   }, [filtered])
 
   // ── Gráfico 3: Timeline ───────────────────────────────────────────────────────
@@ -504,11 +511,12 @@ export const DashboardPage: React.FC = () => {
           )}
         </div>
 
-        {/* Gráfico 2: Barras horizontais por instituição */}
+        {/* Gráfico 2: Total Pago × Resultado Alliance (BV) por instituição */}
         <div className="bg-surface-2 border border-bordercol rounded-card p-5">
-          <h2 className="text-white font-semibold text-sm mb-4">Valor Orçado por Instituição</h2>
+          <h2 className="text-white font-semibold text-sm mb-1">Total Pago × Resultado Alliance (BV)</h2>
+          <p className="text-muted text-[11px] mb-4">Custo (o que a Alliance pagou) vs. margem da Alliance, por instituição</p>
           {barInstData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={260}>
               <BarChart data={barInstData} layout="vertical" margin={{ left: 0, right: 12, top: 0, bottom: 0 }}>
                 <XAxis type="number" tick={{ fontSize: 9, fill: '#8892a4' }}
                   tickFormatter={v => `${((v as number) / 1000).toFixed(0)}k`}
@@ -516,9 +524,9 @@ export const DashboardPage: React.FC = () => {
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#8892a4' }}
                   axisLine={false} tickLine={false} width={75} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="value" name="Orçado" radius={[0, 4, 4, 0]}>
-                  {barInstData.map(d => <Cell key={d.name} fill={corDaInstituicao(d.name)} />)}
-                </Bar>
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="pago" name="Total Pago" fill="#60a5fa" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="bv"   name="Resultado Alliance (BV)" fill="#34d399" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
