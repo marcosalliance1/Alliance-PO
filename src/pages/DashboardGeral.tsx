@@ -231,7 +231,6 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
 
   const ranking = useMemo(() => {
     return projetosFiltrados
-      .filter(p => p.status !== 'realizado')
       .map((p) => {
         const resumo = calcResumoProjeto(p)
         const pct = (n: number, d: number) => (d > 0 ? (n / d) * 100 : 0)
