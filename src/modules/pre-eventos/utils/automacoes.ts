@@ -114,6 +114,11 @@ export function gerarEquipeAutomatica(
 
 export function recalcularItem(item: ItemOrcamento): ItemOrcamento {
   const totalOrcado = item.qtde * item.custoUnitario
+  // "Pago (Comissão)": a comissão pagou do bolso deles — não sai da conta Alliance.
+  // Zera o Total Pago (não fura a conciliação Everest) e não gera BV. O V. Cliente permanece.
+  if (item.status === 'PAGO_COMISSAO') {
+    return { ...item, totalOrcado, totalPagoReal: 0, bvAbsoluto: 0, bvPercentual: 0 }
+  }
   const bvAbsoluto = item.valorPassadoCliente - item.totalPagoReal
   const bvPercentual = item.totalPagoReal > 0
     ? (bvAbsoluto / item.totalPagoReal) * 100

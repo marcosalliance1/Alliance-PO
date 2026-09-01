@@ -10,7 +10,9 @@
   | 'FESTA_X_DIAS'
 
 export type OrcamentoStatus = 'RASCUNHO' | 'EM_ANDAMENTO' | 'CONCLUIDO'
-export type ItemStatus = 'PENDENTE' | 'CONTRATADO' | 'PAGO'
+// PAGO_COMISSAO = a comissão pagou do bolso deles (não saiu da conta Alliance):
+// não conta no Total Pago (não fura a conciliação Everest) nem gera BV; só entra no V. Cliente.
+export type ItemStatus = 'PENDENTE' | 'CONTRATADO' | 'PAGO' | 'PAGO_COMISSAO'
 
 export interface NotaFiscal {
   nome: string

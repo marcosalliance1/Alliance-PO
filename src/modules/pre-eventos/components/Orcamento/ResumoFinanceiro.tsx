@@ -8,15 +8,17 @@ export const ResumoFinanceiro: React.FC<Props> = ({ orc }) => {
   const r = useMemo(() => {
     const totalReceitas = orc.bolsaFolia + orc.receitasSympla.reduce((s, l) => s + l.total, 0)
     const secoes = [orc.operacaoEstrutura, orc.equipe, orc.atracao, orc.abBebidas, orc.extras]
-    let totalOrcado = 0, totalPago = 0, totalBV = 0
+    let totalOrcado = 0, totalPago = 0, totalBV = 0, totalCliente = 0
     for (const s of secoes) {
-      totalOrcado += s.reduce((acc, i) => acc + i.totalOrcado, 0)
-      totalPago   += s.reduce((acc, i) => acc + i.totalPagoReal, 0)
-      totalBV     += s.reduce((acc, i) => acc + (i.valorPassadoCliente - i.totalPagoReal), 0)
+      totalOrcado  += s.reduce((acc, i) => acc + i.totalOrcado, 0)
+      totalPago    += s.reduce((acc, i) => acc + i.totalPagoReal, 0)
+      totalCliente += s.reduce((acc, i) => acc + i.valorPassadoCliente, 0)
+      // Itens "Pago (Comissão)" não geram BV (a comissão pagou; não é margem da Alliance).
+      totalBV      += s.reduce((acc, i) => acc + (i.status === 'PAGO_COMISSAO' ? 0 : i.valorPassadoCliente - i.totalPagoReal), 0)
     }
     const saldo  = totalReceitas - totalPago
     const bvPct  = totalPago > 0 ? (totalBV / totalPago) * 100 : 0
-    return { totalReceitas, totalOrcado, totalPago, saldo, totalBV, bvPct }
+    return { totalReceitas, totalOrcado, totalPago, totalCliente, saldo, totalBV, bvPct }
   }, [orc])
 
   const Row = ({ label, value, accent, big }: { label: string; value: number; accent?: boolean; big?: boolean }) => (
@@ -40,6 +42,7 @@ export const ResumoFinanceiro: React.FC<Props> = ({ orc }) => {
           <Row label="Total Receitas"     value={r.totalReceitas} />
           <Row label="Total Custos Orçados" value={r.totalOrcado} />
           <Row label="Total Custos Pagos"  value={r.totalPago} />
+          <Row label="Total Passado ao Cliente" value={r.totalCliente} />
         </div>
         <div>
           <Row label="Total BV (R$)" value={r.totalBV} accent />

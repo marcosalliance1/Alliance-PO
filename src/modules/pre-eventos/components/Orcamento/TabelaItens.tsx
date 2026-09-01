@@ -15,12 +15,13 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<ItemStatus, string> = {
-  PENDENTE:   'bg-warning/20 text-warning border-warning/30',
-  CONTRATADO: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-  PAGO:       'bg-success/20 text-success border-success/30',
+  PENDENTE:      'bg-warning/20 text-warning border-warning/30',
+  CONTRATADO:    'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  PAGO:          'bg-success/20 text-success border-success/30',
+  PAGO_COMISSAO: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
 }
 const STATUS_LABELS: Record<ItemStatus, string> = {
-  PENDENTE: 'Pendente', CONTRATADO: 'Contratado', PAGO: 'Pago',
+  PENDENTE: 'Pendente', CONTRATADO: 'Contratado', PAGO: 'Pago', PAGO_COMISSAO: 'Pago (Comissão)',
 }
 const MAX_SIZE = 4 * 1024 * 1024
 
@@ -179,9 +180,18 @@ const LinhaItem: React.FC<{
       </td>
       {/* Total Orç. */}
       <td className={`${tdBase} text-right text-gray-400`}>{formatBRL(item.totalOrcado)}</td>
-      {/* Total Pago */}
+      {/* Total Pago — travado quando "Pago (Comissão)" (a comissão pagou, não a Alliance) */}
       <td className={tdBase}>
-        <CampoMoeda value={item.totalPagoReal} onChange={v => onUpdate(item.id, 'totalPagoReal', v)} className={numCls} />
+        {item.status === 'PAGO_COMISSAO' ? (
+          <span
+            className="block text-center text-[10px] italic text-purple-300/70"
+            title="Pago pela comissão — não entra no Total Pago (não saiu da conta Alliance)"
+          >
+            comissão
+          </span>
+        ) : (
+          <CampoMoeda value={item.totalPagoReal} onChange={v => onUpdate(item.id, 'totalPagoReal', v)} className={numCls} />
+        )}
       </td>
       {/* Val. Cliente */}
       <td className={tdBase}>

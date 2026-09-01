@@ -363,14 +363,16 @@ const TIPO_LABEL: Record<string, string> = {
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
 const STATUS_STYLE: Record<string, string> = {
-  CONTRATADO: 'bg-success/15 text-success',
-  PAGO:       'bg-blue-400/15 text-blue-400',
-  PENDENTE:   'bg-warning/15 text-warning',
+  CONTRATADO:    'bg-success/15 text-success',
+  PAGO:          'bg-blue-400/15 text-blue-400',
+  PENDENTE:      'bg-warning/15 text-warning',
+  PAGO_COMISSAO: 'bg-purple-400/15 text-purple-400',
 }
 const STATUS_LABEL: Record<string, string> = {
-  CONTRATADO: 'Contratado',
-  PAGO:       'Pago',
-  PENDENTE:   'Pendente',
+  CONTRATADO:    'Contratado',
+  PAGO:          'Pago',
+  PENDENTE:      'Pendente',
+  PAGO_COMISSAO: 'Pago (Comissão)',
 }
 
 // ─── Helpers financeiros ──────────────────────────────────────────────────────
