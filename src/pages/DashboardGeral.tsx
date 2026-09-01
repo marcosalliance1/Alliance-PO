@@ -230,7 +230,9 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
   [projetosFiltrados])
 
   const ranking = useMemo(() => {
-    return projetosFiltrados
+    // Sempre inclui ativos + realizados, independente do filtro de status da página —
+    // a margem de um projeto já concluído continua relevante pra comparação.
+    return [...projetosEmAndamento, ...projetosRealizados]
       .map((p) => {
         const resumo = calcResumoProjeto(p)
         const pct = (n: number, d: number) => (d > 0 ? (n / d) * 100 : 0)
@@ -242,7 +244,7 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
         return { projeto: p, margemProjetadaPct, margemOrcadaPct, margemContratadaPct, faltaPagarR, pctFalta, alertaFalta: pctFalta > 20 }
       })
       .sort((a, b) => b.margemOrcadaPct - a.margemOrcadaPct)
-  }, [projetosFiltrados])
+  }, [projetosEmAndamento, projetosRealizados])
 
   const resumoPorTipo = useMemo(() => {
     const grupos: Record<'SUPERIOR' | 'MEDIO' | 'FUNDAMENTAL', { receita: number; custo: number; count: number }> = {
