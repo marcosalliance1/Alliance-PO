@@ -205,13 +205,18 @@ export const DashboardPage: React.FC = () => {
       .sort((a, b) => b.value - a.value)
   }, [filtered])
 
-  // ── Gráfico 2: Total Pago × Resultado Alliance (BV) por evento (clicável) ──────
-  const barEventoData = useMemo(() => {
-    return filtered
-      .map(o => ({ id: o.id, name: labelEvento(o), pago: pagoOf(o), bv: bvOf(o) }))
-      .filter(d => d.pago !== 0 || d.bv !== 0)
+  // ── Gráfico 2: Total Pago × Resultado Alliance (BV) por instituição ───────────
+  const barInstData = useMemo(() => {
+    const map = new Map<string, { pago: number; bv: number }>()
+    for (const o of filtered) {
+      const k = o.instituicao || 'Sem instituição'
+      const g = map.get(k) ?? { pago: 0, bv: 0 }
+      g.pago += pagoOf(o); g.bv += bvOf(o)
+      map.set(k, g)
+    }
+    return [...map.entries()]
+      .map(([name, g]) => ({ name, pago: g.pago, bv: g.bv }))
       .sort((a, b) => b.pago - a.pago)
-      .slice(0, 12) // top 12 por custo — evita parede de barras
   }, [filtered])
 
   // ── Gráfico 3: Timeline ───────────────────────────────────────────────────────
@@ -508,21 +513,19 @@ export const DashboardPage: React.FC = () => {
         {/* Gráfico 2: Total Pago × Resultado Alliance (BV) por evento — barra empilhada, clicável */}
         <div className="bg-surface-2 border border-bordercol rounded-card p-5">
           <h2 className="text-white font-semibold text-sm mb-1">Total Pago × Resultado Alliance (BV)</h2>
-          <p className="text-muted text-[11px] mb-4">Por evento — azul é o custo, verde a margem da Alliance. Clique numa barra pra abrir. Top 12 por custo.</p>
-          {barEventoData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={Math.max(220, barEventoData.length * 30)}>
-              <BarChart data={barEventoData} layout="vertical" margin={{ left: 0, right: 12, top: 0, bottom: 0 }}>
+          <p className="text-muted text-[11px] mb-4">Por instituição — azul é o custo, verde a margem da Alliance (empilhados).</p>
+          {barInstData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={barInstData} layout="vertical" margin={{ left: 0, right: 12, top: 0, bottom: 0 }}>
                 <XAxis type="number" tick={{ fontSize: 9, fill: '#8892a4' }}
                   tickFormatter={v => `${((v as number) / 1000).toFixed(0)}k`}
                   axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: '#8892a4' }}
-                  axisLine={false} tickLine={false} width={120} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#8892a4' }}
+                  axisLine={false} tickLine={false} width={80} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="pago" name="Total Pago" fill="#60a5fa" stackId="v"
-                  cursor="pointer" onClick={(d: { id?: string }) => d?.id && navigate(`/pre-eventos/orcamentos/${d.id}`)} />
-                <Bar dataKey="bv"   name="Resultado Alliance (BV)" fill="#34d399" stackId="v" radius={[0, 4, 4, 0]}
-                  cursor="pointer" onClick={(d: { id?: string }) => d?.id && navigate(`/pre-eventos/orcamentos/${d.id}`)} />
+                <Bar dataKey="pago" name="Total Pago" fill="#60a5fa" stackId="v" />
+                <Bar dataKey="bv"   name="Resultado Alliance (BV)" fill="#34d399" stackId="v" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
