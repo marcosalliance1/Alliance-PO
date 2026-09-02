@@ -265,9 +265,9 @@ export const DashboardPage: React.FC = () => {
     const nx = Number(x), ny = Number(y)
     const eventos = eventosPorMes[index]?.eventos ?? []
     return (
-      <text textAnchor="middle" fill="#fff" fontSize={9}>
+      <text textAnchor="start" fill="#fff" fontSize={9}>
         {eventos.map((ev, i) => (
-          <tspan key={i} x={nx} y={ny - 10 - i * 11}>{ev}</tspan>
+          <tspan key={i} x={nx - 3} y={ny - 10 - i * 11}>{ev}</tspan>
         ))}
       </text>
     )
