@@ -1,12 +1,13 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { Projeto, ItemCusto, ItemCatalogo, TAP, Receitas, ConciliacaoEverest, CustoAdicional } from '../types'
+import type { Projeto, ItemCusto, ItemCatalogo, TAP, Receitas, ConciliacaoEverest, CustoAdicional, InfoEvento } from '../types'
 import { formatBRL } from '../utils/formatters'
 import { TAPForm } from '../components/projeto/TAPForm'
 import { SecaoCusto } from '../components/projeto/SecaoCusto'
 import { ResumoGeral } from '../components/projeto/ResumoGeral'
 import { ProjectDashboard } from '../components/projeto/ProjectDashboard'
 import { FinanceiroEverestTab } from '../components/projeto/FinanceiroEverestTab'
+import { AbaInfoEvento } from '../components/projeto/AbaInfoEvento'
 import { Header } from '../components/layout/Header'
 import { BadgeEscola } from '../components/ui/Badge'
 import { useAuth } from '../contexts/AuthContext'
@@ -20,6 +21,7 @@ interface ViewProjetoProps {
   onUpdateReceitas: (r: Receitas) => void
   onUpdateConciliacao: (c: ConciliacaoEverest) => void
   onUpdateCustosAdicionais: (items: CustoAdicional[]) => void
+  onUpdateInfoEvento: (info: InfoEvento) => void
   onAddItem: (secaoId: string) => void
   onAddItemFromBanco: (secaoId: string, partial: Partial<ItemCusto>) => void
   onUpdateItem: (secaoId: string, itemId: string, changes: Partial<ItemCusto>) => void
@@ -37,6 +39,7 @@ export function ViewProjeto({
   onUpdateReceitas,
   onUpdateConciliacao,
   onUpdateCustosAdicionais,
+  onUpdateInfoEvento,
   onAddItem,
   onAddItemFromBanco,
   onUpdateItem,
@@ -67,6 +70,7 @@ export function ViewProjeto({
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'resumo', label: 'Resumo Geral' },
     { id: 'financeiro-everest', label: 'Financeiro Everest' },
+    { id: 'info-evento', label: 'Info do Evento' },
   ]
 
   // Custos de "Estoque Alliance" (bebidas do próprio estoque, lançadas à mão):
@@ -216,6 +220,10 @@ export function ViewProjeto({
 
       {abaAtiva === 'financeiro-everest' && (
         <FinanceiroEverestTab projeto={projeto} />
+      )}
+
+      {abaAtiva === 'info-evento' && (
+        <AbaInfoEvento projeto={projeto} onChange={onUpdateInfoEvento} isAdmin={isAdmin} />
       )}
     </div>
   )

@@ -121,6 +121,70 @@ export interface LinhaResumoComercial {
   valorReal: number       // "Valor real"
 }
 
+// ─── Info do Evento (operacional) ─────────────────────────────────────────────
+// Espelha o mesmo modelo do módulo pré-eventos (src/modules/pre-eventos/types) —
+// copiado, não reinventado, pra manter os dois em sincronia.
+export interface NotaFiscal {
+  nome: string
+  tipo: string
+  dados: string   // base64
+  tamanho: number // bytes
+}
+
+export type FornecedorStatus = 'aberto' | 'aguardando' | 'fechado'
+export interface InfoEventoFornecedor {
+  categoria: string
+  fornecedor: string
+  status?: FornecedorStatus // 3 estados (aberto | aguardando assinatura | fechado)
+  fechado?: boolean         // legado — dados antigos; ler via statusFornecedor()
+}
+// Deriva o status novo, cobrindo dados antigos que só tinham `fechado`.
+export function statusFornecedor(f: InfoEventoFornecedor): FornecedorStatus {
+  return f.status ?? (f.fechado ? 'fechado' : 'aberto')
+}
+export interface InfoEventoLineup {
+  atracao: string
+  horarioInicio: string   // "23:00"
+  horarioTermino: string  // "00:30"
+  status?: FornecedorStatus
+  rider?: NotaFiscal       // arquivo do rider anexado
+  // legado (dados antigos): ler via lineupView()
+  artista?: string
+  horario?: string
+  obs?: string
+}
+
+// Normaliza um item de lineup, cobrindo dados antigos (artista/horario texto).
+export function lineupView(l: InfoEventoLineup): { atracao: string; inicio: string; termino: string; status: FornecedorStatus } {
+  const atracao = l.atracao || l.artista || ''
+  let inicio = l.horarioInicio || ''
+  let termino = l.horarioTermino || ''
+  if (!inicio && !termino && l.horario) {
+    const m = l.horario.match(/(\d{1,2}:\d{2})\D+(\d{1,2}:\d{2})/)
+    if (m) { inicio = m[1]; termino = m[2] }
+    else { const m2 = l.horario.match(/(\d{1,2}:\d{2})/); if (m2) inicio = m2[1] }
+  }
+  return { atracao, inicio, termino, status: l.status ?? 'aberto' }
+}
+export interface InfoEvento {
+  nomeEvento: string
+  tipo: string
+  data: string
+  diaSemana: string
+  local: string
+  horario: string
+  tematica: string
+  totalConvidados: string
+  formandos: string
+  pagantes: string
+  bolsaFolia: string
+  dataAdimplencia: string
+  vendaDeConvite: string
+  fornecedores: InfoEventoFornecedor[]
+  lineup: InfoEventoLineup[]
+  linkVenda: string | null
+}
+
 export interface Projeto {
   id: string
   tap: TAP
@@ -129,6 +193,7 @@ export interface Projeto {
   custosAdicionais?: CustoAdicional[]
   conciliacaoEverest?: ConciliacaoEverest
   resumoComercial?: LinhaResumoComercial[]
+  infoEvento?: InfoEvento
   criadoEm: string
   atualizadoEm: string
   importadoDe?: string

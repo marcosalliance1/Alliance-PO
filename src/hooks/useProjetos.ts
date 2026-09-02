@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Projeto, SecaoCusto, ItemCusto, TAP, Receitas, ConciliacaoEverest, CustoAdicional, LinhaResumoComercial } from '../types'
+import type { Projeto, SecaoCusto, ItemCusto, TAP, Receitas, ConciliacaoEverest, CustoAdicional, LinhaResumoComercial, InfoEvento } from '../types'
 import type { SyncResult } from '../utils/sheetsSync'
 import { v4 as uuid } from '../utils/uuid'
 import { getSecoesPorTipo } from '../data/secoesPorTipo'
@@ -15,6 +15,7 @@ function rowToProjeto(row: Record<string, unknown>): Projeto {
     custosAdicionais: (row.custos_adicionais as CustoAdicional[]) ?? [],
     conciliacaoEverest: (row.conciliacao_everest as ConciliacaoEverest) ?? undefined,
     resumoComercial: (row.resumo_comercial as LinhaResumoComercial[]) ?? [],
+    infoEvento: (row.info_evento as InfoEvento) ?? undefined,
     criadoEm: row.criado_em as string,
     atualizadoEm: row.atualizado_em as string,
     importadoDe: (row.importado_de as string) ?? undefined,
@@ -89,6 +90,7 @@ export function useProjetos() {
         custos_adicionais: projeto.custosAdicionais ?? [],
         conciliacao_everest: projeto.conciliacaoEverest ?? null,
         resumo_comercial: projeto.resumoComercial ?? [],
+        info_evento: projeto.infoEvento ?? null,
         importado_de: projeto.importadoDe ?? null,
         atualizado_em: now,
       })
@@ -108,6 +110,7 @@ export function useProjetos() {
         custos_adicionais: projeto.custosAdicionais ?? [],
         conciliacao_everest: projeto.conciliacaoEverest ?? null,
         resumo_comercial: projeto.resumoComercial ?? [],
+        info_evento: projeto.infoEvento ?? null,
         importado_de: projeto.importadoDe ?? null,
         atualizado_em: new Date().toISOString(),
       })
@@ -249,6 +252,19 @@ export function useProjetos() {
     ))
   }, [])
 
+  // ── Info do Evento ───────────────────────────────────────────────────────────
+  const atualizarInfoEvento = useCallback(async (projetoId: string, infoEvento: InfoEvento) => {
+    const now = new Date().toISOString()
+    const { error: err } = await supabase
+      .from('projetos')
+      .update({ info_evento: infoEvento, atualizado_em: now })
+      .eq('id', projetoId)
+    if (err) throw new Error(err.message)
+    setProjetos((prev) => prev.map((p) =>
+      p.id === projetoId ? { ...p, infoEvento, atualizadoEm: now } : p
+    ))
+  }, [])
+
   const getProjeto = useCallback(
     (id: string) => projetos.find((p) => p.id === id),
     [projetos],
@@ -323,7 +339,7 @@ export function useProjetos() {
   return {
     projetos, loading, error,
     carregar, criarProjeto, salvarProjeto, importarProjeto, reimportarProjeto, excluirProjeto,
-    atualizarTAP, atualizarReceitas, atualizarConciliacao, atualizarCustosAdicionais,
+    atualizarTAP, atualizarReceitas, atualizarConciliacao, atualizarCustosAdicionais, atualizarInfoEvento,
     adicionarItem, atualizarItem, excluirItem,
     getProjeto, sincronizarSecoes, atualizarSheetsUrl, atualizarSheetLayout, marcarRealizado,
   }

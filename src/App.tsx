@@ -22,7 +22,7 @@ import { LoginViewer } from './pages/LoginViewer'
 import { useProjetos } from './hooks/useProjetos'
 import { useBancoItens } from './hooks/useBancoItens'
 import { useConfiguracoes } from './hooks/useConfiguracoes'
-import type { ItemCusto, TAP, Receitas, ConciliacaoEverest, Projeto, ConfiguracaoGlobal, ItemCatalogo, CustoAdicional } from './types'
+import type { ItemCusto, TAP, Receitas, ConciliacaoEverest, Projeto, ConfiguracaoGlobal, ItemCatalogo, CustoAdicional, InfoEvento } from './types'
 import { supabase } from './lib/supabase'
 import { useAuth } from './contexts/AuthContext'
 import { AppProvider as PreEventosProvider } from './modules/pre-eventos/contexts/AppContext'
@@ -95,6 +95,7 @@ interface ProjetoPageProps {
   atualizarReceitas: (id: string, r: Receitas) => Promise<void>
   atualizarConciliacao: (id: string, c: ConciliacaoEverest) => Promise<void>
   atualizarCustosAdicionais: (id: string, items: CustoAdicional[]) => Promise<void>
+  atualizarInfoEvento: (id: string, info: InfoEvento) => Promise<void>
   adicionarItem: (id: string, secaoId: string, partial: Partial<ItemCusto>) => Promise<void>
   atualizarItem: (id: string, secaoId: string, itemId: string, changes: Partial<ItemCusto>) => Promise<void>
   excluirItem: (id: string, secaoId: string, itemId: string) => Promise<void>
@@ -103,7 +104,7 @@ interface ProjetoPageProps {
 
 function ProjetoPage({
   projetos, loading, bancoItens, config,
-  atualizarTAP, atualizarReceitas, atualizarConciliacao, atualizarCustosAdicionais,
+  atualizarTAP, atualizarReceitas, atualizarConciliacao, atualizarCustosAdicionais, atualizarInfoEvento,
   adicionarItem, atualizarItem, excluirItem, salvarProjeto,
 }: ProjetoPageProps) {
   const { id } = useParams<{ id: string }>()
@@ -120,6 +121,7 @@ function ProjetoPage({
       onUpdateReceitas={(r: Receitas) => atualizarReceitas(projeto.id, r)}
       onUpdateConciliacao={(c) => atualizarConciliacao(projeto.id, c)}
       onUpdateCustosAdicionais={(items) => atualizarCustosAdicionais(projeto.id, items)}
+      onUpdateInfoEvento={(info) => atualizarInfoEvento(projeto.id, info)}
       onAddItem={(secaoId: string) => adicionarItem(projeto.id, secaoId, {})}
       onAddItemFromBanco={(secaoId: string, partial: Partial<ItemCusto>) => adicionarItem(projeto.id, secaoId, partial)}
       onUpdateItem={(secaoId: string, itemId: string, changes: Partial<ItemCusto>) =>
@@ -137,7 +139,7 @@ function AppRoutes() {
   const {
     projetos, loading: loadingProjetos, carregar,
     criarProjeto, importarProjeto, reimportarProjeto, excluirProjeto,
-    atualizarTAP, atualizarReceitas, atualizarConciliacao, atualizarCustosAdicionais,
+    atualizarTAP, atualizarReceitas, atualizarConciliacao, atualizarCustosAdicionais, atualizarInfoEvento,
     adicionarItem, atualizarItem, excluirItem, salvarProjeto,
     sincronizarSecoes, atualizarSheetsUrl, atualizarSheetLayout, marcarRealizado,
   } = useProjetos()
@@ -268,6 +270,7 @@ function AppRoutes() {
               atualizarReceitas={atualizarReceitas}
               atualizarConciliacao={atualizarConciliacao}
               atualizarCustosAdicionais={atualizarCustosAdicionais}
+              atualizarInfoEvento={atualizarInfoEvento}
               adicionarItem={adicionarItem}
               atualizarItem={atualizarItem}
               excluirItem={excluirItem}
