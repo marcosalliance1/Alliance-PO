@@ -289,6 +289,19 @@ export const DashboardPage: React.FC = () => {
       .sort((a, b) => b.pago - a.pago)
   }, [filtered])
 
+  // ── BV por Turma (Festa) — ranking com barra inline ───────────────────────────
+  const bvPorTurma = useMemo(() => {
+    const rows = filtered
+      .map(o => {
+        const pago = pagoOf(o), bv = bvOf(o)
+        return { id: o.id, label: labelEvento(o), pago, bv, margem: pago > 0 ? (bv / pago) * 100 : 0 }
+      })
+      .filter(d => d.pago !== 0 || d.bv !== 0)
+      .sort((a, b) => b.bv - a.bv)
+    const maxBV = rows.reduce((m, d) => Math.max(m, d.bv), 0)
+    return { rows, maxBV }
+  }, [filtered])
+
   // ── Gráfico 3: Timeline ───────────────────────────────────────────────────────
   const hoje = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d }, [])
   const em30  = useMemo(() => new Date(hoje.getTime() + 30 * 86400000), [hoje])
@@ -770,6 +783,54 @@ export const DashboardPage: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* ── BV por Turma (Festa) — tabela com barra ── */}
+      {bvPorTurma.rows.length > 0 && (
+        <div className="bg-surface-2 border border-bordercol rounded-card overflow-hidden">
+          <div className="px-5 py-3 border-b border-bordercol">
+            <h2 className="text-white font-semibold text-sm">BV por Turma (Festa)</h2>
+            <p className="text-muted text-[11px]">Margem da Alliance por evento — clique pra abrir. Respeita os filtros e o período.</p>
+          </div>
+          <div className="max-h-[380px] overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-surface-2 z-10">
+                <tr className="text-muted border-b border-bordercol">
+                  <th className="text-left font-medium px-5 py-2">Evento</th>
+                  <th className="text-right font-medium px-3 py-2">Total Pago</th>
+                  <th className="text-right font-medium px-3 py-2">BV</th>
+                  <th className="text-right font-medium px-3 py-2">Margem</th>
+                  <th className="px-3 py-2 w-32"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {bvPorTurma.rows.map(d => (
+                  <tr key={d.id} onClick={() => navigate(`/pre-eventos/orcamentos/${d.id}`)}
+                    className="border-b border-bordercol/30 hover:bg-white/[0.03] cursor-pointer">
+                    <td className="px-5 py-2 text-white/90 max-w-[240px] truncate">{d.label}</td>
+                    <td className="px-3 py-2 text-right text-muted tabular-nums">{formatBRL(d.pago)}</td>
+                    <td className={`px-3 py-2 text-right tabular-nums font-semibold ${d.bv >= 0 ? 'text-success' : 'text-danger'}`}>{formatBRL(d.bv)}</td>
+                    <td className={`px-3 py-2 text-right tabular-nums ${d.bv >= 0 ? 'text-success' : 'text-danger'}`}>{d.margem.toFixed(1)}%</td>
+                    <td className="px-3 py-2">
+                      <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full bg-success rounded-full" style={{ width: `${bvPorTurma.maxBV > 0 ? Math.max(0, d.bv) / bvPorTurma.maxBV * 100 : 0}%` }} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="sticky bottom-0 bg-surface-2">
+                <tr className="border-t border-bordercol font-semibold text-white">
+                  <td className="px-5 py-2.5">Total · {bvPorTurma.rows.length} evento{bvPorTurma.rows.length !== 1 ? 's' : ''}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{formatBRL(kpis.totalPago)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-success">{formatBRL(kpis.totalBV)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-success">{kpis.totalPago > 0 ? (kpis.totalBV / kpis.totalPago * 100).toFixed(1) : '0.0'}%</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
 
       {filtered.length === 0 && (
         <div className="bg-surface-2 border border-bordercol rounded-card p-12 text-center">
