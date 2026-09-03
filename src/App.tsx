@@ -25,6 +25,7 @@ import { useConfiguracoes } from './hooks/useConfiguracoes'
 import type { ItemCusto, TAP, Receitas, ConciliacaoEverest, Projeto, ConfiguracaoGlobal, ItemCatalogo, CustoAdicional, InfoEvento } from './types'
 import { supabase } from './lib/supabase'
 import { useAuth } from './contexts/AuthContext'
+import { PresencaGlobal } from './components/PresencaGlobal'
 import { AppProvider as PreEventosProvider } from './modules/pre-eventos/contexts/AppContext'
 import { Layout as PreEventosLayout } from './modules/pre-eventos/components/Layout/Layout'
 import { DashboardPage } from './modules/pre-eventos/pages/Dashboard/DashboardPage'
@@ -75,7 +76,12 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   }
   // Viewer/admin na raiz → ir para módulos
   if (location.pathname === '/') return <Navigate to="/modulos" replace />
-  return <>{children}</>
+  return (
+    <>
+      <PresencaGlobal />
+      {children}
+    </>
+  )
 }
 
 // ── Guard de autenticação portal ──────────────────────────────────────────────
