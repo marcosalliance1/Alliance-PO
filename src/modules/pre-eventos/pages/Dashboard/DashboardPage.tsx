@@ -97,6 +97,55 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   )
 }
 
+// ── Filtro de período (data do evento) ────────────────────────────────────────
+const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+// Índice de mês contínuo (ano*12 + mês) a partir de uma data "YYYY-MM-DD".
+function mesIdxFromData(s?: string | null): number | null {
+  const m = (s || '').match(/^(\d{4})-(\d{2})/)
+  if (!m) return null
+  const ano = Number(m[1]), mes = Number(m[2])
+  if (!ano || !mes) return null
+  return ano * 12 + (mes - 1)
+}
+function fmtMesIdx(idx: number): string {
+  const ano = Math.floor(idx / 12), mes = ((idx % 12) + 12) % 12
+  return `${MESES_ABREV[mes]}/${String(ano).slice(-2)}`
+}
+
+// Range slider de dois handles (min/max) sobre meses. Duas <input range> sobrepostas
+// com trilha transparente; só a bolinha captura o clique (pointer-events).
+const RangeMeses: React.FC<{
+  min: number; max: number; inicio: number; fim: number
+  onChange: (ini: number, fim: number) => void
+}> = ({ min, max, inicio, fim, onChange }) => {
+  const span = (max - min) || 1
+  const pct = (v: number) => ((v - min) / span) * 100
+  return (
+    <div className="w-full">
+      <style>{`
+        .rng-mes{-webkit-appearance:none;appearance:none;position:absolute;left:0;top:0;width:100%;height:20px;background:transparent;pointer-events:none;margin:0}
+        .rng-mes::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;height:15px;width:15px;border-radius:50%;background:#e94560;border:2px solid #fff;cursor:pointer;pointer-events:auto}
+        .rng-mes::-moz-range-thumb{height:15px;width:15px;border-radius:50%;background:#e94560;border:2px solid #fff;cursor:pointer;pointer-events:auto}
+        .rng-mes::-webkit-slider-runnable-track{background:transparent;border:none}
+        .rng-mes::-moz-range-track{background:transparent}
+      `}</style>
+      <div className="flex justify-between text-[11px] text-white/80 mb-1 font-medium">
+        <span>{fmtMesIdx(inicio)}</span>
+        <span>{fmtMesIdx(fim)}</span>
+      </div>
+      <div className="relative h-5">
+        <div className="absolute top-1/2 -translate-y-1/2 h-1 w-full bg-white/10 rounded-full" />
+        <div className="absolute top-1/2 -translate-y-1/2 h-1 bg-accent rounded-full"
+          style={{ left: `${pct(inicio)}%`, right: `${100 - pct(fim)}%` }} />
+        <input type="range" className="rng-mes" min={min} max={max} value={inicio}
+          onChange={e => onChange(Math.min(Number(e.target.value), fim), fim)} />
+        <input type="range" className="rng-mes" min={min} max={max} value={fim}
+          onChange={e => onChange(inicio, Math.max(Number(e.target.value), inicio))} />
+      </div>
+    </div>
+  )
+}
+
 export const DashboardPage: React.FC = () => {
   const { orcamentos } = useAppContext()
   const navigate = useNavigate()
@@ -106,6 +155,7 @@ export const DashboardPage: React.FC = () => {
   const [filtroInst,       setFiltroInst]       = useState('')
   const [filtroTurma,      setFiltroTurma]      = useState('')
   const [filtroFornecedor, setFiltroFornecedor] = useState('')
+  const [rangeMes,         setRangeMes]         = useState<[number, number] | null>(null) // null = período todo
   const [expandidos,       setExpandidos]       = useState<Record<string, boolean>>({})
 
   const instituicoes = useMemo(() =>
@@ -139,14 +189,34 @@ export const DashboardPage: React.FC = () => {
     [filtroFornecedor],
   )
 
+  // Domínio de meses (a partir da data do evento) e range efetivo do slider.
+  const mesesDomain = useMemo(() => {
+    let min = Infinity, max = -Infinity
+    for (const o of orcamentos) {
+      const idx = mesIdxFromData(o.data)
+      if (idx == null) continue
+      if (idx < min) min = idx
+      if (idx > max) max = idx
+    }
+    if (min === Infinity) { const d = new Date(); const n = d.getFullYear() * 12 + d.getMonth(); return { min: n, max: n } }
+    return { min, max }
+  }, [orcamentos])
+  const mesIni = rangeMes ? Math.max(mesesDomain.min, Math.min(rangeMes[0], mesesDomain.max)) : mesesDomain.min
+  const mesFim = rangeMes ? Math.min(mesesDomain.max, Math.max(rangeMes[1], mesesDomain.min)) : mesesDomain.max
+  const dateRangeAtivo = mesIni > mesesDomain.min || mesFim < mesesDomain.max
+
   const filtered = useMemo(() => orcamentos.filter(o => {
     if (filtroTipo   && o.tipo        !== filtroTipo)   return false
     if (filtroStatus && o.status      !== filtroStatus) return false
     if (filtroInst   && o.instituicao !== filtroInst)   return false
     if (filtroTurma  && o.turma       !== filtroTurma)  return false
     if (fornsSelecionados.length && !allItemsOf(o).some(i => fornecedoresDe(i).some(f => fornsSelecionados.includes(f)))) return false
+    if (dateRangeAtivo) {
+      const idx = mesIdxFromData(o.data)
+      if (idx == null || idx < mesIni || idx > mesFim) return false
+    }
     return true
-  }), [orcamentos, filtroTipo, filtroStatus, filtroInst, filtroTurma, fornsSelecionados])
+  }), [orcamentos, filtroTipo, filtroStatus, filtroInst, filtroTurma, fornsSelecionados, dateRangeAtivo, mesIni, mesFim])
 
   // ── KPIs ─────────────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -155,7 +225,7 @@ export const DashboardPage: React.FC = () => {
       const items = allItemsOf(o)
       totalOrcado += items.reduce((s, i) => s + i.totalOrcado, 0)
       totalPago   += items.reduce((s, i) => s + i.totalPagoReal, 0)
-      totalBV     += items.reduce((s, i) => s + (i.valorPassadoCliente - i.totalPagoReal), 0)
+      totalBV     += items.reduce((s, i) => s + (i.status === 'PAGO_COMISSAO' ? 0 : i.valorPassadoCliente - i.totalPagoReal), 0)
       bolsaFolia  += o.bolsaFolia
       sympla      += o.receitasSympla.reduce((s, l) => s + l.total, 0)
     }
@@ -356,13 +426,34 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
 
-        {(filtroInst || filtroTurma || filtroTipo || filtroStatus || filtroFornecedor) && (
+        {(filtroInst || filtroTurma || filtroTipo || filtroStatus || filtroFornecedor || dateRangeAtivo) && (
           <button
-            onClick={() => { setFiltroInst(''); setFiltroTurma(''); setFiltroTipo(''); setFiltroStatus(''); setFiltroFornecedor('') }}
+            onClick={() => { setFiltroInst(''); setFiltroTurma(''); setFiltroTipo(''); setFiltroStatus(''); setFiltroFornecedor(''); setRangeMes(null) }}
             className="ml-auto text-xs text-muted hover:text-white transition-colors underline underline-offset-2">
             Limpar filtros
           </button>
         )}
+
+        {/* Período (data do evento) — range slider de dois handles */}
+        <div className="w-full flex items-center gap-3 pt-2 mt-1 border-t border-bordercol/50">
+          <span className="text-[11px] text-muted whitespace-nowrap shrink-0 flex items-center gap-1">
+            <Calendar className="w-3.5 h-3.5" /> Período
+          </span>
+          <div className="flex-1 max-w-md">
+            <RangeMeses min={mesesDomain.min} max={mesesDomain.max} inicio={mesIni} fim={mesFim}
+              onChange={(a, b) => setRangeMes([a, b])} />
+          </div>
+          <button
+            onClick={() => { const a = new Date().getFullYear(); setRangeMes([a * 12, a * 12 + 11]) }}
+            className="text-[11px] text-muted hover:text-white border border-bordercol rounded px-2 py-1 transition-colors shrink-0">
+            Este ano
+          </button>
+          {dateRangeAtivo && (
+            <button onClick={() => setRangeMes(null)} className="text-[11px] text-accent hover:underline shrink-0">
+              período todo
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Resumo do fornecedor filtrado ── */}
