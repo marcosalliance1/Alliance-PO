@@ -74,12 +74,17 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
   const saldoLiquido = arrecadadoLiquido - custoPago
   const pctPago = custoContratado > 0 ? Math.min(100, (custoPago / custoContratado) * 100) : 0
 
-  // Previsão de receita: sai do ORÇADO da P.O. (fallback contratado), já líquido do fee —
-  // comparável ao "Arrecadado da turma". Mostra o que ainda vai entrar sem assustar.
+  // Previsão de receita em valores BRUTOS (igual à P.O.): previsto = ORÇADO (fallback
+  // contratado), já entrou = recebido do Everest. O fee aparece como divisória: parte já
+  // foi (do recebido) e parte ainda vai (do que falta receber).
   const receitaPrevista = resumo.receitaBaile.orcado || resumo.receitaBaile.contratado
-  const previsaoLiquida = receitaPrevista * (1 - ccPct / 100)
-  const aReceber = Math.max(0, previsaoLiquida - arrecadadoLiquido)
-  const pctArrecadado = previsaoLiquida > 0 ? Math.min(100, (arrecadadoLiquido / previsaoLiquida) * 100) : 0
+  const feeRecebido = receitaRecebida * (ccPct / 100)
+  const liqRecebido = receitaRecebida - feeRecebido
+  const aReceberBruto = Math.max(0, receitaPrevista - receitaRecebida)
+  const feeAReceber = aReceberBruto * (ccPct / 100)
+  const liqAReceber = aReceberBruto - feeAReceber
+  const pctRecebido = receitaPrevista > 0 ? Math.min(100, (receitaRecebida / receitaPrevista) * 100) : 0
+  const wPrev = (v: number) => (receitaPrevista > 0 ? (v / receitaPrevista) * 100 : 0)
   const temPrevisao = receitaPrevista > 0
 
   return (
@@ -140,25 +145,62 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
         </div>
       </div>
 
-      {/* Previsão de receita (estimativa) — o que ainda vai entrar, sem assustar */}
+      {/* Previsão de receita (estimativa) — fluxograma: recebido | a receber, e o fee de cada parte */}
       {temPrevisao && (
         <div className="bg-bg rounded-xl px-4 py-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-text-main text-xs font-medium">Previsão de receita da turma</span>
             <span className="text-[10px] uppercase tracking-wide text-text-muted/70 border border-white/10 rounded px-1.5 py-0.5">estimativa</span>
           </div>
-          <div className="h-2.5 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{ width: `${pctArrecadado}%`, background: '#00b894' }} />
+
+          {/* Barra segmentada: turma (verde) + fee (âmbar); tom cheio = recebido, tom claro = a receber. Divisória no ponto de hoje. */}
+          <div className="relative">
+            <div className="flex h-6 rounded-md overflow-hidden bg-white/5">
+              <div style={{ width: `${wPrev(liqRecebido)}%`, background: '#00b894' }} title="Recebido — fica com a turma" />
+              <div style={{ width: `${wPrev(feeRecebido)}%`, background: '#f59e0b' }} title="Recebido — fee Alliance" />
+              <div style={{ width: `${wPrev(liqAReceber)}%`, background: 'rgba(0,184,148,0.38)' }} title="A receber — turma (estimado)" />
+              <div style={{ width: `${wPrev(feeAReceber)}%`, background: 'rgba(245,158,11,0.38)' }} title="A receber — fee (estimado)" />
+            </div>
+            {pctRecebido > 2 && pctRecebido < 98 && (
+              <div className="absolute top-0 bottom-0 w-px bg-white/70" style={{ left: `${pctRecebido}%` }} />
+            )}
           </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-success">{fmtBRL(arrecadadoLiquido)} já entraram</span>
-            <span className="text-text-muted">{pctArrecadado.toFixed(0)}% de {fmtBRL(previsaoLiquida)} previstos</span>
+          <div className="flex justify-between text-[11px] text-text-muted">
+            <span>◀ Já recebido · {pctRecebido.toFixed(0)}%</span>
+            <span>Ainda a receber ▶</span>
           </div>
+
+          {/* Detalhe por destino: recebido vs a receber, cada um dividido em turma e fee */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs pt-1">
+            <div className="space-y-1">
+              <div className="text-text-main font-medium">Já recebido · {fmtBRL(receitaRecebida)}</div>
+              <div className="flex justify-between">
+                <span className="text-text-muted flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: '#00b894' }} /> fica com a turma</span>
+                <span className="text-success tabular-nums">{fmtBRL(liqRecebido)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-text-muted flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: '#f59e0b' }} /> fee Alliance ({ccPct.toFixed(ccPct % 1 === 0 ? 0 : 2)}%)</span>
+                <span className="text-warning tabular-nums">{fmtBRL(feeRecebido)}</span>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-text-main font-medium">Ainda a receber · {fmtBRL(aReceberBruto)}</div>
+              <div className="flex justify-between">
+                <span className="text-text-muted flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: 'rgba(0,184,148,0.38)' }} /> irá pra turma</span>
+                <span className="text-success/70 tabular-nums">{fmtBRL(liqAReceber)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-text-muted flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: 'rgba(245,158,11,0.38)' }} /> fee Alliance ({ccPct.toFixed(ccPct % 1 === 0 ? 0 : 2)}%)</span>
+                <span className="text-warning/70 tabular-nums">{fmtBRL(feeAReceber)}</span>
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-between text-xs border-t border-white/8 pt-2">
-            <span className="text-text-muted">Ainda a receber (estimado)</span>
-            <span className="text-text-main tabular-nums">{fmtBRL(aReceber)}</span>
+            <span className="text-text-main font-medium">Previsto total (orçado)</span>
+            <span className="text-text-main font-semibold tabular-nums">{fmtBRL(receitaPrevista)}</span>
           </div>
-          <div className="text-text-muted/50 text-[10px]">Estimativa pela receita orçada da P.O., já sem o fee. Não considera inadimplência.</div>
+          <div className="text-text-muted/50 text-[10px]">Estimativa pela receita orçada da P.O. Não considera inadimplência.</div>
         </div>
       )}
 
