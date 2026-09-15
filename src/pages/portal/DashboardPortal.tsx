@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
-import { CheckCircle2, AlertTriangle, LogOut, ChevronDown, ChevronRight, Download, Wallet, CalendarDays, ArrowRight } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, LogOut, ChevronDown, ChevronRight, Download, Wallet, CalendarDays, ArrowRight, Gift } from 'lucide-react'
 import { gerarPrestacaoContas } from '../../lib/gerarPrestacaoContas'
 import { supabase } from '../../lib/supabase'
 import { usePortalAuth } from '../../contexts/PortalAuthContext'
@@ -430,6 +430,7 @@ const TIPO_LABEL: Record<string, string> = {
   VIAGEM_MEIO_CURSO: 'Viagem Meio Curso',
   FESTA_PRE_INTERNATO: 'Pré-Internato',
   FESTA_X_DIAS: 'Festa X Dias',
+  TROTE_ALLIANCE: 'Trote',
 }
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -774,6 +775,18 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
 
   const hoje = new Date().toISOString().slice(0, 10)
 
+  // Valor do Trote na P.O. (fonte de verdade) — usado quando o pré-evento é uma
+  // cortesia da Alliance (tipo TROTE_ALLIANCE). O orçamento do módulo fica
+  // dessincronizado, então puxamos o valor pago/contratado da P.O.
+  const valorCortesiaTrote = useMemo(
+    () =>
+      (projeto.secoes ?? [])
+        .flatMap((s) => s.itens ?? [])
+        .filter((i) => (i.item ?? '').trim().toLowerCase().startsWith('trote'))
+        .reduce((s, i) => s + (i.valorPago || i.valorContratado || 0), 0),
+    [projeto],
+  )
+
   useEffect(() => {
     async function load() {
       const { data } = await supabase.from('orcamentos').select('dados')
@@ -825,6 +838,7 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
       {orcamentos.map(orc => {
         const isPast = orc.data && orc.data < hoje
         const isOpen = expandidos[orc.id] ?? false
+        const ehCortesia = orc.tipo === 'TROTE_ALLIANCE'
 
         return (
           <div key={orc.id} className={`rounded-xl overflow-hidden transition-all ${isPast ? 'opacity-50' : ''} ${isOpen ? 'bg-surface ring-1 ring-white/10' : 'bg-bg'}`}>
@@ -837,7 +851,10 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
                 {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </span>
               <div className="flex-1 min-w-0">
-                <div className="text-text-main font-semibold text-sm">{TIPO_LABEL[orc.tipo] ?? orc.tipo}</div>
+                <div className="text-text-main font-semibold text-sm flex items-center gap-2 flex-wrap">
+                  {TIPO_LABEL[orc.tipo] ?? orc.tipo}
+                  {ehCortesia && <span className="text-[9px] uppercase tracking-wide text-success bg-success/12 border border-success/25 rounded px-1.5 py-0.5">Cortesia Alliance</span>}
+                </div>
                 <div className="text-text-muted text-xs mt-0.5">{orc.turma}</div>
               </div>
               <div className="text-right shrink-0">
@@ -859,8 +876,27 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
                   </div>
                 )}
 
-                {/* Orçamento completo */}
+                {/* Orçamento completo (ou card de cortesia, se for presente da Alliance) */}
                 <div className="space-y-5">
+                {ehCortesia ? (
+                  <div className="rounded-xl border border-success/25 bg-success/5 px-4 py-4 space-y-2.5">
+                    <div className="flex items-center gap-2">
+                      <Gift size={16} className="text-success shrink-0" />
+                      <span className="text-text-main font-semibold text-sm">Presente da Alliance</span>
+                    </div>
+                    <p className="text-text-muted text-xs leading-relaxed">Este pré-evento foi oferecido como cortesia pela Alliance — sem custo para a turma.</p>
+                    {valorCortesiaTrote > 0 && (
+                      <div className="flex justify-between text-sm pt-1.5 border-t border-white/8">
+                        <span className="text-text-muted">Valor coberto pela Alliance</span>
+                        <span className="text-success font-semibold tabular-nums">{fmtBRL(valorCortesiaTrote)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-text-muted">Custo para a turma</span>
+                      <span className="text-text-main font-semibold tabular-nums">{fmtBRL(0)}</span>
+                    </div>
+                  </div>
+                ) : (<>
                 <h4 className="text-text-muted text-[10px] font-bold uppercase tracking-widest mb-2">Orçamento</h4>
                 {/* KPIs financeiros */}
                 {(() => {
@@ -974,6 +1010,7 @@ function SecaoPreEventos({ projeto }: { projeto: Projeto }) {
                     </div>
                   </div>
                 )}
+                </>)}
                 </div>
                 </div>
                 {temCronograma && <GanttPortal tarefas={tarefasRegua} dataEvento={orc.data} />}
