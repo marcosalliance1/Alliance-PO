@@ -246,6 +246,34 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
       .sort((a, b) => b.margemOrcadaPct - a.margemOrcadaPct)
   }, [projetosEmAndamento, projetosRealizados])
 
+  // Margem Orçada × Real, agrupado por ano de entrega — só projetos ativos (o "Top
+  // Projetos" acima inclui realizados de propósito, esse aqui é o oposto). "Margem
+  // Real" só existe quando já tem pagamento real lançado (receita ou custo pago);
+  // sem isso o cálculo (0/0) daria uma divergência falsa — projeto fica de fora até
+  // ter dado real, em vez de aparecer com "0% real" enganoso.
+  const rankingOrcadaVsReal = useMemo(() => {
+    const pct = (n: number, d: number) => (d > 0 ? (n / d) * 100 : 0)
+    const porAno = new Map<number, {
+      projeto: Projeto; margemOrcadaPct: number; margemRealPct: number; divergencia: number
+    }[]>()
+
+    for (const p of projetosEmAndamento) {
+      const resumo = calcResumoProjeto(p)
+      const temDadoReal = resumo.receitaBaile.pago > 0 || resumo.custoTotal.pago > 0
+      if (!temDadoReal) continue
+      const margemOrcadaPct = pct(resumo.receitaBaile.orcado - resumo.custoTotal.orcado, resumo.receitaBaile.orcado)
+      const margemRealPct = pct(resumo.receitaBaile.pago - resumo.custoTotal.pago, resumo.receitaBaile.pago)
+      const ano = p.tap.anoRealizacao
+      const lista = porAno.get(ano) ?? []
+      lista.push({ projeto: p, margemOrcadaPct, margemRealPct, divergencia: Math.abs(margemOrcadaPct - margemRealPct) })
+      porAno.set(ano, lista)
+    }
+
+    return Array.from(porAno.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([ano, lista]) => ({ ano, lista: lista.sort((a, b) => b.divergencia - a.divergencia) }))
+  }, [projetosEmAndamento])
+
   const resumoPorTipo = useMemo(() => {
     const grupos: Record<'SUPERIOR' | 'MEDIO' | 'FUNDAMENTAL', { receita: number; custo: number; count: number }> = {
       SUPERIOR: { receita: 0, custo: 0, count: 0 },
@@ -669,6 +697,71 @@ export function DashboardGeral({ projetos }: DashboardGeralProps) {
                     </div>
                   )
                 })}
+              </div>
+              <p className="text-[10px] text-text-muted text-center mt-3">Clique em um projeto para abrir o dashboard detalhado</p>
+            </div>
+          )}
+
+          {/* ── Margem Orçada × Real, por ano de entrega ──────────────────── */}
+          {showEmAndamentoCharts && rankingOrcadaVsReal.length > 0 && (
+            <div className="card">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded flex items-center justify-center shrink-0" style={{ background: 'rgba(14,165,233,0.15)' }}>
+                    <TrendingUp className="w-3.5 h-3.5" style={{ color: '#0EA5E9' }} />
+                  </div>
+                  <h3 className="text-sm font-semibold text-text-main">Margem Orçada × Real — por Ano de Entrega</h3>
+                </div>
+              </div>
+              <p className="text-[11px] text-text-muted mb-4">Só projetos ativos com pagamento real já lançado. Ordenado pela maior diferença entre o orçado e o real dentro de cada ano.</p>
+
+              <div className="space-y-5">
+                {rankingOrcadaVsReal.map(({ ano, lista }) => (
+                  <div key={ano}>
+                    <p className="text-xs font-bold text-text-muted uppercase tracking-wide mb-2">{ano} <span className="font-normal normal-case">· {lista.length} projeto{lista.length !== 1 ? 's' : ''}</span></p>
+                    <div className="space-y-2">
+                      {lista.map((r) => {
+                        const titulo = r.projeto.tap.turma || `${r.projeto.tap.instituicao} ${r.projeto.tap.curso}`.trim() || `Projeto #${r.projeto.id.slice(0, 6)}`
+                        return (
+                          <div
+                            key={r.projeto.id}
+                            className="flex items-center gap-3 p-3 rounded-inner hover:bg-white/5 cursor-pointer transition-colors border border-white/5"
+                            onClick={() => navigate(`/projetos/${r.projeto.id}`)}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-text-main truncate">{titulo}</p>
+                              <p className="text-[11px] text-text-muted">
+                                {r.projeto.tap.tipoEscola === 'SUPERIOR' ? 'Ensino Superior' : r.projeto.tap.tipoEscola === 'FUNDAMENTAL' ? 'Ensino Fundamental' : 'Ensino Médio'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <div className="text-center min-w-[52px]">
+                                <p className="text-[10px] text-text-muted">Orçada</p>
+                                <p className="text-sm font-semibold" style={{ color: r.margemOrcadaPct >= 0 ? '#16A34A' : '#DC2626' }}>{r.margemOrcadaPct.toFixed(1)}%</p>
+                              </div>
+                              <div className="text-center min-w-[52px]">
+                                <p className="text-[10px] text-text-muted">Real</p>
+                                <p className="text-sm font-semibold" style={{ color: r.margemRealPct >= 0 ? '#16A34A' : '#DC2626' }}>{r.margemRealPct.toFixed(1)}%</p>
+                              </div>
+                              <div className="text-center min-w-[56px]">
+                                <p className="text-[10px] text-text-muted">Δ</p>
+                                <p
+                                  className="text-sm font-semibold px-1.5 rounded"
+                                  style={r.divergencia > 10
+                                    ? { color: '#F59E0B', background: 'rgba(245,158,11,0.12)' }
+                                    : { color: '#64748B' }
+                                  }
+                                >
+                                  {r.divergencia.toFixed(1)}pp
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
               <p className="text-[10px] text-text-muted text-center mt-3">Clique em um projeto para abrir o dashboard detalhado</p>
             </div>
