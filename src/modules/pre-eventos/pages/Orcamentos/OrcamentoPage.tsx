@@ -7,6 +7,7 @@ import { formatBRL, newItemId } from '../../utils/formatters'
 import TabelaItens from '../../components/Orcamento/TabelaItens'
 import { ResumoFinanceiro } from '../../components/Orcamento/ResumoFinanceiro'
 import { PainelMargem } from '../../components/Orcamento/PainelMargem'
+import { PainelStatusCustos } from '../../components/Orcamento/PainelStatusCustos'
 import { PainelSugestoes } from '../../components/Orcamento/PainelSugestoes'
 import { AbaInfoEvento } from '../../components/Evento/AbaInfoEvento'
 import { CronogramaRegua } from '../../components/Evento/CronogramaRegua'
@@ -931,6 +932,8 @@ export const OrcamentoPage: React.FC = () => {
       <PainelSugestoes orc={orc} onAdicionar={handleAdicionarSugestao} />
 
       <ResumoFinanceiro orc={orc} />
+
+      <PainelStatusCustos orc={orc} />
       </>)}
 
       {/* Input oculto para upload de documento de cotação */}
