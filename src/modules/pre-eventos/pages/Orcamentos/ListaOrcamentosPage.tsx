@@ -4,13 +4,21 @@ import { Plus, Search, Pencil, Trash2, Eye, ChevronDown, ChevronRight } from 'lu
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS } from '../../data/defaults'
 import { formatBRL, formatDate } from '../../utils/formatters'
-import type { OrcamentoStatus } from '../../types'
+import type { Orcamento, OrcamentoStatus } from '../../types'
 
 const STATUS_COLORS: Record<OrcamentoStatus, string> = {
   RASCUNHO:    'bg-muted/20 text-muted border-muted/30',
   EM_ANDAMENTO:'bg-warning/20 text-warning border-warning/30',
   CONCLUIDO:   'bg-success/20 text-success border-success/30',
 }
+
+const allItemsOf = (o: Orcamento) => [...o.operacaoEstrutura, ...o.equipe, ...o.atracao, ...o.abBebidas, ...o.extras]
+const receitasOf = (o: Orcamento) => o.bolsaFolia + o.receitasSympla.reduce((s, l) => s + l.total, 0)
+const pagoOf = (o: Orcamento) => allItemsOf(o).reduce((s, i) => s + i.totalPagoReal, 0)
+// BV = V.Cliente − Total Pago; itens "Pago (Comissão)" não geram BV.
+const bvOf = (o: Orcamento) => allItemsOf(o).reduce((s, i) => s + (i.status === 'PAGO_COMISSAO' ? 0 : i.valorPassadoCliente - i.totalPagoReal), 0)
+// Chave de agrupamento por turma: normaliza grafia ("BQ 78" e "BQ78" caem juntos).
+const turmaKey = (t: string) => (t || '—').trim().replace(/\s+/g, '').toUpperCase() || '—'
 
 export const ListaOrcamentosPage: React.FC = () => {
   const navigate = useNavigate()
@@ -23,7 +31,7 @@ export const ListaOrcamentosPage: React.FC = () => {
     [...new Set(orcamentos.map(o => o.instituicao).filter(Boolean))].sort(),
   [orcamentos])
 
-  // Group filtered orçamentos by institution
+  // Agrupa: Instituição → Turma → orçamentos (tipos de evento).
   const grupos = useMemo(() => {
     const q = busca.toLowerCase()
     const filtrados = orcamentos.filter(o => {
@@ -34,28 +42,30 @@ export const ListaOrcamentosPage: React.FC = () => {
       return true
     })
 
-    const map = new Map<string, typeof filtrados>()
+    const instMap = new Map<string, Map<string, { label: string; itens: Orcamento[] }>>()
     for (const o of filtrados) {
-      const key = o.instituicao || '—'
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(o)
+      const inst = o.instituicao || '—'
+      const tk = turmaKey(o.turma)
+      if (!instMap.has(inst)) instMap.set(inst, new Map())
+      const tm = instMap.get(inst)!
+      if (!tm.has(tk)) tm.set(tk, { label: (o.turma || '—').trim() || '—', itens: [] })
+      tm.get(tk)!.itens.push(o)
     }
-    return [...map.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([inst, itens]) => [
-        inst,
-        [...itens].sort((a, b) => {
-          const t = (a.turma || '').localeCompare(b.turma || '')
-          return t !== 0 ? t : (a.data || '').localeCompare(b.data || '')
-        }),
-      ] as [string, typeof filtrados])
+
+    return [...instMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b, 'pt-BR', { numeric: true }))
+      .map(([inst, tm]) => {
+        const turmas = [...tm.values()]
+          .map(t => ({ ...t, itens: [...t.itens].sort((a, b) => (a.data || '').localeCompare(b.data || '')) }))
+          .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR', { numeric: true }))
+        const nOrc = turmas.reduce((s, t) => s + t.itens.length, 0)
+        return { inst, turmas, nOrc }
+      })
   }, [orcamentos, busca, filtroInst])
 
-  const totalFiltrado = grupos.reduce((s, [, itens]) => s + itens.length, 0)
+  const totalFiltrado = grupos.reduce((s, g) => s + g.nOrc, 0)
 
-  function toggle(inst: string) {
-    setAbertos(prev => ({ ...prev, [inst]: !prev[inst] }))
-  }
+  const toggle = (key: string) => setAbertos(prev => ({ ...prev, [key]: !prev[key] }))
 
   function handleDelete(id: string, nome: string) {
     confirm(`Deseja excluir o orçamento "${nome}"? Esta ação não pode ser desfeita.`, () => {
@@ -93,7 +103,7 @@ export const ListaOrcamentosPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Grupos por Instituição */}
+      {/* Grupos: Instituição → Turma → orçamentos */}
       {grupos.length === 0 ? (
         <div className="bg-surface-2 border border-bordercol rounded-card p-12 text-center">
           <p className="text-white font-semibold">
@@ -105,96 +115,119 @@ export const ListaOrcamentosPage: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-2">
-          {grupos.map(([inst, itens]) => {
-            const isOpen = abertos[inst] ?? false
+          {grupos.map(({ inst, turmas, nOrc }) => {
+            const instKey = `i:${inst}`
+            const instOpen = abertos[instKey] ?? false
             return (
               <div key={inst} className="bg-surface-2 border border-bordercol rounded-card overflow-hidden">
-                {/* Institution header */}
+                {/* Nível 1: Instituição */}
                 <button
-                  onClick={() => toggle(inst)}
+                  onClick={() => toggle(instKey)}
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left"
                 >
                   <span className="text-muted shrink-0">
-                    {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                    {instOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                   </span>
                   <span className="text-white font-semibold text-sm flex-1">{inst}</span>
-                  <span className="text-muted text-xs shrink-0">{itens.length} orçamento{itens.length !== 1 ? 's' : ''}</span>
+                  <span className="text-muted text-xs shrink-0">
+                    {turmas.length} turma{turmas.length !== 1 ? 's' : ''} · {nOrc} orçamento{nOrc !== 1 ? 's' : ''}
+                  </span>
                 </button>
 
-                {/* Inner table */}
-                {isOpen && (
-                  <div className="border-t border-bordercol/50 overflow-x-auto">
-                    <table className="w-full text-sm" style={{ minWidth: 620 }}>
-                      <thead>
-                        <tr className="bg-white/[0.03]">
-                          <th className="text-left text-muted font-medium px-4 py-2 text-xs">Turma</th>
-                          <th className="text-left text-muted font-medium px-4 py-2 text-xs hidden sm:table-cell">Tipo</th>
-                          <th className="text-center text-muted font-medium px-4 py-2 text-xs hidden md:table-cell">Data</th>
-                          <th className="text-center text-muted font-medium px-4 py-2 text-xs hidden lg:table-cell">Conv.</th>
-                          <th className="text-right text-muted font-medium px-4 py-2 text-xs">Receitas</th>
-                          <th className="text-right text-muted font-medium px-4 py-2 text-xs hidden md:table-cell">Total Pago</th>
-                          <th className="text-right text-muted font-medium px-4 py-2 text-xs hidden sm:table-cell">BV</th>
-                          <th className="text-center text-muted font-medium px-4 py-2 text-xs hidden sm:table-cell">Status</th>
-                          <th className="w-24 px-4 py-2"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {itens.map(o => {
-                          const allItems = [...o.operacaoEstrutura, ...o.equipe, ...o.atracao, ...o.abBebidas, ...o.extras]
-                          const totalReceitas = o.bolsaFolia + o.receitasSympla.reduce((s, l) => s + l.total, 0)
-                          const totalPago = allItems.reduce((s, i) => s + i.totalPagoReal, 0)
-                          const totalBV   = allItems.reduce((s, i) => s + (i.valorPassadoCliente - i.totalPagoReal), 0)
+                {/* Nível 2: Turmas */}
+                {instOpen && (
+                  <div className="border-t border-bordercol/50">
+                    {turmas.map(t => {
+                      const tKey = `t:${inst}::${turmaKey(t.label)}`
+                      const tOpen = abertos[tKey] ?? false
+                      const bvTurma = t.itens.reduce((s, o) => s + bvOf(o), 0)
+                      return (
+                        <div key={tKey}>
+                          {/* Turma header (indentado) */}
+                          <button
+                            onClick={() => toggle(tKey)}
+                            className="w-full flex items-center gap-3 pl-8 pr-4 py-2.5 bg-black/10 hover:bg-white/[0.03] transition-colors text-left border-b border-bordercol/30"
+                          >
+                            <span className="text-muted shrink-0">
+                              {tOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                            </span>
+                            <span className="text-white text-sm font-medium flex-1">{t.label}</span>
+                            <span className="text-muted text-[11px] shrink-0">{t.itens.length} evento{t.itens.length !== 1 ? 's' : ''}</span>
+                            <span className={`text-[11px] font-semibold shrink-0 w-24 text-right ${bvTurma >= 0 ? 'text-success' : 'text-danger'}`}>
+                              BV {formatBRL(bvTurma)}
+                            </span>
+                          </button>
 
-                          return (
-                            <tr
-                              key={o.id}
-                              className="border-t border-bordercol/30 hover:bg-white/[0.03] cursor-pointer transition-colors"
-                              onClick={() => navigate(`/pre-eventos/orcamentos/${o.id}`)}
-                            >
-                              <td className="px-4 py-2.5 text-white text-xs font-medium">{o.turma || '—'}</td>
-                              <td className="px-4 py-2.5 text-gray-300 text-xs hidden sm:table-cell">{EVENT_TYPE_LABELS[o.tipo]}</td>
-                              <td className="px-4 py-2.5 text-center text-gray-300 text-xs hidden md:table-cell">{formatDate(o.data)}</td>
-                              <td className="px-4 py-2.5 text-center text-gray-300 text-xs hidden lg:table-cell">{o.quantidadeConvidados}</td>
-                              <td className="px-4 py-2.5 text-right text-success text-xs font-medium">{formatBRL(totalReceitas)}</td>
-                              <td className="px-4 py-2.5 text-right text-gray-300 text-xs hidden md:table-cell">{formatBRL(totalPago)}</td>
-                              <td className={`px-4 py-2.5 text-right text-xs font-semibold hidden sm:table-cell ${totalBV >= 0 ? 'text-success' : 'text-danger'}`}>
-                                {formatBRL(totalBV)}
-                              </td>
-                              <td className="px-4 py-2.5 text-center hidden sm:table-cell">
-                                <span className={`text-xs border rounded px-2 py-0.5 whitespace-nowrap ${STATUS_COLORS[o.status]}`}>
-                                  {o.status.replace('_', ' ')}
-                                </span>
-                              </td>
-                              <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
-                                <div className="flex items-center gap-1 justify-end">
-                                  <button
-                                    onClick={() => navigate(`/pre-eventos/orcamentos/${o.id}`)}
-                                    className="p-1.5 rounded text-muted hover:text-white hover:bg-white/10 transition-colors"
-                                    title="Visualizar"
-                                  >
-                                    <Eye className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => navigate(`/pre-eventos/orcamentos/${o.id}`)}
-                                    className="p-1.5 rounded text-muted hover:text-accent hover:bg-accent/10 transition-colors"
-                                    title="Editar"
-                                  >
-                                    <Pencil className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(o.id, `${o.instituicao} ${o.turma}`)}
-                                    className="p-1.5 rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors"
-                                    title="Excluir"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                          {/* Nível 3: tabela de orçamentos da turma */}
+                          {tOpen && (
+                            <div className="overflow-x-auto bg-black/20">
+                              <table className="w-full text-sm" style={{ minWidth: 620 }}>
+                                <thead>
+                                  <tr className="bg-white/[0.03]">
+                                    <th className="text-left text-muted font-medium px-4 py-2 text-xs pl-12">Tipo</th>
+                                    <th className="text-center text-muted font-medium px-4 py-2 text-xs hidden md:table-cell">Data</th>
+                                    <th className="text-center text-muted font-medium px-4 py-2 text-xs hidden lg:table-cell">Conv.</th>
+                                    <th className="text-right text-muted font-medium px-4 py-2 text-xs">Receitas</th>
+                                    <th className="text-right text-muted font-medium px-4 py-2 text-xs hidden md:table-cell">Total Pago</th>
+                                    <th className="text-right text-muted font-medium px-4 py-2 text-xs hidden sm:table-cell">BV</th>
+                                    <th className="text-center text-muted font-medium px-4 py-2 text-xs hidden sm:table-cell">Status</th>
+                                    <th className="w-24 px-4 py-2"></th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {t.itens.map(o => (
+                                    <tr
+                                      key={o.id}
+                                      className="border-t border-bordercol/30 hover:bg-white/[0.03] cursor-pointer transition-colors"
+                                      onClick={() => navigate(`/pre-eventos/orcamentos/${o.id}`)}
+                                    >
+                                      <td className="px-4 py-2.5 text-white text-xs font-medium pl-12">{EVENT_TYPE_LABELS[o.tipo]}</td>
+                                      <td className="px-4 py-2.5 text-center text-gray-300 text-xs hidden md:table-cell">{formatDate(o.data)}</td>
+                                      <td className="px-4 py-2.5 text-center text-gray-300 text-xs hidden lg:table-cell">{o.quantidadeConvidados}</td>
+                                      <td className="px-4 py-2.5 text-right text-success text-xs font-medium">{formatBRL(receitasOf(o))}</td>
+                                      <td className="px-4 py-2.5 text-right text-gray-300 text-xs hidden md:table-cell">{formatBRL(pagoOf(o))}</td>
+                                      <td className={`px-4 py-2.5 text-right text-xs font-semibold hidden sm:table-cell ${bvOf(o) >= 0 ? 'text-success' : 'text-danger'}`}>
+                                        {formatBRL(bvOf(o))}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-center hidden sm:table-cell">
+                                        <span className={`text-xs border rounded px-2 py-0.5 whitespace-nowrap ${STATUS_COLORS[o.status]}`}>
+                                          {o.status.replace('_', ' ')}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
+                                        <div className="flex items-center gap-1 justify-end">
+                                          <button
+                                            onClick={() => navigate(`/pre-eventos/orcamentos/${o.id}`)}
+                                            className="p-1.5 rounded text-muted hover:text-white hover:bg-white/10 transition-colors"
+                                            title="Visualizar"
+                                          >
+                                            <Eye className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button
+                                            onClick={() => navigate(`/pre-eventos/orcamentos/${o.id}`)}
+                                            className="p-1.5 rounded text-muted hover:text-accent hover:bg-accent/10 transition-colors"
+                                            title="Editar"
+                                          >
+                                            <Pencil className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button
+                                            onClick={() => handleDelete(o.id, `${o.instituicao} ${o.turma}`)}
+                                            className="p-1.5 rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors"
+                                            title="Excluir"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
