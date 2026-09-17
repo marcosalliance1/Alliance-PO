@@ -127,9 +127,6 @@ function TabelaCaptacao({ tipo, linhas }: { tipo: TipoEscola; linhas: LinhaCapta
           <th className="text-left px-4 py-2 text-text-muted font-medium text-xs w-40">Adesões</th>
           <th className="text-right px-4 py-2 text-text-muted font-medium text-xs w-32">Pacote Base</th>
           <th className="text-right px-4 py-2 text-text-muted font-medium text-xs w-32">Total</th>
-          <th className="text-right px-4 py-2 text-text-muted font-medium text-xs w-32">Comissão 01</th>
-          <th className="text-right px-4 py-2 text-text-muted font-medium text-xs w-32">Comissão 02</th>
-          <th className="text-right px-4 py-2 text-text-muted font-medium text-xs w-32">Total Comissão</th>
           <th className="text-left px-4 py-2 text-text-muted font-medium text-xs w-36">Responsável</th>
         </tr>
       </thead>
@@ -151,15 +148,12 @@ function TabelaCaptacao({ tipo, linhas }: { tipo: TipoEscola; linhas: LinhaCapta
             </td>
             <td className="px-4 py-2.5 text-right text-text-main">{formatBRL(l.pacoteBase)}</td>
             <td className="px-4 py-2.5 text-right text-text-main">{formatBRL(l.total)}</td>
-            <td className="px-4 py-2.5 text-right text-text-main">{formatBRL(l.comissao01)}</td>
-            <td className="px-4 py-2.5 text-right text-text-main">{formatBRL(l.comissao02)}</td>
-            <td className="px-4 py-2.5 text-right text-primary font-semibold">{formatBRL(l.totalComissao)}</td>
             <td className="px-4 py-2.5 text-text-main">{l.responsavel}</td>
           </tr>
         ))}
         {linhas.length === 0 && (
           <tr>
-            <td colSpan={8} className="px-4 py-6 text-center text-text-muted text-sm">Nenhuma instituição encontrada.</td>
+            <td colSpan={5} className="px-4 py-6 text-center text-text-muted text-sm">Nenhuma instituição encontrada.</td>
           </tr>
         )}
       </tbody>
