@@ -12,7 +12,20 @@ export type StatusItem = 'orçar' | 'orçando' | 'estimado' | 'fechado' | 'N/A'
 
 export type TipoCusto = 'Custo Fixo' | 'Custo Variável'
 
-export type StatusPagamento = 'N/A' | 'em aberto' | 'parcial' | 'pago'
+// Cartão* = pago num cartão da Alliance (dinheiro da Alliance): conta como pago normal
+// (o valorPago já entra em todos os totais). Só não bate no Everest até a fatura fechar —
+// por isso há um card de breakdown por cartão na tela do projeto.
+export type StatusPagamento =
+  | 'N/A' | 'em aberto' | 'parcial' | 'pago'
+  | 'cartão produção' | 'cartão comercial' | 'cartão bia' | 'cartão golden'
+
+export const CARTOES_PAGAMENTO: { status: StatusPagamento; label: string; cor: string }[] = [
+  { status: 'cartão produção',  label: 'Cartão Produção',  cor: '#22d3ee' },
+  { status: 'cartão comercial', label: 'Cartão Comercial', cor: '#818cf8' },
+  { status: 'cartão bia',       label: 'Cartão Bia',       cor: '#f472b6' },
+  { status: 'cartão golden',    label: 'Cartão Golden',    cor: '#f59e0b' },
+]
+export const isCartaoPagamento = (s: StatusPagamento): boolean => s.startsWith('cartão')
 
 export interface ItemCusto {
   id: string

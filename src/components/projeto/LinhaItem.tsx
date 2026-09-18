@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import type { ItemCusto, StatusItem, StatusPagamento, TipoCusto } from '../../types'
+import { isCartaoPagamento } from '../../types'
 import { Trash2 } from 'lucide-react'
 import { formatBRL } from '../../utils/formatters'
 import { useAuth } from '../../contexts/AuthContext'
@@ -12,7 +13,7 @@ interface LinhaItemProps {
 }
 
 const STATUS_OPTS: StatusItem[] = ['orçar', 'orçando', 'estimado', 'fechado', 'N/A']
-const PGTO_OPTS: StatusPagamento[] = ['N/A', 'em aberto', 'parcial', 'pago']
+const PGTO_OPTS: StatusPagamento[] = ['N/A', 'em aberto', 'parcial', 'pago', 'cartão produção', 'cartão comercial', 'cartão bia', 'cartão golden']
 const TIPO_CUSTO_OPTS: TipoCusto[] = ['Custo Fixo', 'Custo Variável']
 
 function Td({ children, className = '', style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
@@ -40,6 +41,7 @@ export function ValorContabil({ value, className = '', style, title }: {
 // estimado=azul, fechado=verde. "Pago" é uma camada extra por cima (outro tom de verde,
 // pra não confundir com "fechado" mas ainda deixar claro que é um estado positivo).
 function getStickyBg(item: ItemCusto): string {
+  if (isCartaoPagamento(item.statusPagamento)) return '#e0faff' // cartão = pago via cartão (tom ciano)
   if (item.statusPagamento === 'pago') return '#e6faf5'
   switch (item.status) {
     case 'orçando': return '#fffbeb'
@@ -127,6 +129,9 @@ function divTitle(item: ItemCusto, coluna: string): string {
 
 // Mesma regra de getStickyBg, só que pra linha inteira (cor mais forte) — orçar sem cor.
 function getRowStyle(item: ItemCusto): React.CSSProperties {
+  if (isCartaoPagamento(item.statusPagamento)) {
+    return { backgroundColor: 'rgba(34,211,238,0.12)', borderLeft: '3px solid #22D3EE' }
+  }
   if (item.statusPagamento === 'pago') {
     return { backgroundColor: 'rgba(16,185,129,0.12)', borderLeft: '3px solid #10B981' }
   }

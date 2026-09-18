@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Projeto, ItemCusto, ItemCatalogo, TAP, Receitas, ConciliacaoEverest, CustoAdicional, InfoEvento } from '../types'
+import { isCartaoPagamento, CARTOES_PAGAMENTO } from '../types'
 import { formatBRL } from '../utils/formatters'
 import { TAPForm } from '../components/projeto/TAPForm'
 import { SecaoCusto } from '../components/projeto/SecaoCusto'
@@ -12,7 +13,7 @@ import { Header } from '../components/layout/Header'
 import { BadgeEscola } from '../components/ui/Badge'
 import { useAuth } from '../contexts/AuthContext'
 import { gerarRelatorioPendencias } from '../lib/gerarRelatorioPendencias'
-import { ArrowLeft, Save, Check, Loader, FileWarning, Boxes } from 'lucide-react'
+import { ArrowLeft, Save, Check, Loader, FileWarning, Boxes, CreditCard } from 'lucide-react'
 
 interface ViewProjetoProps {
   projeto: Projeto
@@ -80,6 +81,21 @@ export function ViewProjeto({
     for (const s of projeto.secoes) for (const it of s.itens)
       if ((it.fornecedor || '').toLowerCase().includes('estoque')) itens.push(it)
     return { itens, pago: itens.reduce((s, i) => s + (i.valorPago || 0), 0) }
+  }, [projeto])
+
+  // Pago no cartão: agrega o valorPago por cartão (statusPagamento "cartão *") em todas as seções.
+  const cartoesPago = useMemo(() => {
+    const map = new Map<string, { valor: number; n: number }>()
+    for (const s of projeto.secoes) for (const it of s.itens) {
+      if (!isCartaoPagamento(it.statusPagamento)) continue
+      const v = it.valorPago || 0
+      if (v <= 0) continue
+      const acc = map.get(it.statusPagamento) ?? { valor: 0, n: 0 }
+      acc.valor += v; acc.n += 1
+      map.set(it.statusPagamento, acc)
+    }
+    const total = [...map.values()].reduce((s, x) => s + x.valor, 0)
+    return { map, total }
   }, [projeto])
 
   const handleUpdateItem = useCallback(
@@ -176,6 +192,34 @@ export function ViewProjeto({
                 <span className="text-text-muted shrink-0">{formatBRL(it.valorPago || 0)}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Card Pago no Cartão (cartões da Alliance — entra no Everest só na fatura) */}
+      {cartoesPago.total > 0 && (
+        <div className="bg-surface-2 border border-white/10 rounded-lg p-4 mb-5">
+          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+            <h3 className="text-text-main font-semibold text-sm flex items-center gap-2">
+              <CreditCard size={16} className="text-primary" /> Pago no Cartão
+            </h3>
+            <span className="text-[11px] text-text-muted">entra no Everest só quando a fatura fecha</span>
+          </div>
+          <p className="text-2xl font-bold text-text-main">{formatBRL(cartoesPago.total)}</p>
+          <p className="text-[11px] text-text-muted mb-2">total pago em cartões da Alliance neste projeto</p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+            {CARTOES_PAGAMENTO.filter((c) => cartoesPago.map.has(c.status)).map((c) => {
+              const d = cartoesPago.map.get(c.status)!
+              return (
+                <div key={c.status} className="rounded border border-white/10 p-2">
+                  <p className="text-[11px] text-text-muted flex items-center gap-1.5 mb-0.5">
+                    <span className="w-2.5 h-2.5 rounded-sm inline-block shrink-0" style={{ background: c.cor }} /> {c.label}
+                  </p>
+                  <p className="text-sm font-bold text-text-main">{formatBRL(d.valor)}</p>
+                  <p className="text-[10px] text-text-muted">{d.n} {d.n === 1 ? 'item' : 'itens'}</p>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
