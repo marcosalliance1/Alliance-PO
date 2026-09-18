@@ -12,7 +12,21 @@
 export type OrcamentoStatus = 'RASCUNHO' | 'EM_ANDAMENTO' | 'CONCLUIDO'
 // PAGO_COMISSAO = a comissão pagou do bolso deles (não saiu da conta Alliance):
 // não conta no Total Pago (não fura a conciliação Everest) nem gera BV; só entra no V. Cliente.
-export type ItemStatus = 'PENDENTE' | 'CONTRATADO' | 'PAGO' | 'PAGO_COMISSAO'
+// CARTAO_* = pago num cartão da Alliance (dinheiro da Alliance): conta como Pago normal
+// (entra no Total Pago e gera BV). Só não bate no Everest até a fatura fechar — por isso
+// tem um card de breakdown por cartão. Futuramente linkado ao sistema de cartão.
+export type ItemStatus =
+  | 'PENDENTE' | 'CONTRATADO' | 'PAGO' | 'PAGO_COMISSAO'
+  | 'CARTAO_PRODUCAO' | 'CARTAO_COMERCIAL' | 'CARTAO_BIA' | 'CARTAO_GOLDEN'
+
+// Definição central dos cartões (status, rótulo, cor) — usada no dropdown e no card de breakdown.
+export const CARTOES: { status: ItemStatus; label: string; cor: string }[] = [
+  { status: 'CARTAO_PRODUCAO',  label: 'Cartão Produção',  cor: '#22d3ee' },
+  { status: 'CARTAO_COMERCIAL', label: 'Cartão Comercial', cor: '#818cf8' },
+  { status: 'CARTAO_BIA',       label: 'Cartão Bia',       cor: '#f472b6' },
+  { status: 'CARTAO_GOLDEN',    label: 'Cartão Golden',    cor: '#f59e0b' },
+]
+export const isCartao = (s: ItemStatus): boolean => s.startsWith('CARTAO_')
 
 export interface NotaFiscal {
   nome: string

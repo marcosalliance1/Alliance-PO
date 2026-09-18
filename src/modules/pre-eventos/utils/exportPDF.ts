@@ -673,6 +673,8 @@ export async function exportarOS(orc: Orcamento) {
   // Itens × Fornecedor (das seções do orçamento) — só itens com fornecedor preenchido.
   const ITEM_SIT_LABEL: Record<string, string> = {
     PENDENTE: 'Pendente', CONTRATADO: 'Contratado', PAGO: 'Pago', PAGO_COMISSAO: 'Pago (Comissão)',
+    CARTAO_PRODUCAO: 'Cartão Produção', CARTAO_COMERCIAL: 'Cartão Comercial',
+    CARTAO_BIA: 'Cartão Bia', CARTAO_GOLDEN: 'Cartão Golden',
   }
   const secoesOrc: [string, ItemOrcamento[]][] = [
     ['OPERAÇÃO / ESTRUTURA',     orc.operacaoEstrutura],

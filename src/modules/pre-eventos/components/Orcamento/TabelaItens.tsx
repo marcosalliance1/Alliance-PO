@@ -15,13 +15,19 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<ItemStatus, string> = {
-  PENDENTE:      'bg-warning/20 text-warning border-warning/30',
-  CONTRATADO:    'bg-blue-500/20 text-blue-300 border-blue-500/30',
-  PAGO:          'bg-success/20 text-success border-success/30',
-  PAGO_COMISSAO: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  PENDENTE:        'bg-warning/20 text-warning border-warning/30',
+  CONTRATADO:      'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  PAGO:            'bg-success/20 text-success border-success/30',
+  PAGO_COMISSAO:   'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  CARTAO_PRODUCAO: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+  CARTAO_COMERCIAL:'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+  CARTAO_BIA:      'bg-pink-500/20 text-pink-300 border-pink-500/30',
+  CARTAO_GOLDEN:   'bg-amber-500/20 text-amber-300 border-amber-500/30',
 }
 const STATUS_LABELS: Record<ItemStatus, string> = {
   PENDENTE: 'Pendente', CONTRATADO: 'Contratado', PAGO: 'Pago', PAGO_COMISSAO: 'Pago (Comissão)',
+  CARTAO_PRODUCAO: 'Cartão Produção', CARTAO_COMERCIAL: 'Cartão Comercial',
+  CARTAO_BIA: 'Cartão Bia', CARTAO_GOLDEN: 'Cartão Golden',
 }
 const MAX_SIZE = 4 * 1024 * 1024
 

@@ -440,12 +440,21 @@ const STATUS_STYLE: Record<string, string> = {
   PAGO:          'bg-blue-400/15 text-blue-400',
   PENDENTE:      'bg-warning/15 text-warning',
   PAGO_COMISSAO: 'bg-purple-400/15 text-purple-400',
+  // Cartões: pra comissão aparecem apenas como "Pago" (detalhe do cartão é interno).
+  CARTAO_PRODUCAO:  'bg-blue-400/15 text-blue-400',
+  CARTAO_COMERCIAL: 'bg-blue-400/15 text-blue-400',
+  CARTAO_BIA:       'bg-blue-400/15 text-blue-400',
+  CARTAO_GOLDEN:    'bg-blue-400/15 text-blue-400',
 }
 const STATUS_LABEL: Record<string, string> = {
   CONTRATADO:    'Contratado',
   PAGO:          'Pago',
   PENDENTE:      'Pendente',
   PAGO_COMISSAO: 'Pago (Comissão)',
+  CARTAO_PRODUCAO:  'Pago',
+  CARTAO_COMERCIAL: 'Pago',
+  CARTAO_BIA:       'Pago',
+  CARTAO_GOLDEN:    'Pago',
 }
 
 // ─── Helpers financeiros ──────────────────────────────────────────────────────

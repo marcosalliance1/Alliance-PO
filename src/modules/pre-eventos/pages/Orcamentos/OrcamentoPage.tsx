@@ -8,6 +8,7 @@ import TabelaItens from '../../components/Orcamento/TabelaItens'
 import { ResumoFinanceiro } from '../../components/Orcamento/ResumoFinanceiro'
 import { PainelMargem } from '../../components/Orcamento/PainelMargem'
 import { PainelStatusCustos } from '../../components/Orcamento/PainelStatusCustos'
+import { PainelCartoes } from '../../components/Orcamento/PainelCartoes'
 import { PainelSugestoes } from '../../components/Orcamento/PainelSugestoes'
 import { AbaInfoEvento } from '../../components/Evento/AbaInfoEvento'
 import { CronogramaRegua } from '../../components/Evento/CronogramaRegua'
@@ -934,6 +935,7 @@ export const OrcamentoPage: React.FC = () => {
       <ResumoFinanceiro orc={orc} />
 
       <PainelStatusCustos orc={orc} />
+      <PainelCartoes orc={orc} />
       </>)}
 
       {/* Input oculto para upload de documento de cotação */}

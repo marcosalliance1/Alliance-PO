@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
-import type { Orcamento, ItemOrcamento, ItemStatus } from '../../types'
+import type { Orcamento, ItemOrcamento } from '../../types'
+import { isCartao } from '../../types'
 import { formatBRL } from '../../utils/formatters'
 
 const secoesDe = (o: Orcamento): ItemOrcamento[] =>
@@ -12,7 +13,9 @@ function valorEfetivo(i: ItemOrcamento): number {
   return i.totalPagoReal > 0 ? i.totalPagoReal : i.totalOrcado
 }
 
-const BUCKETS: { key: ItemStatus; label: string; cor: string; bg: string }[] = [
+// Cartão dobra em "Pago", então os buckets do painel são só estes 4.
+type BucketKey = 'PENDENTE' | 'CONTRATADO' | 'PAGO' | 'PAGO_COMISSAO'
+const BUCKETS: { key: BucketKey; label: string; cor: string; bg: string }[] = [
   { key: 'PAGO',          label: 'Pago',            cor: '#34d399', bg: 'bg-success' },
   { key: 'CONTRATADO',    label: 'Contratado',      cor: '#60a5fa', bg: 'bg-blue-400' },
   { key: 'PENDENTE',      label: 'Pendente',        cor: '#fbbf24', bg: 'bg-warning' },
@@ -21,14 +24,16 @@ const BUCKETS: { key: ItemStatus; label: string; cor: string; bg: string }[] = [
 
 export const PainelStatusCustos: React.FC<{ orc: Orcamento }> = ({ orc }) => {
   const r = useMemo(() => {
-    const acc: Record<ItemStatus, { valor: number; n: number }> = {
+    const acc: Record<BucketKey, { valor: number; n: number }> = {
       PENDENTE: { valor: 0, n: 0 }, CONTRATADO: { valor: 0, n: 0 },
       PAGO: { valor: 0, n: 0 }, PAGO_COMISSAO: { valor: 0, n: 0 },
     }
     for (const i of secoesDe(orc)) {
       const v = valorEfetivo(i)
       if (v <= 0) continue // ignora linhas vazias / sem valor
-      const b = acc[i.status] ?? acc.PENDENTE // status legado/inesperado cai em Pendente
+      // Cartão é pago (dinheiro da Alliance) → entra no bucket Pago; detalhe por cartão vai no card de Cartões.
+      const key: BucketKey = isCartao(i.status) ? 'PAGO' : (i.status as BucketKey)
+      const b = acc[key] ?? acc.PENDENTE // status legado/inesperado cai em Pendente
       b.valor += v
       b.n += 1
     }
