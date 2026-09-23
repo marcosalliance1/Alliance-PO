@@ -12,6 +12,7 @@ interface Props {
   onChange: (items: ItemOrcamento[]) => void
   podeAdicionar?: boolean
   filtroFornecedor?: string // se setado, mostra só itens desse fornecedor
+  sugestoesItem?: string[] // nomes já usados (autocomplete no campo Item, ex.: atrações)
 }
 
 const STATUS_COLORS: Record<ItemStatus, string> = {
@@ -113,6 +114,7 @@ const LinhaItem: React.FC<{
   idx: number
   indentado?: boolean
   fornecedores: string[]
+  datalistItemId?: string
   onUpdate: (id: string, field: keyof ItemOrcamento, val: string | number) => void
   onUpdateNF: (id: string, nf: NotaFiscal | undefined) => void
   onRemove: (id: string) => void
@@ -122,7 +124,7 @@ const LinhaItem: React.FC<{
   onDragEndRow: () => void
   isDragging: boolean
   isOver: boolean
-}> = ({ item, idx, indentado = false, fornecedores, onUpdate, onUpdateNF, onRemove,
+}> = ({ item, idx, indentado = false, fornecedores, datalistItemId, onUpdate, onUpdateNF, onRemove,
        onDragStartRow, onDragOverRow, onDropRow, onDragEndRow, isDragging, isOver }) => {
   const tdBase   = 'px-2 py-1.5 text-xs text-gray-300 border-b border-bordercol'
   const inputCls = 'w-full bg-transparent text-xs text-white outline-none border border-transparent hover:border-bordercol focus:border-accent rounded px-1 py-0.5 transition-colors'
@@ -161,7 +163,7 @@ const LinhaItem: React.FC<{
       {/* Item */}
       <td className={tdBase}>
         <div className={indentado ? 'pl-3 border-l-2 border-accent/30' : ''}>
-          <input className={inputCls} value={item.item}
+          <input className={inputCls} value={item.item} list={datalistItemId}
             onChange={e => onUpdate(item.id, 'item', e.target.value)} placeholder="Item" />
         </div>
       </td>
@@ -255,8 +257,10 @@ const LinhaItem: React.FC<{
 }
 
 // ─── Tabela Principal ─────────────────────────────────────────────────────────
-const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true, filtroFornecedor }) => {
+const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true, filtroFornecedor, sugestoesItem }) => {
   const { fornecedores } = useAppContext()
+  const datalistId = React.useId()
+  const temSugestoes = !!sugestoesItem && sugestoesItem.length > 0
   // Itens exibidos (aplica o filtro de fornecedor). Edições/add/remove usam `items` cheio.
   const itemsView = useMemo(() => {
     if (!filtroFornecedor) return items
@@ -332,6 +336,11 @@ const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true, f
 
   return (
     <div className="overflow-x-auto">
+      {temSugestoes && (
+        <datalist id={datalistId}>
+          {sugestoesItem!.map(s => <option key={s} value={s} />)}
+        </datalist>
+      )}
       <table className="w-full border-collapse text-xs" style={{ minWidth: 1250 }}>
         <thead>
           <tr className="bg-surface2/50">
@@ -385,6 +394,7 @@ const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true, f
                 idx={row.idx}
                 indentado={row.indentado}
                 fornecedores={fornecedores}
+                datalistItemId={temSugestoes ? datalistId : undefined}
                 onUpdate={update}
                 onUpdateNF={updateNF}
                 onRemove={removeRow}

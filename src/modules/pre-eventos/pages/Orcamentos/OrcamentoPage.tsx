@@ -117,8 +117,18 @@ const PLATAFORMAS_PADRAO = ['Sympla', 'PIX', 'Dinheiro', 'Cartão', 'Transferên
 export const OrcamentoPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { buscarOrcamento, salvarOrcamento, salvarOrcamentoComGuarda, addToast, atualizarEquipe, config, recalcularSecao } = useAppContext()
+  const { buscarOrcamento, salvarOrcamento, salvarOrcamentoComGuarda, addToast, atualizarEquipe, config, recalcularSecao, orcamentos } = useAppContext()
   const { usuario } = useAuth()
+
+  // Autocomplete de atrações: nomes de atração já usados em qualquer orçamento (exclui Rider).
+  // Ajuda a reusar a mesma grafia e evitar duplicatas no ranking de cachês.
+  const atracaoSugestoes = useMemo(() => {
+    const set = new Set<string>()
+    for (const o of orcamentos)
+      for (const i of o.atracao)
+        if (i.item?.trim() && !/rider/i.test(i.item)) set.add(i.item.trim())
+    return [...set].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [orcamentos])
 
   const [orc, setOrc] = useState<Orcamento | null>(null)
   const [abaAtiva, setAbaAtiva] = useState<'orcamento' | 'evento' | 'cronograma'>('orcamento')
@@ -896,6 +906,7 @@ export const OrcamentoPage: React.FC = () => {
           items={orc.atracao}
           onChange={items => updateSecao('atracao', items)}
           filtroFornecedor={filtroFornecedor}
+          sugestoesItem={atracaoSugestoes}
         />
       </SecaoAccordion>
 

@@ -46,31 +46,47 @@ function labelEvento(o: Orcamento): string {
   return o.turma && t ? `${o.turma} — ${t}` : (o.turma || t || 'Sem nome')
 }
 
+// Normalização agressiva pra juntar atrações escritas de formas diferentes
+// ("Dubflow" / "DUBFLOW" / "Dub Flow" → mesma chave) — escolha do Marcos (23/09).
+function normalizaAtracao(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+// Melhor rótulo de exibição de um grupo: a grafia mais usada (desempate: a mais longa).
+function melhorRotulo(m: Map<string, number>): string | undefined {
+  let best: string | undefined; let bestN = -1
+  for (const [r, n] of m)
+    if (n > bestN || (n === bestN && best !== undefined && r.length > best.length)) { best = r; bestN = n }
+  return best
+}
+
 // Agrupa itens por uma "chave" (fornecedor, ou nome do item), somando pago/orçado
-// e guardando o breakdown por evento (pra drill-down clicável no ranking).
+// e guardando o breakdown por evento (pra drill-down clicável no ranking). Quando a chave
+// é normalizada (ex.: atrações), passe `rotuloDe` pra exibir a grafia original mais usada.
 function agruparRanking(
   orcs: Orcamento[],
   itensDe: (o: Orcamento) => ItemOrcamento[],
   chavesDe: (i: ItemOrcamento) => string[],
+  rotuloDe?: (i: ItemOrcamento) => string,
 ): RankingItem[] {
-  const map = new Map<string, { pago: number; orcado: number; eventos: Map<string, EventoBreakdown> }>()
+  const map = new Map<string, { pago: number; orcado: number; eventos: Map<string, EventoBreakdown>; rotulos: Map<string, number> }>()
   for (const o of orcs) {
     const label = labelEvento(o)
     for (const item of itensDe(o))
       for (const chave of chavesDe(item)) {
         if (!chave) continue
-        const g = map.get(chave) ?? { pago: 0, orcado: 0, eventos: new Map<string, EventoBreakdown>() }
+        const g = map.get(chave) ?? { pago: 0, orcado: 0, eventos: new Map<string, EventoBreakdown>(), rotulos: new Map<string, number>() }
         g.pago += item.totalPagoReal
         g.orcado += item.totalOrcado
         const v = item.totalPagoReal || item.totalOrcado
         const ev = g.eventos.get(o.id) ?? { id: o.id, label, valor: 0 }
         ev.valor += v
         g.eventos.set(o.id, ev)
+        if (rotuloDe) { const r = rotuloDe(item).trim(); if (r) g.rotulos.set(r, (g.rotulos.get(r) ?? 0) + 1) }
         map.set(chave, g)
       }
   }
   return [...map.entries()]
-    .map(([nome, g]) => ({ nome, pago: g.pago, orcado: g.orcado, eventos: [...g.eventos.values()].sort((a, b) => b.valor - a.valor) }))
+    .map(([chave, g]) => ({ nome: melhorRotulo(g.rotulos) ?? chave, pago: g.pago, orcado: g.orcado, eventos: [...g.eventos.values()].sort((a, b) => b.valor - a.valor) }))
     .sort((a, b) => (b.pago - a.pago) || (b.orcado - a.orcado))
 }
 
@@ -258,7 +274,8 @@ export const DashboardPage: React.FC = () => {
     () => agruparRanking(
       filtered,
       o => o.atracao.filter(i => !/rider/i.test(i.item)),
-      i => [i.item.trim()].filter(Boolean),
+      i => [normalizaAtracao(i.item)].filter(Boolean),
+      i => i.item, // rótulo exibido = grafia original mais usada
     ),
     [filtered],
   )
