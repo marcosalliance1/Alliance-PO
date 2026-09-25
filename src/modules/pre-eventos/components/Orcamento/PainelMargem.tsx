@@ -16,7 +16,8 @@ export const PainelMargem: React.FC<{ orc: Orcamento }> = ({ orc }) => {
     // V. Cliente = valor cheio passado à turma (o que ela paga à Alliance).
     const custoCliente = secoes.reduce((s, sec) => s + sec.reduce((a, i) => a + i.valorPassadoCliente, 0), 0)
     const receita = orc.bolsaFolia + orc.receitasSympla.reduce((s, l) => s + l.total, 0)
-    const resultadoCliente = receita - custoCliente // saldo da turma
+    // Saldo da turma: tira o Pago Comissão (verba externa da comissão, não das receitas aqui).
+    const resultadoCliente = receita - (custoCliente - pagoComissao)
     const pct = (v: number) => (receita > 0 ? (v / receita) * 100 : 0)
     return {
       custoPago, pagoComissao, custoCliente, receita, resultadoCliente,

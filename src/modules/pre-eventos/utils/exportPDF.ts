@@ -295,7 +295,8 @@ export async function exportarPDF(orc: Orcamento) {
   const totalCliente  = allItems.reduce((s, i) => s + i.valorPassadoCliente, 0)
   const totalPagoComissao = allItems.reduce((s, i) => s + (i.status === 'PAGO_COMISSAO' ? i.valorPassadoCliente : 0), 0)
   const totalBV       = allItems.reduce((s, i) => s + (i.status === 'PAGO_COMISSAO' ? 0 : i.valorPassadoCliente - i.totalPagoReal), 0)
-  const saldo         = totalReceitas - totalCliente // Saldo da Turma = Receitas − Passado ao Cliente
+  // Saldo da Turma = Receitas − o que a turma bancou via Alliance (fora o Pago Comissão, verba externa).
+  const saldo         = totalReceitas - (totalCliente - totalPagoComissao)
 
   doc.setFillColor(...HDR_BG)
   doc.rect(10, sy, 120, 7, 'F')
@@ -532,7 +533,9 @@ export async function exportarRelatorioCliente(orc: Orcamento) {
   const totalReceitas = orc.bolsaFolia + orc.receitasSympla.reduce((s, l) => s + l.total, 0)
   const allItems      = [...orc.operacaoEstrutura, ...orc.equipe, ...orc.atracao, ...orc.abBebidas, ...orc.extras]
   const totalCliente  = allItems.reduce((s, i) => s + i.valorPassadoCliente, 0)
-  const saldo         = totalReceitas - totalCliente
+  // Pago pela comissão (verba própria, externa às receitas) sai do saldo da turma.
+  const totalPagoComissao = allItems.reduce((s, i) => s + (i.status === 'PAGO_COMISSAO' ? i.valorPassadoCliente : 0), 0)
+  const saldo         = totalReceitas - (totalCliente - totalPagoComissao)
 
   doc.setFillColor(...HDR_BG); doc.rect(10, sy, 120, 7, 'F')
   doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...HDR_TEXT)
@@ -541,6 +544,7 @@ export async function exportarRelatorioCliente(orc: Orcamento) {
   const linhas: [string, number][] = [
     ['Total Arrecadado (Receitas)', totalReceitas],
     ['Total Investido no Evento',   totalCliente],
+    ...(totalPagoComissao > 0 ? ([['(-) Pago pela Comissão (verba própria)', totalPagoComissao]] as [string, number][]) : []),
     ['Saldo da Turma',              saldo],
   ]
   doc.setFontSize(9); doc.setFont('helvetica', 'normal')

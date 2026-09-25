@@ -18,8 +18,9 @@ export const ResumoFinanceiro: React.FC<Props> = ({ orc }) => {
       // Itens "Pago (Comissão)" não geram BV (a comissão pagou; não é margem da Alliance).
       totalBV      += s.reduce((acc, i) => acc + (i.status === 'PAGO_COMISSAO' ? 0 : i.valorPassadoCliente - i.totalPagoReal), 0)
     }
-    // Saldo da Turma = Receitas − o valor cheio consumido no evento (não importa quem pagou).
-    const saldo  = totalReceitas - totalCliente
+    // Saldo da Turma = Receitas − o que a turma bancou VIA ALLIANCE. O "Pago Comissão" sai
+    // da conta: é verba externa da comissão (outras arrecadações), não das receitas aqui.
+    const saldo  = totalReceitas - (totalCliente - totalPagoComissao)
     const bvPct  = totalPago > 0 ? (totalBV / totalPago) * 100 : 0
     return { totalReceitas, totalOrcado, totalPago, totalCliente, totalPagoComissao, saldo, totalBV, bvPct }
   }, [orc])
@@ -70,7 +71,7 @@ export const ResumoFinanceiro: React.FC<Props> = ({ orc }) => {
           <p className={`text-2xl font-bold ${r.saldo >= 0 ? 'text-success' : 'text-danger'}`}>
             {formatBRL(r.saldo)}
           </p>
-          <p className="text-muted text-xs mt-2">Receitas − Passado ao Cliente</p>
+          <p className="text-muted text-xs mt-2">Receitas − Passado ao Cliente (fora o Pago Comissão)</p>
         </div>
       </div>
     </div>
