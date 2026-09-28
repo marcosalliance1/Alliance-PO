@@ -3,7 +3,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts'
-import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight, Table2, Search, ChevronLeft, FileDown, Package } from 'lucide-react'
+import { Upload, Loader, TrendingUp, CreditCard, BarChart2, ChevronDown, ChevronRight, Table2, Search, ChevronLeft, FileDown, Package, Layers } from 'lucide-react'
 import { useFinanceiro, type BoletimRecord, type CAPRecord, type DimensaoProjetoRecord } from '../hooks/useFinanceiro'
 import { fmtCompact, tempoDesde, mesAno, nivelEnsino } from '../utils/parseFinanceiro'
 import { useAuth } from '../contexts/AuthContext'
@@ -24,6 +24,7 @@ const ABAS = [
   { id: 'resultado',    label: 'Resultado Projetos', Icon: TrendingUp },
   { id: 'fluxo',        label: 'Fluxo de Caixa',      Icon: CreditCard },
   { id: 'despesas',     label: 'Controle de Despesas', Icon: BarChart2 },
+  { id: 'contaGerencial', label: 'Conta Gerencial',   Icon: Layers },
   { id: 'fornecedores', label: 'Fornecedores',        Icon: Package },
   { id: 'dados',        label: 'Dados',                Icon: Table2 },
 ] as const
@@ -850,6 +851,171 @@ function ControleDespesas({ boletim: boletimRaw, cap: capRaw, dimensaoProjetos, 
   )
 }
 
+// ─── Aba: Conta Gerencial (prioriza conta gerencial, com filtro de período) ──
+function ContaGerencial({ boletim: boletimRaw, cap: capRaw, filtroProj }: {
+  boletim: BoletimRecord[]
+  cap: CAPRecord[]
+  filtroProj: string
+}) {
+  const fp = filtroProj.toLowerCase().trim()
+  const [dataDe, setDataDe] = useState('')
+  const [dataAte, setDataAte] = useState('')
+  const [expandidosConta, setExpandidosConta] = useState<Record<string, boolean>>({})
+  const [expandidosFornecedor, setExpandidosFornecedor] = useState<Record<string, boolean>>({})
+
+  // Mesma mescla de CAP + tarifas do Boletim usada em "Controle de Despesas" —
+  // mantém os totais consistentes entre as duas abas.
+  type DespNorm = {
+    v_lancamento: number; situacao: string; desc_conta_gerencial: string
+    desc_centro_custo: string; fantasia_cliente_fornecedor: string; d_competencia: string | null
+  }
+  const capF = fp ? capRaw.filter(r => (r.desc_centro_custo ?? '').toLowerCase().includes(fp)) : capRaw
+  const tarifasF = boletimRaw.filter(r =>
+    r.tipo === 'DESPESA' &&
+    (r.desc_conta_gerencial ?? '').toUpperCase() === 'TARIFAS BANCARIAS' &&
+    (!fp || (r.desc_centro_custo ?? '').toLowerCase().includes(fp))
+  )
+  const despesasBase: DespNorm[] = [
+    ...capF.map(i => ({
+      v_lancamento: i.v_titulo ?? 0,
+      situacao: i.situacao,
+      desc_conta_gerencial: i.desc_conta_gerencial,
+      desc_centro_custo: i.desc_centro_custo,
+      fantasia_cliente_fornecedor: i.fantasia_fornecedor,
+      d_competencia: i.d_competencia,
+    })),
+    ...tarifasF.map(i => ({
+      v_lancamento: i.v_lancamento ?? 0,
+      situacao: i.situacao,
+      desc_conta_gerencial: i.desc_conta_gerencial,
+      desc_centro_custo: i.desc_centro_custo,
+      fantasia_cliente_fornecedor: i.fantasia_cliente_fornecedor,
+      d_competencia: i.d_competencia,
+    })),
+  ]
+
+  // Filtro de período por data de competência (string 'YYYY-MM-DD', comparável direto).
+  const despesas = despesasBase.filter(i => {
+    if (dataDe && (!i.d_competencia || i.d_competencia < dataDe)) return false
+    if (dataAte && (!i.d_competencia || i.d_competencia > dataAte)) return false
+    return true
+  })
+
+  const totalDespesas  = despesas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const totalLiquidado = despesas.filter(i => i.situacao === 'LIQUIDADO').reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+  const totalAberto    = despesas.filter(i => i.situacao === 'ATIVO').reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
+
+  const porGerencial: Record<string, number> = {}
+  for (const i of despesas) { const g = i.desc_conta_gerencial || '(sem categoria)'; porGerencial[g] = (porGerencial[g] ?? 0) + (i.v_lancamento ?? 0) }
+  const top10Ger = Object.entries(porGerencial).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, value]) => ({ name, value }))
+
+  // Conta Gerencial → Fornecedor → Centro de Custo
+  type FornData = { total: number; centros: Record<string, number> }
+  type ContaData = { total: number; fornecedores: Record<string, FornData> }
+
+  const porConta = useMemo(() => {
+    const result: Record<string, ContaData> = {}
+    for (const i of despesas) {
+      const conta  = i.desc_conta_gerencial          || '(sem categoria)'
+      const forn   = i.fantasia_cliente_fornecedor    || '(sem fornecedor)'
+      const centro = i.desc_centro_custo              || '(sem projeto)'
+      result[conta] ??= { total: 0, fornecedores: {} }
+      result[conta].total += i.v_lancamento ?? 0
+      result[conta].fornecedores[forn] ??= { total: 0, centros: {} }
+      result[conta].fornecedores[forn].total += i.v_lancamento ?? 0
+      result[conta].fornecedores[forn].centros[centro] = (result[conta].fornecedores[forn].centros[centro] ?? 0) + (i.v_lancamento ?? 0)
+    }
+    return result
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [despesas])
+
+  const contasOrdenadas = Object.entries(porConta).sort((a, b) => b[1].total - a[1].total)
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <label className="text-xs text-text-muted">Período (competência):</label>
+        <input
+          type="date" value={dataDe} onChange={e => setDataDe(e.target.value)}
+          className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-text-main focus:outline-none focus:border-primary/50"
+        />
+        <span className="text-text-muted text-xs">até</span>
+        <input
+          type="date" value={dataAte} onChange={e => setDataAte(e.target.value)}
+          className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-text-main focus:outline-none focus:border-primary/50"
+        />
+        {(dataDe || dataAte) && (
+          <button onClick={() => { setDataDe(''); setDataAte('') }} className="text-xs text-text-muted hover:text-text-main underline underline-offset-2">
+            Limpar período
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <KPICard title="Total Despesas"  value={fmtCompact(totalDespesas)}  color="#94a3b8" />
+        <KPICard title="Total Liquidado" value={fmtCompact(totalLiquidado)} color={C_RECEITA} />
+        <KPICard title="Total em Aberto" value={fmtCompact(totalAberto)}    color={C_CORAL} />
+      </div>
+
+      <div className="card">
+        <h3 className="text-text-main text-sm font-semibold mb-4">Top 10 Contas Gerenciais</h3>
+        {top10Ger.length > 0 ? (
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={top10Ger} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+              <XAxis type="number" tickFormatter={v => fmtCompact(v as number)} tick={{ fill: '#8892b0', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="name" tick={{ fill: '#8892b0', fontSize: 10 }} axisLine={false} tickLine={false} width={150} />
+              <Tooltip content={<TTip />} />
+              <Bar dataKey="value" name="Valor" fill={C_CORAL} radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : <EmptyChart />}
+      </div>
+
+      <div className="card p-0 overflow-hidden">
+        <div className="px-5 py-3 border-b border-white/10 text-text-main text-sm font-semibold">Por Conta Gerencial → Fornecedor → Centro de Custo</div>
+        {contasOrdenadas.length > 0 ? contasOrdenadas.map(([conta, { total: contaTotal, fornecedores }]) => {
+          const fornSort = Object.entries(fornecedores).sort((a, b) => b[1].total - a[1].total)
+          return (
+            <div key={conta}>
+              <button
+                onClick={() => setExpandidosConta(p => ({ ...p, [conta]: !p[conta] }))}
+                className="w-full flex items-center gap-2 px-5 py-3 text-left text-sm font-bold border-b border-white/10 hover:opacity-80 transition-opacity"
+                style={{ background: 'rgba(249,115,22,0.1)', borderLeft: `3px solid ${C_CORAL}`, color: C_CORAL }}
+              >
+                {expandidosConta[conta] ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                <span className="flex-1 uppercase tracking-wider truncate">{conta}</span>
+                <span>{fmtCompact(contaTotal)}</span>
+              </button>
+              {expandidosConta[conta] && fornSort.map(([forn, { total: fornTotal, centros }]) => {
+                const fk = `${conta}::${forn}`
+                return (
+                  <div key={forn}>
+                    <button
+                      onClick={() => setExpandidosFornecedor(p => ({ ...p, [fk]: !p[fk] }))}
+                      className="w-full flex items-center gap-2 px-5 py-2.5 pl-10 text-left text-xs text-text-muted hover:bg-white/5 transition-colors border-b border-white/5 bg-black/15"
+                    >
+                      {expandidosFornecedor[fk] ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                      <span className="flex-1 truncate">{forn}</span>
+                      <span className="font-medium text-text-main">{fmtCompact(fornTotal)}</span>
+                    </button>
+                    {expandidosFornecedor[fk] && Object.entries(centros).sort((a, b) => b[1] - a[1]).map(([centro, cVal]) => (
+                      <div key={centro} className="flex justify-between px-5 py-1.5 pl-16 text-xs text-text-muted border-b border-white/5 bg-black/20">
+                        <span className="truncate flex-1 pr-3">{centro}</span>
+                        <span className="shrink-0">{fmtCompact(cVal)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+          )
+        }) : <div className="px-5 py-8 text-center text-text-muted text-sm">Nenhum dado disponível para o período/filtro selecionado</div>}
+      </div>
+    </div>
+  )
+}
+
 // ─── Aba 4: Dados (tabela bruta boletim) ─────────────────────────
 const PAGE_SIZE = 100
 
@@ -1102,7 +1268,7 @@ export function Financeiro() {
   const semDados = boletim.length === 0
 
   async function handleExportarPDF() {
-    if (abaAtiva === 'fornecedores') return // aba sem relatório em PDF por enquanto
+    if (abaAtiva === 'fornecedores' || abaAtiva === 'contaGerencial') return // abas sem relatório em PDF por enquanto
     const graficos = conteudoRef.current ? await capturarGraficos(conteudoRef.current) : []
     gerarRelatorioFinanceiro(abaAtiva, boletim, cap, dimensaoProjetos, filtroProj, graficos)
   }
@@ -1151,7 +1317,7 @@ export function Financeiro() {
         <div className="flex gap-3 flex-wrap items-start">
           <button
             onClick={handleExportarPDF}
-            disabled={semDados || abaAtiva === 'fornecedores'}
+            disabled={semDados || abaAtiva === 'fornecedores' || abaAtiva === 'contaGerencial'}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 bg-white/5 border border-white/10 text-text-muted hover:text-text-main hover:bg-white/10"
           >
             <FileDown size={14} />
@@ -1250,6 +1416,7 @@ export function Financeiro() {
           {abaAtiva === 'resultado' && <ResultadoProjetos boletim={boletim} cap={cap} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
           {abaAtiva === 'fluxo'    && <FluxoCaixa cap={cap} filtroProj={filtroProj} />}
           {abaAtiva === 'despesas'     && <ControleDespesas boletim={boletim} cap={cap} dimensaoProjetos={dimensaoProjetos} filtroProj={filtroProj} />}
+          {abaAtiva === 'contaGerencial' && <ContaGerencial boletim={boletim} cap={cap} filtroProj={filtroProj} />}
           {abaAtiva === 'fornecedores' && <FornecedoresPorCusto cap={cap} filtroProj={filtroProj} />}
           {abaAtiva === 'dados'        && <TabelaDados boletim={boletim} filtroProj={filtroProj} />}
         </div>
