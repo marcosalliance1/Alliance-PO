@@ -860,6 +860,8 @@ function ContaGerencial({ boletim: boletimRaw, cap: capRaw, filtroProj }: {
   const fp = filtroProj.toLowerCase().trim()
   const [dataDe, setDataDe] = useState('')
   const [dataAte, setDataAte] = useState('')
+  const [contaFiltro, setContaFiltro] = useState('')
+  const [fornecedorFiltro, setFornecedorFiltro] = useState('')
   const [expandidosConta, setExpandidosConta] = useState<Record<string, boolean>>({})
   const [expandidosFornecedor, setExpandidosFornecedor] = useState<Record<string, boolean>>({})
 
@@ -895,11 +897,26 @@ function ContaGerencial({ boletim: boletimRaw, cap: capRaw, filtroProj }: {
   ]
 
   // Filtro de período por data de competência (string 'YYYY-MM-DD', comparável direto).
-  const despesas = despesasBase.filter(i => {
+  const despesasPeriodo = despesasBase.filter(i => {
     if (dataDe && (!i.d_competencia || i.d_competencia < dataDe)) return false
     if (dataAte && (!i.d_competencia || i.d_competencia > dataAte)) return false
     return true
   })
+
+  // Lista de contas gerenciais disponíveis pro seletor — reflete o período já filtrado.
+  const contasDisponiveis = Array.from(new Set(despesasPeriodo.map(i => i.desc_conta_gerencial || '(sem categoria)'))).sort((a, b) => a.localeCompare(b))
+
+  const despesasConta = contaFiltro
+    ? despesasPeriodo.filter(i => (i.desc_conta_gerencial || '(sem categoria)') === contaFiltro)
+    : despesasPeriodo
+
+  // Fornecedores disponíveis pro seletor — reflete período + conta já filtrados
+  // (escolher uma conta gerencial primeiro estreita a lista de fornecedores).
+  const fornecedoresDisponiveis = Array.from(new Set(despesasConta.map(i => i.fantasia_cliente_fornecedor || '(sem fornecedor)'))).sort((a, b) => a.localeCompare(b))
+
+  const despesas = fornecedorFiltro
+    ? despesasConta.filter(i => (i.fantasia_cliente_fornecedor || '(sem fornecedor)') === fornecedorFiltro)
+    : despesasConta
 
   const totalDespesas  = despesas.reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
   const totalLiquidado = despesas.filter(i => i.situacao === 'LIQUIDADO').reduce((s, i) => s + (i.v_lancamento ?? 0), 0)
@@ -949,6 +966,40 @@ function ContaGerencial({ boletim: boletimRaw, cap: capRaw, filtroProj }: {
             Limpar período
           </button>
         )}
+
+        <label className="text-xs text-text-muted ml-2">Conta Gerencial:</label>
+        <select
+          value={contaFiltro}
+          onChange={e => { setContaFiltro(e.target.value); setFornecedorFiltro('') }}
+          className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-text-main focus:outline-none focus:border-primary/50 max-w-[240px]"
+        >
+          <option value="" className="bg-surface">Todas</option>
+          {contasDisponiveis.map(c => (
+            <option key={c} value={c} className="bg-surface">{c}</option>
+          ))}
+        </select>
+        {contaFiltro && (
+          <button onClick={() => { setContaFiltro(''); setFornecedorFiltro('') }} className="text-xs text-text-muted hover:text-text-main underline underline-offset-2">
+            Limpar conta
+          </button>
+        )}
+
+        <label className="text-xs text-text-muted ml-2">Fornecedor:</label>
+        <select
+          value={fornecedorFiltro}
+          onChange={e => setFornecedorFiltro(e.target.value)}
+          className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-text-main focus:outline-none focus:border-primary/50 max-w-[240px]"
+        >
+          <option value="" className="bg-surface">Todos</option>
+          {fornecedoresDisponiveis.map(f => (
+            <option key={f} value={f} className="bg-surface">{f}</option>
+          ))}
+        </select>
+        {fornecedorFiltro && (
+          <button onClick={() => setFornecedorFiltro('')} className="text-xs text-text-muted hover:text-text-main underline underline-offset-2">
+            Limpar fornecedor
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -980,8 +1031,8 @@ function ContaGerencial({ boletim: boletimRaw, cap: capRaw, filtroProj }: {
             <div key={conta}>
               <button
                 onClick={() => setExpandidosConta(p => ({ ...p, [conta]: !p[conta] }))}
-                className="w-full flex items-center gap-2 px-5 py-3 text-left text-sm font-bold border-b border-white/10 hover:opacity-80 transition-opacity"
-                style={{ background: 'rgba(249,115,22,0.1)', borderLeft: `3px solid ${C_CORAL}`, color: C_CORAL }}
+                className="w-full flex items-center gap-2 px-5 py-3 text-left text-sm font-bold border-b border-white/10 hover:opacity-80 transition-opacity text-text-main"
+                style={{ background: 'rgba(249,115,22,0.1)', borderLeft: `3px solid ${C_CORAL}` }}
               >
                 {expandidosConta[conta] ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 <span className="flex-1 uppercase tracking-wider truncate">{conta}</span>
