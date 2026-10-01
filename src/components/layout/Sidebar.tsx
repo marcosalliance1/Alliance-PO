@@ -36,14 +36,18 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         'md:relative md:translate-x-0 md:z-auto',
       ].join(' ')}
     >
-      <div className="px-5 py-4 border-b border-white/10 flex items-center justify-center">
+      <button
+        onClick={() => { navigate('/modulos'); onClose() }}
+        className="px-5 py-4 border-b border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors"
+        title="Voltar ao menu"
+      >
         <img
           src={allianceLogo}
           alt="Alliance"
           className="h-10 w-auto"
           style={{ mixBlendMode: 'screen' }}
         />
-      </div>
+      </button>
       <nav className="flex-1 py-4 px-3 flex flex-col gap-1 overflow-y-auto">
         {links.map(({ to, icon: Icon, label }) => (
           <NavLink
