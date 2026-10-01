@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { ChevronDown, Download } from 'lucide-react'
+import { ChevronDown, ChevronRight, Download } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatBRL } from '../utils/formatters'
 import { exportarVerbasExcel, type CategoriaBloco, type ColunaProjeto, type LinhaValores } from '../lib/exportarVerbasExcel'
@@ -81,6 +81,8 @@ export function Verbas() {
   const [filtroItem, setFiltroItem] = useState('')
   const [filtroProjetos, setFiltroProjetos] = useState<Set<string>>(new Set())
   const [showProjetoDropdown, setShowProjetoDropdown] = useState(false)
+  // Blocos de categoria começam recolhidos (só os totais) — clica pra expandir o detalhe.
+  const [categoriasAbertas, setCategoriasAbertas] = useState<Record<string, boolean>>({})
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -444,7 +446,7 @@ export function Verbas() {
                   {projetosFiltrados.map(p => (
                     <th
                       key={p.id}
-                      className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[150px] whitespace-nowrap"
+                      className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[150px] whitespace-nowrap border-l border-dashed border-white/15"
                     >
                       <div className="flex items-center justify-end gap-1.5">
                         <span
@@ -455,22 +457,30 @@ export function Verbas() {
                       </div>
                     </th>
                   ))}
-                  <th className="text-right px-3 py-2.5 text-xs font-semibold text-primary min-w-[150px] whitespace-nowrap">
+                  <th className="text-right px-3 py-2.5 text-xs font-semibold text-primary min-w-[150px] whitespace-nowrap border-l border-dashed border-white/15">
                     Total
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {blocos.map(bloco => (
+                {blocos.map(bloco => {
+                  const aberto = categoriasAbertas[bloco.categoria] ?? false
+                  return (
                   <Fragment key={bloco.categoria}>
-                    <tr className="bg-primary/10">
+                    <tr
+                      className="bg-primary/10 cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => setCategoriasAbertas(p => ({ ...p, [bloco.categoria]: !aberto }))}
+                    >
                       <td className="px-3 py-2 text-xs font-bold text-primary uppercase tracking-wide sticky left-0 bg-surface z-10" style={{ background: 'rgba(233,69,96,0.12)' }}>
-                        {bloco.categoria}
+                        <span className="inline-flex items-center gap-1.5">
+                          {aberto ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                          {bloco.categoria}
+                        </span>
                       </td>
-                      {projetosFiltrados.map(p => <td key={p.id} />)}
+                      {projetosFiltrados.map(p => <td key={p.id} className="border-l border-dashed border-white/15" />)}
                       <td />
                     </tr>
-                    {bloco.subcategorias.map(sub => (
+                    {aberto && bloco.subcategorias.map(sub => (
                       <Fragment key={sub.nome}>
                         {sub.itens.map((it, i) => (
                           <tr key={`${bloco.categoria}-${sub.nome}-${i}`} className="border-b border-white/5 hover:bg-white/5 transition-colors">
@@ -480,13 +490,13 @@ export function Verbas() {
                               {it.item}
                             </td>
                             {projetosFiltrados.map(p => (
-                              <td key={p.id} className="px-3 py-2 text-right tabular-nums">
+                              <td key={p.id} className="px-3 py-2 text-right tabular-nums border-l border-dashed border-white/10">
                                 {it.valores[p.id]
                                   ? <span className="text-text-main">{formatBRL(it.valores[p.id])}</span>
                                   : <span className="text-white/20">—</span>}
                               </td>
                             ))}
-                            <td className="px-3 py-2 text-right font-medium text-text-main tabular-nums">
+                            <td className="px-3 py-2 text-right font-medium text-text-main tabular-nums border-l border-dashed border-white/10">
                               {formatBRL(it.total)}
                             </td>
                           </tr>
@@ -496,11 +506,11 @@ export function Verbas() {
                             Subtotal — {sub.nome}
                           </td>
                           {projetosFiltrados.map(p => (
-                            <td key={p.id} className="px-3 py-1.5 text-right text-xs font-semibold text-text-main tabular-nums">
+                            <td key={p.id} className="px-3 py-1.5 text-right text-xs font-semibold text-text-main tabular-nums border-l border-dashed border-white/10">
                               {sub.valores[p.id] ? formatBRL(sub.valores[p.id]) : <span className="text-white/20">—</span>}
                             </td>
                           ))}
-                          <td className="px-3 py-1.5 text-right text-xs font-semibold text-text-main tabular-nums">
+                          <td className="px-3 py-1.5 text-right text-xs font-semibold text-text-main tabular-nums border-l border-dashed border-white/10">
                             {formatBRL(sub.total)}
                           </td>
                         </tr>
@@ -511,16 +521,17 @@ export function Verbas() {
                         TOTAL — {bloco.categoria}
                       </td>
                       {projetosFiltrados.map(p => (
-                        <td key={p.id} className="px-3 py-2 text-right text-sm font-bold text-primary tabular-nums">
+                        <td key={p.id} className="px-3 py-2 text-right text-sm font-bold text-primary tabular-nums border-l border-dashed border-white/15">
                           {bloco.valores[p.id] ? formatBRL(bloco.valores[p.id]) : <span className="text-white/20">—</span>}
                         </td>
                       ))}
-                      <td className="px-3 py-2 text-right text-sm font-bold text-primary tabular-nums">
+                      <td className="px-3 py-2 text-right text-sm font-bold text-primary tabular-nums border-l border-dashed border-white/15">
                         {formatBRL(bloco.total)}
                       </td>
                     </tr>
                   </Fragment>
-                ))}
+                  )
+                })}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-white/20" style={{ background: 'rgba(255,255,255,0.04)' }}>
@@ -528,11 +539,11 @@ export function Verbas() {
                     TOTAL GERAL
                   </td>
                   {projetosFiltrados.map(p => (
-                    <td key={p.id} className="px-3 py-3 text-right text-sm font-bold text-text-main tabular-nums">
+                    <td key={p.id} className="px-3 py-3 text-right text-sm font-bold text-text-main tabular-nums border-l border-dashed border-white/15">
                       {totalGeral.valores[p.id] ? formatBRL(totalGeral.valores[p.id]) : <span className="text-white/20">—</span>}
                     </td>
                   ))}
-                  <td className="px-3 py-3 text-right text-base font-bold text-primary tabular-nums">
+                  <td className="px-3 py-3 text-right text-base font-bold text-primary tabular-nums border-l border-dashed border-white/15">
                     {formatBRL(totalGeral.total)}
                   </td>
                 </tr>
