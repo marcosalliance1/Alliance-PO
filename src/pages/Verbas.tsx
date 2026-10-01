@@ -1,56 +1,56 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { RefreshCw, AlertCircle, CheckCircle, ChevronDown } from 'lucide-react'
+import { ChevronDown, Download } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { useGoogleAuth } from '../contexts/GoogleAuthContext'
-import { sincronizarVerbas, sleep } from '../utils/verbasSync'
 import { formatBRL } from '../utils/formatters'
+import { exportarVerbasExcel, type CategoriaBloco, type ColunaProjeto, type LinhaValores } from '../lib/exportarVerbasExcel'
 
 // ── Tipos locais ─────────────────────────────────────────────────────────────
+// Lê direto de projetos.secoes — mesmo dado já mantido em dia pelo sync (manual
+// ou automático, 10h/17h). Sem pipeline/tabela própria, sem sync próprio.
 
-interface VerbasItemRow {
-  id: string
-  projeto_id: string
-  projeto_nome: string
-  segmento: string
-  categoria: string
-  sub_categoria: string
+interface ItemRaw {
   item: string
-  valor_orcado: number
+  subcategoria: string
+  valorOrcado: number
 }
-
-interface ProjetoSumarizacao {
-  id: string
+interface SecaoRaw {
   nome: string
-  segmento: string
+  itens: ItemRaw[]
 }
-
-interface PivotRow {
-  categoria: string
-  sub_categoria: string
-  item: string
-  valores: Record<string, number>
-  total: number
-}
-
-interface ProjetoComparativo {
+interface ProjetoRaw {
   id: string
   tap: { tipoEscola?: string; turma?: string; instituicao?: string; curso?: string }
-  secoes: Array<{
-    itens: Array<{
-      item: string; subcategoria: string
-      qtdeContratada: number; valorUnitarioContratado: number; valorContratado: number
-      qtdeOrcada: number; valorUnitarioOrcado: number; valorOrcado: number
-    }>
-  }>
+  secoes: SecaoRaw[]
   total_convidados_atual?: number | null
 }
 
-// ── Constantes visuais ────────────────────────────────────────────────────────
+// ── Categorias fixas, na ordem combinada ────────────────────────────────────
+// "Bar" e "Food e Outros" ficam juntos porque são uma seção só na P.O. (2.4 CUSTO
+// BAR & FOOD E OUTROS) — não dá pra separar sem inventar regra em cima do texto
+// do item. Administrativos e Pré-Eventos ficam de fora (não são "verba" de
+// produção do evento).
+const CATEGORIAS_ORDEM = [
+  'Produção', 'Artístico', 'Equipe', 'Bar & Food e Outros', 'Cerimônia Religiosa', 'Colação de Grau',
+] as const
+
+function categoriaDaSecao(nomeSecao: string): string | null {
+  const n = (nomeSecao || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  if (n.includes('administrativ')) return null
+  if (n.includes('pre-event') || n.includes('pre event') || n.includes('preevent') || n.includes('pre-eventos')) return null
+  if (n.includes('producao')) return 'Produção'
+  if (n.includes('artistic')) return 'Artístico'
+  if (n.includes('equipe')) return 'Equipe'
+  if (n.includes('bar') || n.includes('food')) return 'Bar & Food e Outros'
+  if (n.includes('cerimonia')) return 'Cerimônia Religiosa'
+  if (n.includes('colacao')) return 'Colação de Grau'
+  return null
+}
 
 const SEGMENTOS = ['9º Ano', 'Ensino Médio', 'Ensino Superior'] as const
+type Segmento = typeof SEGMENTOS[number]
 
 const CORES_SEGMENTO: Record<string, string> = {
   '9º Ano': '#e94560',
@@ -58,16 +58,23 @@ const CORES_SEGMENTO: Record<string, string> = {
   'Ensino Superior': '#00b894',
 }
 
+function segmentoDoTipo(tipoEscola?: string): Segmento {
+  if (tipoEscola === 'SUPERIOR') return 'Ensino Superior'
+  if (tipoEscola === 'FUNDAMENTAL') return '9º Ano'
+  return 'Ensino Médio'
+}
+
+function linhaVazia(): LinhaValores { return { valores: {}, total: 0 } }
+function somar(destino: LinhaValores, projetoId: string, valor: number) {
+  destino.valores[projetoId] = (destino.valores[projetoId] ?? 0) + valor
+  destino.total += valor
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export function Verbas() {
-  const { accessToken, conectar } = useGoogleAuth()
-
-  const [itens, setItens] = useState<VerbasItemRow[]>([])
-  const [loadingDados, setLoadingDados] = useState(true)
-  const [sincronizando, setSincronizando] = useState(false)
-  const [progresso, setProgresso] = useState('')
-  const [feedback, setFeedback] = useState<{ tipo: 'sucesso' | 'erro'; msg: string } | null>(null)
+  const [projetosRaw, setProjetosRaw] = useState<ProjetoRaw[]>([])
+  const [loading, setLoading] = useState(true)
 
   const [filtroCategoria, setFiltroCategoria] = useState('')
   const [filtroSubcategoria, setFiltroSubcategoria] = useState('')
@@ -75,7 +82,6 @@ export function Verbas() {
   const [filtroProjetos, setFiltroProjetos] = useState<Set<string>>(new Set())
   const [showProjetoDropdown, setShowProjetoDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const [projetosData, setProjetosData] = useState<ProjetoComparativo[]>([])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -87,119 +93,148 @@ export function Verbas() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  // ── Carregar dados ──────────────────────────────────────────────────────────
-
-  const carregarDados = async () => {
-    setLoadingDados(true)
-    const { data, error } = await supabase
-      .from('verbas_itens')
-      .select('*')
-      .order('categoria')
-      .order('sub_categoria')
-      .order('item')
-    if (!error && data) setItens(data as VerbasItemRow[])
-    setLoadingDados(false)
-  }
-
-  useEffect(() => { carregarDados() }, [])
-
+  // ── Carregar dados — direto de projetos.secoes, sempre em dia com o sync ────
   useEffect(() => {
+    setLoading(true)
     supabase
       .from('projetos')
       .select('id, tap, secoes, total_convidados_atual')
-      .then(({ data }) => { if (data) setProjetosData(data as ProjetoComparativo[]) })
+      .then(({ data }) => {
+        setProjetosRaw((data as ProjetoRaw[]) ?? [])
+        setLoading(false)
+      })
   }, [])
 
   // ── Derivações ──────────────────────────────────────────────────────────────
 
-  const projetos = useMemo((): ProjetoSumarizacao[] => {
-    const map = new Map<string, ProjetoSumarizacao>()
-    for (const it of itens) {
-      if (!map.has(it.projeto_id)) {
-        map.set(it.projeto_id, { id: it.projeto_id, nome: it.projeto_nome, segmento: it.segmento })
-      }
-    }
-    return Array.from(map.values())
-  }, [itens])
+  const projetos = useMemo(() =>
+    projetosRaw
+      .map(p => ({
+        id: p.id,
+        nome: p.tap.turma || `${p.tap.instituicao ?? ''} ${p.tap.curso ?? ''}`.trim() || p.id.slice(0, 6),
+        segmento: segmentoDoTipo(p.tap.tipoEscola),
+      }))
+      .sort((a, b) => a.nome.localeCompare(b.nome)),
+  [projetosRaw])
+
+  const projetosFiltrados = useMemo(() =>
+    filtroProjetos.size > 0 ? projetos.filter(p => filtroProjetos.has(p.id)) : projetos,
+  [projetos, filtroProjetos])
+
+  const idsFiltrados = useMemo(() => new Set(projetosFiltrados.map(p => p.id)), [projetosFiltrados])
 
   const totaisPorSegmento = useMemo(() => {
     const totais: Record<string, number> = { '9º Ano': 0, 'Ensino Médio': 0, 'Ensino Superior': 0 }
-    for (const it of itens) {
-      totais[it.segmento] = (totais[it.segmento] ?? 0) + it.valor_orcado
+    const porProjeto = new Map(projetosRaw.map(p => [p.id, p]))
+    for (const p of projetos) {
+      const raw = porProjeto.get(p.id)
+      if (!raw) continue
+      for (const secao of raw.secoes ?? []) {
+        const categoria = categoriaDaSecao(secao.nome)
+        if (!categoria) continue
+        for (const it of secao.itens ?? []) {
+          if (!it.subcategoria?.trim()) continue
+          totais[p.segmento] = (totais[p.segmento] ?? 0) + (it.valorOrcado ?? 0)
+        }
+      }
     }
     return totais
-  }, [itens])
+  }, [projetos, projetosRaw])
+
+  // Todo item válido (categoria reconhecida, não é item-mãe, orçado > 0),
+  // já com o filtro de projeto aplicado — fonte única pro gráfico, tabela e totais.
+  const itensValidos = useMemo(() => {
+    const lista: { projetoId: string; categoria: string; subCategoria: string; item: string; valor: number }[] = []
+    for (const p of projetosRaw) {
+      if (!idsFiltrados.has(p.id)) continue
+      for (const secao of p.secoes ?? []) {
+        const categoria = categoriaDaSecao(secao.nome)
+        if (!categoria) continue
+        for (const it of secao.itens ?? []) {
+          if (!it.subcategoria?.trim()) continue // item-mãe / linha de grupo
+          const valor = it.valorOrcado ?? 0
+          if (valor <= 0) continue
+          lista.push({ projetoId: p.id, categoria, subCategoria: it.subcategoria, item: it.item || '(sem nome)', valor })
+        }
+      }
+    }
+    return lista
+  }, [projetosRaw, idsFiltrados])
 
   const dadosGrafico = useMemo(() => {
-    const segOrder = Object.fromEntries(SEGMENTOS.map((s, i) => [s, i]))
-    return projetos
-      .map(p => ({
-        name: p.nome,
-        segmento: p.segmento,
-        total: itens.filter(it => it.projeto_id === p.id).reduce((s, it) => s + it.valor_orcado, 0),
-      }))
-      .sort((a, b) => {
-        const d = (segOrder[a.segmento] ?? 99) - (segOrder[b.segmento] ?? 99)
-        return d !== 0 ? d : a.name.localeCompare(b.name)
-      })
-  }, [projetos, itens])
+    const porCategoria: Record<string, number> = {}
+    for (const i of itensValidos) porCategoria[i.categoria] = (porCategoria[i.categoria] ?? 0) + i.valor
+    return CATEGORIAS_ORDEM
+      .map(c => ({ name: c, total: porCategoria[c] ?? 0 }))
+      .filter(d => d.total > 0)
+  }, [itensValidos])
 
-  const categorias = useMemo(
-    () => [...new Set(itens.map(it => it.categoria))].sort(),
-    [itens],
-  )
-
-  const subcategorias = useMemo(
-    () => [...new Set(
-      itens.filter(it => !filtroCategoria || it.categoria === filtroCategoria).map(it => it.sub_categoria),
+  const subcategorias = useMemo(() =>
+    [...new Set(
+      itensValidos.filter(i => !filtroCategoria || i.categoria === filtroCategoria).map(i => i.subCategoria),
     )].filter(Boolean).sort(),
-    [itens, filtroCategoria],
-  )
+  [itensValidos, filtroCategoria])
 
-  const itensFiltrados = useMemo(() => itens.filter(it => {
-    if (filtroCategoria && it.categoria !== filtroCategoria) return false
-    if (filtroSubcategoria && it.sub_categoria !== filtroSubcategoria) return false
-    if (filtroItem && !it.item.toLowerCase().includes(filtroItem.toLowerCase())) return false
-    if (filtroProjetos.size > 0 && !filtroProjetos.has(it.projeto_id)) return false
+  const itensTabela = useMemo(() => itensValidos.filter(i => {
+    if (filtroCategoria && i.categoria !== filtroCategoria) return false
+    if (filtroSubcategoria && i.subCategoria !== filtroSubcategoria) return false
+    if (filtroItem && !i.item.toLowerCase().includes(filtroItem.toLowerCase())) return false
     return true
-  }), [itens, filtroCategoria, filtroSubcategoria, filtroItem, filtroProjetos])
+  }), [itensValidos, filtroCategoria, filtroSubcategoria, filtroItem])
 
-  const projetosFiltradosPivot = useMemo(() =>
-    filtroProjetos.size > 0 ? projetos.filter(p => filtroProjetos.has(p.id)) : projetos
-  , [projetos, filtroProjetos])
+  // Monta os blocos Categoria → Sub Categoria → Item, já com subtotal por sub
+  // categoria e total por categoria — mesma estrutura usada na tela e no Excel.
+  const blocos = useMemo((): CategoriaBloco[] => {
+    const porCategoria = new Map<string, Map<string, Map<string, LinhaValores>>>()
 
-  const linhasPivot = useMemo((): PivotRow[] => {
-    const map = new Map<string, PivotRow>()
-    for (const it of itensFiltrados) {
-      const chave = `${it.categoria}|||${it.sub_categoria}|||${it.item}`
-      if (!map.has(chave)) {
-        map.set(chave, {
-          categoria: it.categoria,
-          sub_categoria: it.sub_categoria,
-          item: it.item,
-          valores: {},
-          total: 0,
-        })
-      }
-      const row = map.get(chave)!
-      row.valores[it.projeto_id] = (row.valores[it.projeto_id] ?? 0) + it.valor_orcado
-      row.total += it.valor_orcado
+    for (const i of itensTabela) {
+      if (!porCategoria.has(i.categoria)) porCategoria.set(i.categoria, new Map())
+      const porSub = porCategoria.get(i.categoria)!
+      if (!porSub.has(i.subCategoria)) porSub.set(i.subCategoria, new Map())
+      const porItem = porSub.get(i.subCategoria)!
+      if (!porItem.has(i.item)) porItem.set(i.item, linhaVazia())
+      somar(porItem.get(i.item)!, i.projetoId, i.valor)
     }
-    return Array.from(map.values())
-  }, [itensFiltrados])
 
+    const resultado: CategoriaBloco[] = []
+    for (const categoria of CATEGORIAS_ORDEM) {
+      const porSub = porCategoria.get(categoria)
+      if (!porSub) continue
+      const categoriaTotal = linhaVazia()
+      const subcategorias = [...porSub.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([nomeSub, porItem]) => {
+        const subTotal = linhaVazia()
+        const itens = [...porItem.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([item, linha]) => {
+          for (const [pid, v] of Object.entries(linha.valores)) somar(subTotal, pid, v)
+          return { item, ...linha }
+        })
+        for (const [pid, v] of Object.entries(subTotal.valores)) somar(categoriaTotal, pid, v)
+        return { nome: nomeSub, itens, ...subTotal }
+      })
+      resultado.push({ categoria, subcategorias, ...categoriaTotal })
+    }
+    return resultado
+  }, [itensTabela])
+
+  const totalGeral = useMemo(() => {
+    const t = linhaVazia()
+    for (const bloco of blocos) {
+      for (const [pid, v] of Object.entries(bloco.valores)) somar(t, pid, v)
+    }
+    return t
+  }, [blocos])
+
+  // ── Comparativo por Projeto (busca de item) — mesma lógica de antes, agora
+  // sobre a mesma fonte única (projetosRaw) em vez de uma query separada ────────
   const comparativoPorProjeto = useMemo(() => {
     const q = filtroItem.trim().toLowerCase()
     if (!q) return []
 
-    // Chave: proj.id + nome do item — para mostrar uma linha por item distinto por projeto
     const map = new Map<string, {
       projetoId: string; projeto: string; ensino: string; ensinoOrder: number
-      itemNome: string
-      qtde: number; total: number; convidados: number; temCont: boolean; temOrc: boolean
+      itemNome: string; qtde: number; total: number; convidados: number
     }>()
 
-    for (const proj of projetosData) {
+    for (const proj of projetosRaw) {
       if (filtroProjetos.size > 0 && !filtroProjetos.has(proj.id)) continue
 
       const titulo = proj.tap.turma
@@ -214,149 +249,30 @@ export function Verbas() {
         for (const item of secao.itens ?? []) {
           const nome = (item.item || item.subcategoria || '').toLowerCase()
           if (!nome.includes(q)) continue
-
-          const useContratado = (item.valorContratado ?? 0) > 0
-          const qtde = useContratado ? (item.qtdeContratada ?? 0) : (item.qtdeOrcada ?? 0)
-          const total = useContratado ? (item.valorContratado ?? 0) : (item.valorOrcado ?? 0)
+          const total = item.valorOrcado ?? 0
           if (total <= 0) continue
 
           const itemNome = item.item || item.subcategoria || ''
           const key = `${proj.id}|||${itemNome}`
-
           if (!map.has(key)) {
-            map.set(key, { projetoId: proj.id, projeto: titulo, ensino, ensinoOrder, itemNome, qtde: 0, total: 0, convidados, temCont: false, temOrc: false })
+            map.set(key, { projetoId: proj.id, projeto: titulo, ensino, ensinoOrder, itemNome, qtde: 0, total: 0, convidados })
           }
           const entry = map.get(key)!
-          entry.qtde += qtde
           entry.total += total
-          if (useContratado) entry.temCont = true; else entry.temOrc = true
         }
       }
     }
 
-    return Array.from(map.values())
-      .sort((a, b) => {
-        if (a.ensinoOrder !== b.ensinoOrder) return a.ensinoOrder - b.ensinoOrder
-        if (a.projeto !== b.projeto) return a.projeto.localeCompare(b.projeto)
-        return b.total - a.total
-      })
-  }, [filtroItem, projetosData, filtroProjetos])
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.ensinoOrder !== b.ensinoOrder) return a.ensinoOrder - b.ensinoOrder
+      if (a.projeto !== b.projeto) return a.projeto.localeCompare(b.projeto)
+      return b.total - a.total
+    })
+  }, [filtroItem, projetosRaw, filtroProjetos])
 
-  const statsComparativo = useMemo(() => {
-    if (comparativoPorProjeto.length === 0) return null
-    const totalGeral = comparativoPorProjeto.reduce((s, r) => s + r.total, 0)
-    const qtdeTotal = comparativoPorProjeto.reduce((s, r) => s + r.qtde, 0)
-    const vus = comparativoPorProjeto.filter(r => r.qtde > 0).map(r => r.total / r.qtde)
-    return {
-      media: qtdeTotal > 0 ? totalGeral / qtdeTotal : 0,
-      menor: vus.length > 0 ? Math.min(...vus) : 0,
-      maior: vus.length > 0 ? Math.max(...vus) : 0,
-      totalGeral,
-    }
-  }, [comparativoPorProjeto])
-
-  // ── Sincronizar ─────────────────────────────────────────────────────────────
-
-  async function handleSincronizar() {
-    if (!accessToken) { conectar(); return }
-
-    setSincronizando(true)
-    setFeedback(null)
-    setProgresso('Buscando projetos...')
-
-    try {
-      const { data: rows, error } = await supabase
-        .from('projetos')
-        .select('id, tap, sheets_url, sheet_layout')
-
-      if (error) throw new Error(error.message)
-
-      const comUrl = (rows ?? []).filter(r => r.sheets_url) as Array<{
-        id: string
-        tap: Record<string, unknown>
-        sheets_url: string
-        sheet_layout: string | null
-      }>
-
-      if (comUrl.length === 0) {
-        setFeedback({ tipo: 'erro', msg: 'Nenhum projeto com URL do Google Sheets cadastrada.' })
-        return
-      }
-
-      const todosItens: {
-        projeto_id: string
-        projeto_nome: string
-        segmento: string
-        categoria: string
-        sub_categoria: string
-        item: string
-        valor_orcado: number
-      }[] = []
-
-      const idsProcessados: string[] = []
-      const erros: string[] = []
-
-      for (let idx = 0; idx < comUrl.length; idx++) {
-        const row = comUrl[idx]
-        const nome =
-          (row.tap.turma as string | undefined) ||
-          (row.tap.instituicao as string | undefined) ||
-          row.id
-        const curso = row.tap.curso as string | undefined
-        const layout: 'A' | 'B' = row.sheet_layout === 'B' ? 'B' : 'A'
-
-        // Delay entre projetos para evitar quota do Google Sheets API
-        if (idx > 0) await sleep(2000)
-
-        try {
-          const itensProj = await sincronizarVerbas(
-            row.id,
-            nome,
-            row.sheets_url,
-            curso,
-            accessToken,
-            msg => setProgresso(msg),
-            layout,
-          )
-          todosItens.push(...itensProj)
-          idsProcessados.push(row.id)
-        } catch (e) {
-          if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
-          erros.push(`${nome}: ${(e as Error).message}`)
-        }
-      }
-
-      setProgresso('Salvando no banco...')
-
-      if (idsProcessados.length > 0) {
-        const { error: delErr } = await supabase
-          .from('verbas_itens')
-          .delete()
-          .in('projeto_id', idsProcessados)
-        if (delErr) throw new Error(delErr.message)
-      }
-
-      if (todosItens.length > 0) {
-        const BATCH = 500
-        for (let i = 0; i < todosItens.length; i += BATCH) {
-          const { error: insErr } = await supabase
-            .from('verbas_itens')
-            .insert(todosItens.slice(i, i + BATCH))
-          if (insErr) throw new Error(insErr.message)
-        }
-      }
-
-      await carregarDados()
-
-      const msg = `${todosItens.length} itens sincronizados de ${idsProcessados.length} projeto(s).`
-      const msgErros = erros.length ? ` Erros: ${erros.join('; ')}` : ''
-      setFeedback({ tipo: erros.length ? 'erro' : 'sucesso', msg: msg + msgErros })
-    } catch (e) {
-      setFeedback({ tipo: 'erro', msg: (e as Error).message })
-    } finally {
-      setSincronizando(false)
-      setProgresso('')
-    }
+  function handleExportar() {
+    const colunas: ColunaProjeto[] = projetosFiltrados.map(p => ({ id: p.id, nome: p.nome }))
+    exportarVerbasExcel(blocos, colunas, totalGeral)
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -371,31 +287,17 @@ export function Verbas() {
           <p className="text-sm text-text-muted mt-0.5">Consolidado orçado por projeto e categoria</p>
         </div>
         <button
-          onClick={handleSincronizar}
-          disabled={sincronizando}
+          onClick={handleExportar}
+          disabled={blocos.length === 0}
           className="btn-primary flex items-center gap-2 disabled:opacity-60"
         >
-          <RefreshCw size={16} className={sincronizando ? 'animate-spin' : ''} />
-          {sincronizando ? (progresso || 'Sincronizando...') : 'Sincronizar'}
+          <Download size={16} />
+          Exportar Excel
         </button>
       </div>
 
-      {/* Feedback */}
-      {feedback && (
-        <div className={`flex items-start gap-3 px-4 py-3 rounded-lg text-sm ${
-          feedback.tipo === 'sucesso'
-            ? 'bg-success/10 border border-success/30 text-success'
-            : 'bg-danger/10 border border-danger/30 text-danger'
-        }`}>
-          {feedback.tipo === 'sucesso'
-            ? <CheckCircle size={16} className="flex-shrink-0 mt-0.5" />
-            : <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />}
-          {feedback.msg}
-        </div>
-      )}
-
       {/* Cards por segmento */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {SEGMENTOS.map(seg => (
           <div key={seg} className="card">
             <div className="flex items-center gap-2 mb-2">
@@ -415,60 +317,31 @@ export function Verbas() {
         ))}
       </div>
 
-      {/* Gráfico de barras */}
+      {/* Gráfico — 1 barra por categoria (fixa), em vez de 1 por projeto */}
       {dadosGrafico.length > 0 && (
         <div className="card">
-          <h2 className="text-sm font-semibold text-text-main mb-4">Total Orçado por Projeto</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={dadosGrafico} margin={{ top: 4, right: 16, left: 8, bottom: 72 }}>
+          <h2 className="text-sm font-semibold text-text-main mb-4">Total Orçado por Categoria</h2>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={dadosGrafico} margin={{ top: 4, right: 16, left: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis
-                dataKey="name"
-                tick={{ fill: '#8892b0', fontSize: 11 }}
-                angle={-35}
-                textAnchor="end"
-                interval={0}
-              />
+              <XAxis dataKey="name" tick={{ fill: '#8892b0', fontSize: 11 }} />
               <YAxis
                 tick={{ fill: '#8892b0', fontSize: 11 }}
                 tickFormatter={v =>
-                  new Intl.NumberFormat('pt-BR', {
-                    notation: 'compact', compactDisplay: 'short', currency: 'BRL',
-                  }).format(v as number)
+                  new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short' }).format(v as number)
                 }
-                width={72}
+                width={64}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#1a1a2e',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: 8,
-                  fontSize: 12,
+                  backgroundColor: '#1a1a2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12,
                 }}
                 labelStyle={{ color: '#f0f0f0', marginBottom: 4 }}
-                itemStyle={{ color: '#8892b0' }}
                 formatter={(value) => [formatBRL(Number(value ?? 0)), 'Total Orçado']}
               />
-              <Bar dataKey="total" radius={[4, 4, 0, 0]} maxBarSize={56}>
-                {dadosGrafico.map((entry, idx) => (
-                  <Cell key={idx} fill={CORES_SEGMENTO[entry.segmento] ?? '#8892b0'} />
-                ))}
-              </Bar>
+              <Bar dataKey="total" radius={[4, 4, 0, 0]} maxBarSize={72} fill="#e94560" />
             </BarChart>
           </ResponsiveContainer>
-
-          {/* Legenda manual */}
-          <div className="flex gap-5 mt-1 justify-center">
-            {SEGMENTOS.map(seg => (
-              <div key={seg} className="flex items-center gap-1.5 text-xs text-text-muted">
-                <span
-                  className="w-3 h-3 rounded-sm inline-block flex-shrink-0"
-                  style={{ backgroundColor: CORES_SEGMENTO[seg] }}
-                />
-                {seg}
-              </div>
-            ))}
-          </div>
         </div>
       )}
 
@@ -529,7 +402,7 @@ export function Verbas() {
             className="bg-surface-2 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-text-main"
           >
             <option value="">Todas as Categorias</option>
-            {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+            {CATEGORIAS_ORDEM.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
 
           <select
@@ -551,16 +424,14 @@ export function Verbas() {
         </div>
 
         {/* Conteúdo */}
-        {loadingDados ? (
+        {loading ? (
           <div className="flex items-center justify-center h-24 text-text-muted text-sm gap-2">
             <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             Carregando...
           </div>
-        ) : linhasPivot.length === 0 ? (
+        ) : blocos.length === 0 ? (
           <p className="text-text-muted text-sm text-center py-10">
-            {itens.length === 0
-              ? 'Nenhum dado. Clique em Sincronizar para importar.'
-              : 'Nenhum item encontrado com os filtros selecionados.'}
+            Nenhum item encontrado com os filtros selecionados.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -568,15 +439,9 @@ export function Verbas() {
               <thead>
                 <tr className="border-b border-white/10">
                   <th className="text-left px-3 py-2.5 text-xs font-medium text-text-muted min-w-[160px] sticky left-0 bg-surface z-10">
-                    Categoria
+                    Categoria / Sub Categoria / Item
                   </th>
-                  <th className="text-left px-3 py-2.5 text-xs font-medium text-text-muted min-w-[160px]">
-                    Sub Categoria
-                  </th>
-                  <th className="text-left px-3 py-2.5 text-xs font-medium text-text-muted min-w-[200px]">
-                    Item
-                  </th>
-                  {projetosFiltradosPivot.map(p => (
+                  {projetosFiltrados.map(p => (
                     <th
                       key={p.id}
                       className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[150px] whitespace-nowrap"
@@ -591,40 +456,92 @@ export function Verbas() {
                     </th>
                   ))}
                   <th className="text-right px-3 py-2.5 text-xs font-semibold text-primary min-w-[150px] whitespace-nowrap">
-                    Total Geral
+                    Total
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {linhasPivot.map((row, i) => (
-                  <tr
-                    key={i}
-                    className="border-b border-white/5 hover:bg-white/5 transition-colors"
-                  >
-                    <td className="px-3 py-2 text-xs text-text-muted sticky left-0 bg-surface z-10">
-                      {row.categoria}
-                    </td>
-                    <td className="px-3 py-2 text-text-muted">
-                      {row.sub_categoria || <span className="text-white/20">—</span>}
-                    </td>
-                    <td className="px-3 py-2 text-text-main">{row.item}</td>
-                    {projetosFiltradosPivot.map(p => (
-                      <td key={p.id} className="px-3 py-2 text-right tabular-nums">
-                        {row.valores[p.id]
-                          ? <span className="text-text-main">{formatBRL(row.valores[p.id])}</span>
-                          : <span className="text-white/20">—</span>}
+                {blocos.map(bloco => (
+                  <Fragment key={bloco.categoria}>
+                    <tr className="bg-primary/10">
+                      <td className="px-3 py-2 text-xs font-bold text-primary uppercase tracking-wide sticky left-0 bg-surface z-10" style={{ background: 'rgba(233,69,96,0.12)' }}>
+                        {bloco.categoria}
                       </td>
+                      {projetosFiltrados.map(p => <td key={p.id} />)}
+                      <td />
+                    </tr>
+                    {bloco.subcategorias.map(sub => (
+                      <Fragment key={sub.nome}>
+                        {sub.itens.map((it, i) => (
+                          <tr key={`${bloco.categoria}-${sub.nome}-${i}`} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <td className="px-3 py-2 text-text-main sticky left-0 bg-surface z-10">
+                              <span className="text-text-muted text-xs">{sub.nome}</span>
+                              <span className="text-text-muted/50"> — </span>
+                              {it.item}
+                            </td>
+                            {projetosFiltrados.map(p => (
+                              <td key={p.id} className="px-3 py-2 text-right tabular-nums">
+                                {it.valores[p.id]
+                                  ? <span className="text-text-main">{formatBRL(it.valores[p.id])}</span>
+                                  : <span className="text-white/20">—</span>}
+                              </td>
+                            ))}
+                            <td className="px-3 py-2 text-right font-medium text-text-main tabular-nums">
+                              {formatBRL(it.total)}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr key={`sub-${bloco.categoria}-${sub.nome}`} className="border-b border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                          <td className="px-3 py-1.5 text-xs font-semibold text-text-muted sticky left-0 z-10" style={{ background: '#16213e' }}>
+                            Subtotal — {sub.nome}
+                          </td>
+                          {projetosFiltrados.map(p => (
+                            <td key={p.id} className="px-3 py-1.5 text-right text-xs font-semibold text-text-main tabular-nums">
+                              {sub.valores[p.id] ? formatBRL(sub.valores[p.id]) : <span className="text-white/20">—</span>}
+                            </td>
+                          ))}
+                          <td className="px-3 py-1.5 text-right text-xs font-semibold text-text-main tabular-nums">
+                            {formatBRL(sub.total)}
+                          </td>
+                        </tr>
+                      </Fragment>
                     ))}
-                    <td className="px-3 py-2 text-right font-semibold text-primary tabular-nums">
-                      {formatBRL(row.total)}
-                    </td>
-                  </tr>
+                    <tr className="border-b-2 border-white/10" style={{ background: 'rgba(233,69,96,0.06)' }}>
+                      <td className="px-3 py-2 text-xs font-bold text-primary sticky left-0 z-10" style={{ background: '#1a1a2e' }}>
+                        TOTAL — {bloco.categoria}
+                      </td>
+                      {projetosFiltrados.map(p => (
+                        <td key={p.id} className="px-3 py-2 text-right text-sm font-bold text-primary tabular-nums">
+                          {bloco.valores[p.id] ? formatBRL(bloco.valores[p.id]) : <span className="text-white/20">—</span>}
+                        </td>
+                      ))}
+                      <td className="px-3 py-2 text-right text-sm font-bold text-primary tabular-nums">
+                        {formatBRL(bloco.total)}
+                      </td>
+                    </tr>
+                  </Fragment>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-white/20" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                  <td className="px-3 py-3 text-sm font-bold text-text-main sticky left-0 z-10" style={{ background: '#1a1a2e' }}>
+                    TOTAL GERAL
+                  </td>
+                  {projetosFiltrados.map(p => (
+                    <td key={p.id} className="px-3 py-3 text-right text-sm font-bold text-text-main tabular-nums">
+                      {totalGeral.valores[p.id] ? formatBRL(totalGeral.valores[p.id]) : <span className="text-white/20">—</span>}
+                    </td>
+                  ))}
+                  <td className="px-3 py-3 text-right text-base font-bold text-primary tabular-nums">
+                    {formatBRL(totalGeral.total)}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}
       </div>
+
       {/* Tabela Comparativo por Projeto */}
       {filtroItem.trim() && (
         <div className="card">
@@ -644,12 +561,9 @@ export function Verbas() {
                   <tr className="border-b border-white/10">
                     <th className="text-left px-3 py-2.5 text-xs font-medium text-text-muted min-w-[160px]">Projeto</th>
                     <th className="text-left px-3 py-2.5 text-xs font-medium text-text-muted min-w-[180px]">Item</th>
-                    <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted">Qtde</th>
-                    <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[120px]">Valor Unitário</th>
-                    <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[120px]">Total</th>
+                    <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[120px]">Total Orçado</th>
                     <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted">Convidados</th>
                     <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted min-w-[110px]">Custo/Conv.</th>
-                    <th className="text-right px-3 py-2.5 text-xs font-medium text-text-muted">Fonte</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -661,7 +575,7 @@ export function Verbas() {
                     const projCount = new Set(linhas.map(r => r.projetoId)).size
                     return [
                       <tr key={`h-${ensino}`}>
-                        <td colSpan={8} className="px-3 pt-4 pb-1.5">
+                        <td colSpan={5} className="px-3 pt-4 pb-1.5">
                           <div className="flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full shrink-0" style={{ background: cor }} />
                             <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: cor }}>{label}</span>
@@ -669,70 +583,24 @@ export function Verbas() {
                           </div>
                         </td>
                       </tr>,
-                      ...linhas.map((row, i) => {
-                        const qtdeDisplay = row.convidados > 0 ? row.convidados : row.qtde
-                        const vu = qtdeDisplay > 0 ? row.total / qtdeDisplay : null
-                        const fonte = row.temCont && row.temOrc ? 'misto' : row.temCont ? 'cont' : 'orc'
-                        return (
-                          <tr key={`${ensino}-${i}`} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                            <td className="px-3 py-2 text-text-main">{row.projeto}</td>
-                            <td className="px-3 py-2 text-text-muted">{row.itemNome || <span className="text-white/30">—</span>}</td>
-                            <td className="px-3 py-2 text-right tabular-nums text-text-main">
-                              {qtdeDisplay > 0 ? qtdeDisplay.toLocaleString('pt-BR') : <span className="text-white/30">—</span>}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums font-medium text-text-main">
-                              {vu !== null ? formatBRL(vu) : <span className="text-white/30">—</span>}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">
-                              {formatBRL(row.total)}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums text-text-muted">
-                              {row.convidados > 0 ? row.convidados.toLocaleString('pt-BR') : <span className="text-white/30">—</span>}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums text-text-main">
-                              {row.convidados > 0 ? formatBRL(row.total / row.convidados) : <span className="text-white/30">—</span>}
-                            </td>
-                            <td className="px-3 py-2 text-right">
-                              <span
-                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                                style={fonte === 'cont'
-                                  ? { background: 'rgba(22,163,74,0.15)', color: '#16A34A' }
-                                  : fonte === 'orc'
-                                  ? { background: 'rgba(234,179,8,0.15)', color: '#CA8A04' }
-                                  : { background: 'rgba(148,163,184,0.15)', color: '#94A3B8' }}
-                              >
-                                {fonte === 'cont' ? 'Cont.' : fonte === 'orc' ? 'Orç.' : 'Misto'}
-                              </span>
-                            </td>
-                          </tr>
-                        )
-                      }),
+                      ...linhas.map((row, i) => (
+                        <tr key={`${ensino}-${i}`} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="px-3 py-2 text-text-main">{row.projeto}</td>
+                          <td className="px-3 py-2 text-text-muted">{row.itemNome || <span className="text-white/30">—</span>}</td>
+                          <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">
+                            {formatBRL(row.total)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-text-muted">
+                            {row.convidados > 0 ? row.convidados.toLocaleString('pt-BR') : <span className="text-white/30">—</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-text-main">
+                            {row.convidados > 0 ? formatBRL(row.total / row.convidados) : <span className="text-white/30">—</span>}
+                          </td>
+                        </tr>
+                      )),
                     ]
                   })}
                 </tbody>
-                {statsComparativo && (
-                  <tfoot>
-                    <tr className="border-t-2 border-white/20" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                      <td className="px-3 py-2.5 text-xs text-text-muted">
-                        {comparativoPorProjeto.length} item(s)
-                      </td>
-                      <td className="px-3 py-2.5" />
-                      <td className="px-3 py-2.5" />
-                      <td className="px-3 py-2.5 text-right">
-                        <div className="text-[10px] text-text-muted">Média VU</div>
-                        <div className="text-xs font-semibold text-text-main tabular-nums">{formatBRL(statsComparativo.media)}</div>
-                        <div className="text-[10px] text-text-muted tabular-nums mt-0.5">
-                          {formatBRL(statsComparativo.menor)} – {formatBRL(statsComparativo.maior)}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-right">
-                        <div className="text-[10px] text-text-muted">Total Geral</div>
-                        <div className="text-xs font-bold text-primary tabular-nums">{formatBRL(statsComparativo.totalGeral)}</div>
-                      </td>
-                      <td colSpan={3} />
-                    </tr>
-                  </tfoot>
-                )}
               </table>
             </div>
           )}
