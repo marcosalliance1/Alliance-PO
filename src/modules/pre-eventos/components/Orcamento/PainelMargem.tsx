@@ -52,8 +52,9 @@ export const PainelMargem: React.FC<{ orc: Orcamento }> = ({ orc }) => {
             {r.resultadoCliente >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />} Resultado Cliente
           </p>
           <p className={`text-lg font-bold ${corDe(r.resultadoCliente)}`}>{formatBRL(r.resultadoCliente)}</p>
-          <p className="text-[11px] text-muted flex items-center gap-1">
-            <Users className="w-3 h-3" /> saldo da turma
+          <p className="text-[11px] text-muted flex items-center gap-1 flex-wrap">
+            <Users className="w-3 h-3 shrink-0" />
+            {r.pagoComissao > 0 ? 'Rec − V.Cliente + Comissão' : 'Rec − V.Cliente'}
             {r.receita > 0 && ` · ${r.margemCliente.toFixed(1)}%`}
           </p>
         </div>

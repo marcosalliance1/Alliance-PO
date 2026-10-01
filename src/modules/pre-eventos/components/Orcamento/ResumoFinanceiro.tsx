@@ -65,13 +65,33 @@ export const ResumoFinanceiro: React.FC<Props> = ({ orc }) => {
           <Row label="Pago Comissão"        value={r.totalPagoComissao} />
         </div>
 
-        {/* Saldo da Turma em destaque */}
+        {/* Saldo da Turma em destaque — com a conta visível (reconcilia na sequência) */}
         <div className={`rounded-lg p-4 border-2 h-fit ${r.saldo >= 0 ? 'border-success/50 bg-success/5' : 'border-danger/50 bg-danger/5'}`}>
-          <p className="text-muted text-xs mb-1">Saldo da Turma</p>
-          <p className={`text-2xl font-bold ${r.saldo >= 0 ? 'text-success' : 'text-danger'}`}>
-            {formatBRL(r.saldo)}
-          </p>
-          <p className="text-muted text-xs mt-2">Receitas − Passado ao Cliente (fora o Pago Comissão)</p>
+          <p className="text-muted text-xs mb-2">Saldo da Turma</p>
+          <div className="space-y-1 text-[11px] mb-2">
+            <div className="flex justify-between gap-2">
+              <span className="text-muted">Receitas</span>
+              <span className="text-white tabular-nums">{formatBRL(r.totalReceitas)}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-muted">(−) V. Cliente</span>
+              <span className="text-white tabular-nums">{formatBRL(r.totalCliente)}</span>
+            </div>
+            {r.totalPagoComissao > 0 && (
+              <div className="flex justify-between gap-2">
+                <span className="text-muted">(+) Pago Comissão</span>
+                <span className="text-white tabular-nums">{formatBRL(r.totalPagoComissao)}</span>
+              </div>
+            )}
+          </div>
+          <div className="border-t border-bordercol/50 pt-2">
+            <p className={`text-2xl font-bold ${r.saldo >= 0 ? 'text-success' : 'text-danger'}`}>
+              {formatBRL(r.saldo)}
+            </p>
+            {r.totalPagoComissao > 0 && (
+              <p className="text-muted text-[10px] mt-1">Pago Comissão é verba externa da comissão — volta pro saldo.</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

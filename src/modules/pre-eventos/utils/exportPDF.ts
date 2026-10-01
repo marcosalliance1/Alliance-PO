@@ -542,16 +542,16 @@ export async function exportarRelatorioCliente(orc: Orcamento) {
   doc.text('RESUMO DA TURMA', 13, sy + 5.5)
 
   const linhas: [string, number][] = [
-    ['Total Arrecadado (Receitas)', totalReceitas],
-    ['Total Investido no Evento',   totalCliente],
-    ...(totalPagoComissao > 0 ? ([['(-) Pago pela Comissão (verba própria)', totalPagoComissao]] as [string, number][]) : []),
+    ['(+) Total Arrecadado (Receitas)', totalReceitas],
+    ['(-) Total Investido no Evento',   totalCliente],
+    ...(totalPagoComissao > 0 ? ([['(+) Pago pela Comissão (verba própria)', totalPagoComissao]] as [string, number][]) : []),
     ['Saldo da Turma',              saldo],
   ]
   doc.setFontSize(9); doc.setFont('helvetica', 'normal')
   linhas.forEach(([k, v], i) => {
     const ry = sy + 13 + i * 6
     doc.setTextColor(...TEXT_MUT); doc.text(k, 13, ry)
-    const isColor = k.startsWith('Saldo') || k.startsWith('Total Arrecadado')
+    const isColor = k.includes('Saldo') || k.includes('Arrecadado')
     doc.setTextColor(...(isColor ? (v >= 0 ? GREEN : RED) : TEXT))
     doc.text(formatBRL(v), 128, ry, { align: 'right' })
   })
