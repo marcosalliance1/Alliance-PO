@@ -14,6 +14,10 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   VIAGEM_MEIO_CURSO:     'Viagem de Meio de Curso',
   FESTA_PRE_INTERNATO:   'Festa Pré-Internato',
   FESTA_X_DIAS:          'Festa X Dias',
+  // Custo interno da Alliance (não é de turma/formatura) — aniversário da empresa,
+  // confraternização etc. Reaproveita toda a estrutura de orçamento do pré-eventos
+  // em vez de um módulo "Administrativo" à parte.
+  EVENTO_INTERNO:        'Evento Interno Alliance',
 }
 
 export const EVENT_TYPES: EventType[] = [
@@ -26,6 +30,7 @@ export const EVENT_TYPES: EventType[] = [
   'VIAGEM_MEIO_CURSO',
   'FESTA_PRE_INTERNATO',
   'FESTA_X_DIAS',
+  'EVENTO_INTERNO',
 ]
 
 export function getEventCategory(tipo: EventType, qtde: number): TipoEvento | null {

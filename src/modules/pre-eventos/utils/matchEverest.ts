@@ -17,6 +17,7 @@ export const CONTA_GERENCIAL_POR_TIPO: Record<EventType, string | null> = {
   VIAGEM_MEIO_CURSO:      'VIAGEM MEIO CURSO',
   FESTA_PRE_INTERNATO:    'FESTA PRE INTERNATO',
   FESTA_X_DIAS:           'FESTA X DIAS',
+  EVENTO_INTERNO:         null, // custo interno da Alliance — sem conta gerencial própria no Everest
 }
 
 const SEP = '||'

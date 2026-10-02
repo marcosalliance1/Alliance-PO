@@ -8,6 +8,7 @@
   | 'VIAGEM_MEIO_CURSO'
   | 'FESTA_PRE_INTERNATO'
   | 'FESTA_X_DIAS'
+  | 'EVENTO_INTERNO'
 
 export type OrcamentoStatus = 'RASCUNHO' | 'EM_ANDAMENTO' | 'CONCLUIDO'
 // PAGO_COMISSAO = a comissão pagou do bolso deles (não saiu da conta Alliance):
