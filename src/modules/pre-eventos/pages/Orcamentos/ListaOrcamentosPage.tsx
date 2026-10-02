@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Pencil, Trash2, Eye, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Eye, ChevronDown, ChevronRight, Copy } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
+import { duplicarOrcamentoModelo } from '../../hooks/useOrcamentos'
 import { EVENT_TYPE_LABELS } from '../../data/defaults'
 import { formatBRL, formatDate } from '../../utils/formatters'
 import type { Orcamento, OrcamentoStatus } from '../../types'
@@ -22,7 +23,7 @@ const turmaKey = (t: string) => (t || '—').trim().replace(/\s+/g, '').toUpperC
 
 export const ListaOrcamentosPage: React.FC = () => {
   const navigate = useNavigate()
-  const { orcamentos, excluirOrcamento, confirm, addToast } = useAppContext()
+  const { orcamentos, excluirOrcamento, salvarOrcamento, confirm, addToast } = useAppContext()
   const [busca, setBusca] = useState('')
   const [filtroInst, setFiltroInst] = useState('')
   const [abertos, setAbertos] = useState<Record<string, boolean>>({})
@@ -72,6 +73,13 @@ export const ListaOrcamentosPage: React.FC = () => {
       excluirOrcamento(id)
       addToast('Orçamento excluído com sucesso.', 'success')
     })
+  }
+
+  function handleDuplicar(orc: Orcamento) {
+    const novo = duplicarOrcamentoModelo(orc)
+    salvarOrcamento(novo)
+    addToast(`Duplicado como "${novo.turma}" — pagamentos zerados. Ajuste turma, tipo e data.`, 'success')
+    navigate(`/pre-eventos/orcamentos/${novo.id}`)
   }
 
   return (
@@ -202,6 +210,13 @@ export const ListaOrcamentosPage: React.FC = () => {
                                             title="Visualizar"
                                           >
                                             <Eye className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button
+                                            onClick={() => handleDuplicar(o)}
+                                            className="p-1.5 rounded text-muted hover:text-accent hover:bg-accent/10 transition-colors"
+                                            title="Duplicar (modelo limpo — zera pagamentos)"
+                                          >
+                                            <Copy className="w-3.5 h-3.5" />
                                           </button>
                                           <button
                                             onClick={() => navigate(`/pre-eventos/orcamentos/${o.id}`)}

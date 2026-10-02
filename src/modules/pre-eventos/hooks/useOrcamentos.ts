@@ -146,6 +146,29 @@ export function criarOrcamentoVazio(
   }
 }
 
+// Duplica um orçamento como "modelo limpo": copia estrutura, itens, orçado, V.Cliente,
+// receitas e Info do Evento; ZERA a execução de cada item (Total Pago, Data Pgto, NF,
+// status→Pendente). Vira um rascunho novo pronto pra preencher o próximo evento.
+export function duplicarOrcamentoModelo(orc: Orcamento): Orcamento {
+  const now = new Date().toISOString()
+  const copia: Orcamento = JSON.parse(JSON.stringify(orc)) // deep clone (sem refs compartilhadas)
+  copia.id = newItemId()
+  copia.turma = orc.turma ? `${orc.turma} (cópia)` : 'Cópia'
+  copia.status = 'RASCUNHO'
+  copia.criadoEm = now
+  copia.atualizadoEm = now
+  copia.atualizadoPor = undefined
+  const limpar = (arr: ItemOrcamento[]) => arr.map(i => recalcularItem({
+    ...i, id: newItemId(), totalPagoReal: 0, dataPagamento: null, notaFiscal: undefined, status: 'PENDENTE' as const,
+  }))
+  copia.operacaoEstrutura = limpar(copia.operacaoEstrutura)
+  copia.equipe = limpar(copia.equipe)
+  copia.atracao = limpar(copia.atracao)
+  copia.abBebidas = limpar(copia.abBebidas)
+  copia.extras = limpar(copia.extras)
+  return copia
+}
+
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useOrcamentos() {
