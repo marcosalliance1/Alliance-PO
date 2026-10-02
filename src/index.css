@@ -235,14 +235,29 @@
 .modo-planilha .bg-primary *,
 .modo-planilha .btn-primary *{ color:#fff !important; }
 /* tabela de itens → grade de planilha */
-.modo-planilha table thead tr{ background:#f2f4f8 !important; }
+/* superfícies translúcidas do tema escuro (thead/grupo/subtotal usam bg-surface2/NN) → claro */
+.modo-planilha [class*="bg-surface2"]{ background:#eef1f6 !important; }
 .modo-planilha table th{ color:var(--pl-muted) !important; border-bottom:1px solid var(--pl-grid-strong) !important; }
 .modo-planilha table td{ border-bottom:1px solid var(--pl-grid) !important; border-right:1px solid var(--pl-grid) !important; }
 .modo-planilha table td:last-child{ border-right:none !important; }
 .modo-planilha table tbody tr:hover td{ background:#f7f9fc !important; }
-.modo-planilha table input,
-.modo-planilha table select{ background:transparent !important; }
-.modo-planilha table input:focus{ background:#fffceb !important; box-shadow:inset 0 0 0 2px var(--c-blue-bar); border-radius:2px; }
+/* SUBTOTAL (tfoot) claro, com texto escuro legível */
+.modo-planilha table tfoot tr{ background:#eef1f6 !important; }
+.modo-planilha table tfoot td{ color:var(--pl-ink) !important; border-top:2px solid var(--pl-grid-strong) !important; }
+/* cabeçalho de colunas tingido pela cor da seção */
+.modo-planilha .sec-cor-blue   thead tr{ background:var(--c-blue-bg) !important; }
+.modo-planilha .sec-cor-green  thead tr{ background:var(--c-green-bg) !important; }
+.modo-planilha .sec-cor-amber  thead tr{ background:var(--c-amber-bg) !important; }
+.modo-planilha .sec-cor-purple thead tr{ background:var(--c-purple-bg) !important; }
+.modo-planilha .sec-cor-teal   thead tr{ background:var(--c-teal-bg) !important; }
+.modo-planilha .sec-cor-blue   thead th{ color:var(--c-blue-ink) !important; }
+.modo-planilha .sec-cor-green  thead th{ color:var(--c-green-ink) !important; }
+.modo-planilha .sec-cor-amber  thead th{ color:var(--c-amber-ink) !important; }
+.modo-planilha .sec-cor-purple thead th{ color:var(--c-purple-ink) !important; }
+.modo-planilha .sec-cor-teal   thead th{ color:var(--c-teal-ink) !important; }
+/* células: inputs achatados (sem contorno arredondado) — vira célula de planilha */
+.modo-planilha table input{ background:transparent !important; border:none !important; border-radius:0 !important; box-shadow:none !important; }
+.modo-planilha table input:focus{ background:#fffceb !important; box-shadow:inset 0 0 0 2px var(--c-blue-bar) !important; }
 /* cabeçalho de seção tingido por cor + barra + zebra */
 .modo-planilha .sec-cor-blue   .sec-head{ background:var(--c-blue-bg) !important; }
 .modo-planilha .sec-cor-green  .sec-head{ background:var(--c-green-bg) !important; }
