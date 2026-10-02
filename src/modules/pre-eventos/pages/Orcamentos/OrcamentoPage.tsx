@@ -1,6 +1,6 @@
 ﻿import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning, Database, Wallet, Eraser, Ticket, Check, Users, Boxes } from 'lucide-react'
+import { Save, FileDown, Sheet, ArrowLeft, Plus, Trash2, RefreshCw, Paperclip, FileUp, X, ExternalLink, FileWarning, Database, Wallet, Eraser, Ticket, Check, Users, Boxes, Table2, Moon } from 'lucide-react'
 import { useAppContext } from '../../contexts/AppContext'
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from '../../data/defaults'
 import { formatBRL, newItemId } from '../../utils/formatters'
@@ -129,6 +129,16 @@ export const OrcamentoPage: React.FC = () => {
         if (i.item?.trim() && !/rider/i.test(i.item)) set.add(i.item.trim())
     return [...set].sort((a, b) => a.localeCompare(b, 'pt-BR'))
   }, [orcamentos])
+
+  // Modo planilha: aparência clara estilo planilha (toggle, preferência por navegador).
+  const [modoPlanilha, setModoPlanilha] = useState<boolean>(() => {
+    try { return localStorage.getItem('alliance_modo_planilha') === '1' } catch { return false }
+  })
+  const toggleModo = () => setModoPlanilha(m => {
+    const v = !m
+    try { localStorage.setItem('alliance_modo_planilha', v ? '1' : '0') } catch { /* ignore */ }
+    return v
+  })
 
   const [orc, setOrc] = useState<Orcamento | null>(null)
   const [abaAtiva, setAbaAtiva] = useState<'orcamento' | 'evento' | 'cronograma'>('orcamento')
@@ -555,7 +565,7 @@ export const OrcamentoPage: React.FC = () => {
   const totalReceitas = orc.bolsaFolia + orc.receitasSympla.reduce((s, l) => s + l.total, 0)
 
   return (
-    <div className="max-w-[1400px] mx-auto space-y-4 pb-20 md:pb-0">
+    <div className={`max-w-[1400px] mx-auto space-y-4 pb-20 md:pb-0 ${modoPlanilha ? 'modo-planilha' : ''}`}>
       {/* Header bar — desktop only action buttons */}
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -563,6 +573,14 @@ export const OrcamentoPage: React.FC = () => {
           className="flex items-center gap-1 text-muted hover:text-white text-sm transition-colors min-h-[44px]"
         >
           <ArrowLeft className="w-4 h-4" /> Voltar
+        </button>
+        <button
+          onClick={toggleModo}
+          title="Alternar aparência (escuro / planilha)"
+          className="toggle-modo flex items-center gap-1.5 text-xs border border-bordercol/60 rounded-lg px-2.5 py-1.5 text-muted hover:text-white transition-colors"
+        >
+          {modoPlanilha ? <Moon className="w-3.5 h-3.5" /> : <Table2 className="w-3.5 h-3.5" />}
+          {modoPlanilha ? 'Escuro' : 'Planilha'}
         </button>
         <div className="flex-1" />
         {orc.id && <PresencaBar canal={`orcamento:${orc.id}`} usuario={usuario} />}
@@ -798,6 +816,7 @@ export const OrcamentoPage: React.FC = () => {
       {/* ── 2. Receitas ── */}
       <SecaoAccordion
         title="Receitas"
+        cor="teal"
         subtitle={`Total: ${formatBRL(totalReceitas)}`}
         defaultOpen
       >
@@ -871,6 +890,7 @@ export const OrcamentoPage: React.FC = () => {
       {/* ── 3. Operação / Estrutura ── */}
       <SecaoAccordion
         title="Operação / Estrutura"
+        cor="blue"
         subtitle={`${orc.operacaoEstrutura.length} itens`}
       >
         <TabelaItens
@@ -883,6 +903,7 @@ export const OrcamentoPage: React.FC = () => {
       {/* ── 4. Equipe ── */}
       <SecaoAccordion
         title="Equipe"
+        cor="green"
         subtitle={`${orc.equipe.length} itens — itens com badge "A" foram preenchidos automaticamente`}
       >
         <div className="flex justify-end mb-3">
@@ -901,7 +922,7 @@ export const OrcamentoPage: React.FC = () => {
       </SecaoAccordion>
 
       {/* ── 5. Atração ── */}
-      <SecaoAccordion title="Atração" subtitle={`${orc.atracao.length} itens`}>
+      <SecaoAccordion title="Atração" cor="purple" subtitle={`${orc.atracao.length} itens`}>
         <TabelaItens
           items={orc.atracao}
           onChange={items => updateSecao('atracao', items)}
@@ -911,7 +932,7 @@ export const OrcamentoPage: React.FC = () => {
       </SecaoAccordion>
 
       {/* ── 6. A&B ── */}
-      <SecaoAccordion title="A&B — Alimentos e Bebidas" subtitle={`${orc.abBebidas.length} itens`}>
+      <SecaoAccordion title="A&B — Alimentos e Bebidas" cor="amber" subtitle={`${orc.abBebidas.length} itens`}>
         <TabelaItens
           items={orc.abBebidas}
           onChange={items => updateSecao('abBebidas', items)}
@@ -920,7 +941,7 @@ export const OrcamentoPage: React.FC = () => {
       </SecaoAccordion>
 
       {/* ── 7. Extras ── */}
-      <SecaoAccordion title="Extras" subtitle={`${orc.extras.length} itens`}>
+      <SecaoAccordion title="Extras" cor="teal" subtitle={`${orc.extras.length} itens`}>
         <TabelaItens
           items={orc.extras}
           onChange={items => updateSecao('extras', items)}

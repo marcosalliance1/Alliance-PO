@@ -6,21 +6,22 @@ interface Props {
   subtitle?: string
   defaultOpen?: boolean
   children: React.ReactNode
+  cor?: 'blue' | 'green' | 'purple' | 'amber' | 'teal' // tom do bloco no modo planilha
 }
 
 export const SecaoAccordion: React.FC<Props> = ({
-  title, subtitle, defaultOpen = false, children
+  title, subtitle, defaultOpen = false, children, cor = 'blue'
 }) => {
   const [open, setOpen] = useState(defaultOpen)
 
   return (
-    <div className="bg-surface-2 border border-bordercol rounded-card overflow-hidden mb-4">
+    <div className={`sec-acc sec-cor-${cor} bg-surface-2 border border-bordercol rounded-card overflow-hidden mb-4`}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 transition-colors"
+        className="sec-head w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <span className="w-1 h-6 bg-accent rounded-full shrink-0" />
+          <span className="sec-barra w-1 h-6 bg-accent rounded-full shrink-0" />
           <div className="text-left">
             <p className="text-white font-semibold text-sm">{title}</p>
             {subtitle && <p className="text-muted text-xs mt-0.5">{subtitle}</p>}
