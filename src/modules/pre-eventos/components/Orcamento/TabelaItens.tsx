@@ -1,4 +1,4 @@
-﻿import React, { memo, useCallback, useRef, useState, useMemo } from 'react'
+﻿import React, { memo, useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { Plus, Trash2, Paperclip, Download, X, Eye, ChevronDown, ChevronRight, GripVertical } from 'lucide-react'
 import type { ItemOrcamento, ItemStatus, NotaFiscal } from '../../types'
 import { formatBRL, newItemId } from '../../utils/formatters'
@@ -256,11 +256,65 @@ const LinhaItem: React.FC<{
   )
 }
 
+// ─── Colunas + larguras ajustáveis (arrastar a borda do cabeçalho) ────────────
+// Largura salva no navegador e sincronizada entre as seções (mesma régua pra todas).
+const COLUNAS: { label: React.ReactNode; align?: 'right' | 'center'; w: number; resize?: boolean }[] = [
+  { label: '#', w: 40 },
+  { label: 'Item', w: 150, resize: true },
+  { label: 'Fornecedor', w: 160, resize: true },
+  { label: 'Qtde', align: 'right', w: 80, resize: true },
+  { label: 'Custo Unit.', align: 'right', w: 150, resize: true },
+  { label: 'Total Orç.', align: 'right', w: 120, resize: true },
+  { label: 'Total Pago', align: 'right', w: 120, resize: true },
+  { label: 'Val. Cliente', align: 'right', w: 120, resize: true },
+  { label: 'BV R$', align: 'right', w: 100, resize: true },
+  { label: 'BV %', align: 'right', w: 70, resize: true },
+  { label: 'Status', align: 'center', w: 110, resize: true },
+  { label: 'Data Pgto.', align: 'center', w: 120, resize: true },
+  { label: <span className="flex items-center gap-1"><Paperclip className="w-3 h-3" />NF</span>, w: 110, resize: true },
+  { label: 'Notas', w: 120, resize: true },
+  { label: '', w: 44 },
+]
+const WIDTHS_KEY = 'alliance_planilha_colwidths'
+function loadWidths(): number[] {
+  try {
+    const r = localStorage.getItem(WIDTHS_KEY)
+    if (r) { const a = JSON.parse(r); if (Array.isArray(a) && a.length === COLUNAS.length) return a as number[] }
+  } catch { /* ignore */ }
+  return COLUNAS.map(c => c.w)
+}
+
 // ─── Tabela Principal ─────────────────────────────────────────────────────────
 const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true, filtroFornecedor, sugestoesItem }) => {
   const { fornecedores } = useAppContext()
   const datalistId = React.useId()
   const temSugestoes = !!sugestoesItem && sugestoesItem.length > 0
+
+  // Larguras de coluna (ajustáveis). Sincroniza entre as seções via evento global.
+  const [colW, setColW] = useState<number[]>(loadWidths)
+  const colWRef = useRef(colW)
+  useEffect(() => { colWRef.current = colW }, [colW])
+  useEffect(() => {
+    const sync = () => setColW(loadWidths())
+    window.addEventListener('planilha-colwidths', sync)
+    return () => window.removeEventListener('planilha-colwidths', sync)
+  }, [])
+  const onResizeDown = (i: number) => (e: React.PointerEvent) => {
+    e.preventDefault(); e.stopPropagation()
+    const startX = e.clientX, startW = colWRef.current[i]
+    const move = (ev: PointerEvent) => {
+      const nw = Math.max(44, startW + (ev.clientX - startX))
+      setColW(prev => { const n = [...prev]; n[i] = nw; return n })
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      try { localStorage.setItem(WIDTHS_KEY, JSON.stringify(colWRef.current)) } catch { /* ignore */ }
+      window.dispatchEvent(new Event('planilha-colwidths')) // sincroniza as outras seções
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
   // Itens exibidos (aplica o filtro de fornecedor). Edições/add/remove usam `items` cheio.
   const itemsView = useMemo(() => {
     if (!filtroFornecedor) return items
@@ -342,23 +396,26 @@ const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true, f
         </datalist>
       )}
       <table className="w-full border-collapse text-xs" style={{ minWidth: 1250 }}>
+        <colgroup>
+          {colW.map((w, i) => <col key={i} style={{ width: w }} />)}
+        </colgroup>
         <thead>
           <tr className="bg-surface2/50">
-            <th className={`${thCls} w-8`}>#</th>
-            <th className={`${thCls} min-w-[130px]`}>Item</th>
-            <th className={`${thCls} min-w-[140px]`}>Fornecedor</th>
-            <th className={`${thCls} text-right`} style={{ minWidth: 70 }}>Qtde</th>
-            <th className={`${thCls} text-right`} style={{ minWidth: 140 }}>Custo Unit.</th>
-            <th className={`${thCls} w-28 text-right`}>Total Orç.</th>
-            <th className={`${thCls} w-28 text-right`}>Total Pago</th>
-            <th className={`${thCls} w-28 text-right`}>Val. Cliente</th>
-            <th className={`${thCls} w-24 text-right`}>BV R$</th>
-            <th className={`${thCls} w-14 text-right`}>BV %</th>
-            <th className={`${thCls} w-24 text-center`}>Status</th>
-            <th className={`${thCls} w-24 text-center`}>Data Pgto.</th>
-            <th className={thCls} style={{ minWidth: 110 }}><span className="flex items-center gap-1"><Paperclip className="w-3 h-3" />NF</span></th>
-            <th className={`${thCls} min-w-[90px]`}>Notas</th>
-            <th className="px-2 py-2 w-8"></th>
+            {COLUNAS.map((c, i) => (
+              <th
+                key={i}
+                className={`${thCls} relative select-none ${c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : ''}`}
+              >
+                {c.label}
+                {c.resize && (
+                  <span
+                    className="col-resize-handle"
+                    onPointerDown={onResizeDown(i)}
+                    title="Arrastar pra redimensionar a coluna"
+                  />
+                )}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>

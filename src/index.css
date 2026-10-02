@@ -282,3 +282,13 @@
 .modo-planilha .sec-cor-teal   tbody tr:nth-child(even) td{ background:var(--c-teal-row); }
 /* toggle no header */
 .modo-planilha .toggle-modo{ background:#fff !important; border-color:var(--pl-grid-strong) !important; color:var(--pl-ink) !important; }
+/* chips de fornecedor discretos (menos "pílula rosa", mantém a função) */
+.modo-planilha [class*="bg-accent/2"]{ background:#eef1f6 !important; border:1px solid #e0e4ec; }
+.modo-planilha [class*="bg-accent/2"],
+.modo-planilha [class*="bg-accent/2"] *{ color:#566070 !important; }
+/* largura fixa pras colunas obedecerem o arraste */
+.modo-planilha table{ table-layout:fixed; width:max-content; min-width:100%; }
+
+/* alça de redimensionar coluna — vale nos dois modos */
+.col-resize-handle{ position:absolute; top:0; right:-3px; width:7px; height:100%; cursor:col-resize; z-index:5; touch-action:none; }
+.col-resize-handle:hover{ background:rgba(66,133,244,.35); }
