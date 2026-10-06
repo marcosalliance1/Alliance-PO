@@ -15,9 +15,13 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside className="w-60 bg-surface border-r border-white/10 flex flex-col shrink-0 min-h-screen">
-      <div className="px-5 py-4 border-b border-white/10 shrink-0 flex items-center justify-center">
+      <button
+        onClick={() => navigate('/modulos')}
+        className="px-5 py-4 border-b border-white/10 shrink-0 flex items-center justify-center hover:bg-white/5 transition-colors"
+        title="Voltar ao menu"
+      >
         <img src={allianceLogo} alt="Alliance" className="h-10 w-auto" style={{ mixBlendMode: 'screen' }} />
-      </div>
+      </button>
 
       <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
         {NAV.map(item => (

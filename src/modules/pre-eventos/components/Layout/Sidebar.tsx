@@ -40,14 +40,18 @@ export const Sidebar: React.FC<Props> = ({ open, onClose }) => {
       ].join(' ')}
     >
       {/* Logo */}
-      <div className="px-5 py-4 border-b border-bordercol shrink-0 flex items-center justify-center">
+      <button
+        onClick={() => { navigate('/modulos'); onClose() }}
+        className="px-5 py-4 border-b border-bordercol shrink-0 flex items-center justify-center hover:bg-white/5 transition-colors"
+        title="Voltar ao menu"
+      >
         <img
           src={allianceLogo}
           alt="Alliance"
           className="h-10 w-auto"
           style={{ mixBlendMode: 'screen' }}
         />
-      </div>
+      </button>
 
       {/* Novo Orçamento */}
       <div className="px-4 py-4 border-b border-bordercol shrink-0">

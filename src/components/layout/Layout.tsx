@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
 import { Menu } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import allianceLogo from '../../assets/alliance-logo.png'
 
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const navigate = useNavigate()
 
   return (
     <div className="min-h-screen bg-bg flex">
@@ -29,7 +30,9 @@ export function Layout() {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <img src={allianceLogo} alt="Alliance" className="h-7 w-auto ml-1" style={{ mixBlendMode: 'screen' }} />
+          <button onClick={() => navigate('/modulos')} title="Voltar ao menu" className="ml-1">
+            <img src={allianceLogo} alt="Alliance" className="h-7 w-auto" style={{ mixBlendMode: 'screen' }} />
+          </button>
         </header>
 
         <main className="flex-1 p-4 md:p-6 min-h-screen overflow-x-hidden">
