@@ -26,6 +26,9 @@ const MAPA_SECOES: Record<string, string> = {
   'colacao de grau': 'colacao', 'colação de grau': 'colacao',
   'custo colacao': 'colacao', 'custo colação': 'colacao',
   'custos administrativos': 'admin', 'custo administrativo': 'admin',
+  // Turmas de Barbacena/FAME (ex: BQ 78) têm uma aba extra "2.9 CUSTO CHURRASCO & JANTAR"
+  'custo churrasco': 'churrasco', 'churrasco & jantar': 'churrasco', 'churrasco e jantar': 'churrasco',
+  'jantar dancante': 'churrasco', 'jantar dançante': 'churrasco',
 }
 
 function norm(s: string): string {
@@ -378,7 +381,10 @@ function parseReceitasFromResumo(values: unknown[][]): Receitas {
     if (!rawLabel) continue
 
     const ln = norm(rawLabel)
-    if (ln.includes('receita baile')) break  // linha de total — parar
+    // Linha de total — parar. O modelo padrão chama de "RECEITA BAILE"; o modelo E.S.
+    // mais novo (ex: BQ 78) chama de "RECEITA TOTAL". Sem parar aqui, o parser engole as
+    // linhas de custo/margem/lucro logo abaixo como se fossem receita e infla tudo.
+    if (ln.includes('receita baile') || ln.startsWith('receita total')) break
 
     // Pular linhas de cabeçalho de seção que não são itens individuais
     if (ln === 'receitas' || ln === 'item' || ln === 'total' || ln === 'descricao') continue
@@ -594,6 +600,7 @@ export async function sincronizarComSheets(
   let totalAdesoesAtual: number | null = null
   const avisosItens: string[] = []
   let preEventoExtra: { id: string; numero: string; nome: string; itens: ItemCusto[] } | null = null
+  let churrascoExtra: { id: string; numero: string; nome: string; itens: ItemCusto[] } | null = null
 
   for (const nomeAba of sheetNames) {
     const nomeN = norm(nomeAba)
@@ -659,8 +666,27 @@ export async function sincronizarComSheets(
       (secaoId === 'cerimonia' && (s.nome.toLowerCase().includes('cerimônia') || s.nome.toLowerCase().includes('cerimonia'))) ||
       (secaoId === 'colacao' && (s.nome.toLowerCase().includes('colação') || s.nome.toLowerCase().includes('colacao'))) ||
       (secaoId === 'admin' && s.nome.toLowerCase().includes('admin')) ||
-      (secaoId === 'preevento' && (s.nome.toLowerCase().includes('pré-event') || s.nome.toLowerCase().includes('pre-event') || s.nome.toLowerCase().includes('pre event') || s.nome.toLowerCase().includes('pré event')))
+      (secaoId === 'preevento' && (s.nome.toLowerCase().includes('pré-event') || s.nome.toLowerCase().includes('pre-event') || s.nome.toLowerCase().includes('pre event') || s.nome.toLowerCase().includes('pré event'))) ||
+      (secaoId === 'churrasco' && (s.numero === '2.9' || s.nome.toLowerCase().includes('churrasco') || s.nome.toLowerCase().includes('jantar')))
     )
+    // Seção 2.9 Churrasco & Jantar só existe em algumas turmas (Barbacena/FAME): criar dinamicamente
+    if (!secaoProjeto && secaoId === 'churrasco') {
+      onProgress(`Lendo CUSTO CHURRASCO & JANTAR (extra)...`)
+      try {
+        const values = await fetchAba(spreadsheetId, nomeAba, accessToken)
+        if (values) {
+          const { itens, avisos: avisosAba } = parseItens(values, '2.9', 'CUSTO CHURRASCO & JANTAR', layout)
+          if (itens.length > 0) {
+            churrascoExtra = { id: uuid(), numero: '2.9', nome: 'CUSTO CHURRASCO & JANTAR', itens }
+          }
+          avisosItens.push(...avisosAba)
+        }
+      } catch (e) {
+        if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
+        console.warn(`Erro ao ler aba "${nomeAba}":`, e)
+      }
+      continue
+    }
     // Seção Pré-Eventos pode não existir em projetos EM: criar dinamicamente
     if (!secaoProjeto && secaoId === 'preevento') {
       onProgress(`Lendo CUSTO PRÉ-EVENTOS (extra)...`)
@@ -756,9 +782,11 @@ export async function sincronizarComSheets(
   }
   avisos.push(...avisosItens)
 
-  const secoesFinais = preEventoExtra
-    ? [...secoesAtualizadas, preEventoExtra]
-    : secoesAtualizadas
+  const secoesFinais = [
+    ...secoesAtualizadas,
+    ...(preEventoExtra ? [preEventoExtra] : []),
+    ...(churrascoExtra ? [churrascoExtra] : []),
+  ]
 
   return {
     secoes: secoesFinais,
