@@ -469,6 +469,43 @@ function secaoTableCliente(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
   })
 }
 
+// Visão da TURMA — projeção inicial: mostra o VALOR ORÇADO de cada item (antes de
+// contratar). Esconde pago/V.Cliente/BV (nada contratado ainda).
+function secaoTableOrcado(doc: jsPDF, titulo: string, items: ItemOrcamento[]) {
+  const filtered = items.filter(i => i.totalOrcado > 0)
+  if (filtered.length === 0) return
+
+  let y = (doc as any).lastAutoTable?.finalY ?? 40
+  const estimatedH = 20 + (filtered.length + 2) * 8
+  if (200 - y < estimatedH && estimatedH <= 165) {
+    doc.addPage(); y = 8; (doc as any).lastAutoTable = { finalY: 8 }
+  }
+
+  doc.setFillColor(...HDR_BG)
+  doc.rect(10, y + 3, 277, 7, 'F')
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...HDR_TEXT)
+  doc.text(titulo, 13, y + 8.5)
+
+  const rows = filtered.map(i => [i.item, formatBRL(i.totalOrcado)])
+  const subtotal = ['SUBTOTAL', formatBRL(filtered.reduce((s, i) => s + i.totalOrcado, 0))]
+
+  autoTable(doc, {
+    startY: y + 12,
+    head: [['Item', 'Valor Orçado']],
+    body: rows,
+    foot: [subtotal],
+    theme: 'grid',
+    rowPageBreak: 'avoid',
+    headStyles: { fillColor: [60, 60, 90] as [number,number,number], textColor: HDR_TEXT, fontSize: 9, fontStyle: 'bold' },
+    bodyStyles: { textColor: TEXT, fontSize: 9, fillColor: ROW_ODD },
+    alternateRowStyles: { fillColor: ROW_EVEN },
+    footStyles: { fillColor: SUB_BG, textColor: TEXT, fontStyle: 'bold', fontSize: 9 },
+    styles: { lineColor: [220, 220, 230] as [number,number,number], lineWidth: 0.1 },
+    margin: { left: 10, right: 10 },
+    columnStyles: { 0: { cellWidth: 225 }, 1: { cellWidth: 52, halign: 'right' } },
+  })
+}
+
 // Faixa de título (barra escura), mesmo estilo do cabeçalho de RECEITAS.
 function faixaTitulo(doc: jsPDF, titulo: string, y: number) {
   doc.setFillColor(...HDR_BG)
@@ -575,6 +612,106 @@ export async function exportarRelatorioCliente(orc: Orcamento) {
     .join('')
   const turmaSlug = (orc.turma || '').replace(/\s+/g, '')
   const filename = `${tipoSlug}_${turmaSlug}`.replace(/[/\\:*?"<>|]/g, '') || 'relatorio_cliente'
+  doc.save(`${filename}.pdf`)
+}
+
+// ─── Orçamento Inicial (Projeção) ─────────────────────────────────────────────
+// Relatório pra mandar pra turma ANTES de contratar: receita (Bolsa Folia + lotes de
+// ingresso, se houver) × valor ORÇADO por item × saldo projetado. Nada pago/contratado.
+export async function exportarOrcamentoInicial(orc: Orcamento) {
+  const logoImg = await new Promise<HTMLImageElement>((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(img)
+    img.src = allianceLogo
+  })
+  const hasLogo    = logoImg.naturalWidth > 0
+  const logoRatio  = hasLogo ? logoImg.naturalWidth / logoImg.naturalHeight : 4
+  const logoBranco = hasLogo ? logoParaBranco(logoImg) : ''
+  const logoH = 11, logoW = logoH * logoRatio, logoHF = 4.5, logoWF = logoHF * logoRatio
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  doc.setFillColor(255, 255, 255); doc.rect(0, 0, 297, 210, 'F')
+
+  // Cabeçalho
+  doc.setFillColor(...ACC); doc.rect(0, 0, 297, 16, 'F')
+  if (hasLogo) doc.addImage(logoBranco, 'PNG', 10, 2.5, logoW, logoH)
+  doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(...HDR_TEXT)
+  doc.text('ALLIANCE FORMATURAS', hasLogo ? 10 + logoW + 3 : 10, 11)
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal')
+  doc.text('Projeção do Evento — Orçamento Inicial', 287, 11, { align: 'right' })
+
+  // Info evento
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...TEXT)
+  doc.text(`${orc.instituicao || '—'} — ${orc.turma || '—'}`, 10, 24)
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...TEXT_MUT)
+  doc.text(
+    `${EVENT_TYPE_LABELS[orc.tipo]}  |  Data: ${formatDate(orc.data)}  |  Convidados: ${orc.quantidadeConvidados}  |  Emitido em ${new Date().toLocaleDateString('pt-BR')}`,
+    10, 30,
+  )
+  doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(...TEXT_MUT)
+  doc.text('Projeção com valores orçados — antes de contratar. Valores podem mudar ao fechar com os fornecedores.', 10, 35)
+  doc.setDrawColor(220, 220, 230); doc.setLineWidth(0.3); doc.line(10, 37.5, 287, 37.5)
+  ;(doc as any).lastAutoTable = { finalY: 37.5 }
+
+  // Receitas (Bolsa Folia + lotes de ingresso, se houver) na 1ª página
+  receitasTable(doc, orc)
+
+  // Despesas (orçado) em página nova
+  doc.addPage()
+  faixaTitulo(doc, 'DESPESAS (ORÇADO)', 8)
+  ;(doc as any).lastAutoTable = { finalY: 18 }
+  secaoTableOrcado(doc, 'OPERAÇÃO / ESTRUTURA',     orc.operacaoEstrutura)
+  secaoTableOrcado(doc, 'EQUIPE',                    orc.equipe)
+  secaoTableOrcado(doc, 'ATRAÇÃO',                   orc.atracao)
+  secaoTableOrcado(doc, 'A&B — ALIMENTOS E BEBIDAS', orc.abBebidas)
+  secaoTableOrcado(doc, 'EXTRAS',                    orc.extras)
+
+  // Resumo da projeção: Receitas − Orçado = Saldo Projetado
+  const finalY = (doc as any).lastAutoTable?.finalY ?? 140
+  let sy = finalY + 6
+  if (sy > 165) { doc.addPage(); sy = 12 }
+  const totalReceitas = orc.bolsaFolia + orc.receitasSympla.reduce((s, l) => s + l.total, 0)
+  const allItems      = [...orc.operacaoEstrutura, ...orc.equipe, ...orc.atracao, ...orc.abBebidas, ...orc.extras]
+  const totalOrcado   = allItems.reduce((s, i) => s + i.totalOrcado, 0)
+  const saldo         = totalReceitas - totalOrcado
+
+  doc.setFillColor(...HDR_BG); doc.rect(10, sy, 120, 7, 'F')
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...HDR_TEXT)
+  doc.text('PROJEÇÃO DO EVENTO', 13, sy + 5.5)
+
+  const linhas: [string, number][] = [
+    ['(+) Total Arrecadado (Receitas)', totalReceitas],
+    ['(-) Total Orçado (Despesas)',     totalOrcado],
+    ['Saldo Projetado',                 saldo],
+  ]
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal')
+  linhas.forEach(([k, v], i) => {
+    const ry = sy + 13 + i * 6
+    doc.setTextColor(...TEXT_MUT); doc.text(k, 13, ry)
+    const isColor = k.includes('Saldo') || k.includes('Arrecadado')
+    doc.setTextColor(...(isColor ? (v >= 0 ? GREEN : RED) : TEXT))
+    doc.text(formatBRL(v), 128, ry, { align: 'right' })
+  })
+
+  // Rodapé
+  const total = doc.getNumberOfPages()
+  for (let p = 1; p <= total; p++) {
+    doc.setPage(p)
+    doc.setFillColor(245, 245, 248); doc.rect(0, 203, 297, 7, 'F')
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...TEXT_MUT)
+    if (hasLogo) doc.addImage(logoImg, 'PNG', 10, 204, logoWF, logoHF)
+    doc.text('Alliance Formaturas', hasLogo ? 10 + logoWF + 2 : 10, 207.5)
+    doc.text(`Página ${p} de ${total}`, 287, 207.5, { align: 'right' })
+  }
+
+  const tipoSlug = (EVENT_TYPE_LABELS[orc.tipo] || orc.tipo)
+    .split(/\s+/)
+    .filter(w => !['de', 'da', 'do', 'das', 'dos', 'e'].includes(w.toLowerCase()))
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join('')
+  const turmaSlug = (orc.turma || '').replace(/\s+/g, '')
+  const filename = `OrcamentoInicial_${tipoSlug}_${turmaSlug}`.replace(/[/\\:*?"<>|]/g, '') || 'orcamento_inicial'
   doc.save(`${filename}.pdf`)
 }
 
