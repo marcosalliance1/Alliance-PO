@@ -502,7 +502,7 @@ export function Verbas() {
                           </tr>
                         ))}
                         <tr key={`sub-${bloco.categoria}-${sub.nome}`} className="border-b border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                          <td className="px-3 py-1.5 text-xs font-semibold text-text-muted sticky left-0 z-10" style={{ background: '#16213e' }}>
+                          <td className="px-3 py-1.5 text-xs font-semibold text-text-muted sticky left-0 z-10" style={{ background: 'var(--verbas-sticky-sub, #16213e)' }}>
                             Subtotal — {sub.nome}
                           </td>
                           {projetosFiltrados.map(p => (
@@ -517,7 +517,7 @@ export function Verbas() {
                       </Fragment>
                     ))}
                     <tr className="border-b-2 border-white/10" style={{ background: 'rgba(233,69,96,0.06)' }}>
-                      <td className="px-3 py-2 text-xs font-bold text-primary sticky left-0 z-10" style={{ background: '#1a1a2e' }}>
+                      <td className="px-3 py-2 text-xs font-bold text-primary sticky left-0 z-10" style={{ background: 'var(--verbas-sticky, #1a1a2e)' }}>
                         TOTAL — {bloco.categoria}
                       </td>
                       {projetosFiltrados.map(p => (
@@ -535,7 +535,7 @@ export function Verbas() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-white/20" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                  <td className="px-3 py-3 text-sm font-bold text-text-main sticky left-0 z-10" style={{ background: '#1a1a2e' }}>
+                  <td className="px-3 py-3 text-sm font-bold text-text-main sticky left-0 z-10" style={{ background: 'var(--verbas-sticky, #1a1a2e)' }}>
                     TOTAL GERAL
                   </td>
                   {projetosFiltrados.map(p => (

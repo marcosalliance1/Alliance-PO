@@ -5,10 +5,12 @@ import { Topbar } from './Topbar'
 import { ToastContainer } from '../UI/Toast'
 import { ConfirmDialog } from '../UI/ConfirmDialog'
 import { useAppContext } from '../../contexts/AppContext'
+import { useTemaClaro } from '../../../../hooks/useTemaClaro'
 
 export const Layout: React.FC = () => {
   const { toasts, removeToast, confirmState, acceptConfirm, cancelConfirm } = useAppContext()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [temaClaro] = useTemaClaro()
 
   return (
     <div className="flex min-h-screen bg-surface text-white font-sans">
@@ -24,7 +26,7 @@ export const Layout: React.FC = () => {
 
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        <main className={`flex-1 overflow-auto p-4 md:p-6 ${temaClaro ? 'tema-claro' : ''}`}>
           <Outlet />
         </main>
       </div>

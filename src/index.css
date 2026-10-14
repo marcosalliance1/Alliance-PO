@@ -345,3 +345,117 @@
 .visual-novo .dre-planilha thead th.dre-azul { background:#0b5394 !important; }
 .visual-novo .dre-planilha thead th.dre-sub { background:#f3f3f3 !important; color:#1e2430 !important; text-transform:none; letter-spacing:0; font-weight:700 !important; }
 .visual-novo .dre-planilha thead th.dre-sub.dre-azul { background:#dbe7f5 !important; color:#0b3a6b !important; }
+
+/* ═══════════════════ TEMA CLARO — módulos (opt-in, escopado em .tema-claro) ═══════════════════ */
+/* Aplicado só na área de conteúdo (<main>) dos módulos quando o usuário liga "Tema claro" na barra lateral;
+   a barra lateral continua escura. Desligado = nada daqui vale. Mapeia os tokens escuros do Tailwind
+   (bg-bg, bg-surface, text-text-main…) para o equivalente claro; não mexe em layout de tabela. */
+.tema-claro{
+  --pl-ink:#1e2430; --pl-muted:#64707f; --pl-grid:#e2e6ec; --pl-grid-strong:#cfd5df;
+  --color-surface:#ffffff; --color-bg:#eceff3;
+  background:#eceff3; color:var(--pl-ink);
+}
+
+/* superfícies → branco; tons "overlay" (white/black com opacidade) → cinza muito claro */
+.tema-claro .bg-bg,
+.tema-claro .bg-surface,
+.tema-claro .bg-surface-2,
+.tema-claro .bg-sidebar,
+.tema-claro .card,
+.tema-claro .btn-secondary{ background-color:#ffffff !important; }
+.tema-claro .bg-surface2,
+.tema-claro [class*="bg-surface2/"],
+.tema-claro [class*="bg-surface/"],
+.tema-claro [class*="bg-surface-2/"]{ background-color:#eef1f6 !important; }
+.tema-claro .bg-surface\/80:hover,
+.tema-claro .hover\:bg-surface\/80:hover,
+.tema-claro .hover\:bg-surface-2:hover{ background-color:#f4f6fa !important; }
+.tema-claro [class*="bg-white/"]:not(.fixed),
+.tema-claro [class*="bg-black/"]:not(.fixed):not([class*="inset-0"]){ background-color:#f4f6fa !important; }
+.tema-claro [class*="hover:bg-white/"]:hover,
+.tema-claro [class*="hover:bg-white"]:hover:not(.btn-primary){ background-color:#eef1f6 !important; }
+.tema-claro .card{ border:1px solid var(--pl-grid); box-shadow:0 1px 2px rgba(20,30,50,.06) !important; }
+.tema-claro .btn-secondary{ border-color:var(--pl-grid-strong) !important; }
+
+/* texto */
+.tema-claro .text-text-main,
+.tema-claro .hover\:text-text-main:hover,
+.tema-claro .hover\:text-white:hover,
+.tema-claro .group:hover .group-hover\:text-text-main{ color:var(--pl-ink) !important; }
+.tema-claro .text-text-muted,
+.tema-claro .text-muted{ color:var(--pl-muted) !important; }
+.tema-claro [class*="text-white/"]{ color:rgba(30,36,48,.6) !important; }
+.tema-claro .text-gray-300,
+.tema-claro .text-gray-400,
+.tema-claro .text-slate-300{ color:#3c4350 !important; }
+/* text-white vira escuro, exceto onde há fundo sólido colorido (botões, selos, chips) */
+.tema-claro .text-white:where(:not([class*="bg-primary"]):not([class*="bg-accent"]):not([class*="bg-success"]):not([class*="bg-danger"]):not([class*="bg-warning"]):not([class*="bg-blue-"]):not([class*="bg-green-"]):not([class*="bg-red-"]):not([class*="bg-purple-"]):not([class*="bg-orange-"]):not([class*="bg-yellow-"]):not([class*="bg-pink-"]):not([class*="bg-emerald-"]):not([class*="bg-indigo-"]):not([class*="bg-amber-"]):not([class*="bg-rose-"]):not([class*="bg-teal-"]):not([class*="bg-cyan-"]):not([class*="bg-violet-"]):not([class*="bg-slate-"]):not([class*="bg-gray-"]):not(.btn-primary)){ color:var(--pl-ink) !important; }
+/* filhos de fundo sólido colorido mantêm texto branco (vem depois, então vence a regra acima) */
+.tema-claro .bg-primary *, .tema-claro .bg-accent *, .tema-claro .bg-success *, .tema-claro .bg-danger *,
+.tema-claro .bg-warning *, .tema-claro .btn-primary *, .tema-claro [class*="bg-blue-"] *,
+.tema-claro [class*="bg-green-"] *, .tema-claro [class*="bg-red-"] *, .tema-claro [class*="bg-purple-"] *{ color:#ffffff !important; }
+.tema-claro .btn-primary, .tema-claro .bg-primary, .tema-claro .bg-accent, .tema-claro .bg-success, .tema-claro .bg-danger{ color:#ffffff !important; }
+
+/* tons claros de status (pensados para fundo escuro) → versões mais escuras e legíveis */
+.tema-claro .text-warning{ color:#b06000 !important; }
+.tema-claro .text-success{ color:#137333 !important; }
+.tema-claro .text-danger{ color:#c23b3b !important; }
+.tema-claro .text-red-400, .tema-claro .text-red-300{ color:#c23b3b !important; }
+.tema-claro .text-green-400, .tema-claro .text-green-300, .tema-claro .text-emerald-400{ color:#137333 !important; }
+.tema-claro .text-blue-400, .tema-claro .text-blue-300, .tema-claro .text-blue-200, .tema-claro .hover\:text-blue-400:hover{ color:#1a56db !important; }
+.tema-claro .text-purple-400, .tema-claro .text-purple-300{ color:#7e22ce !important; }
+.tema-claro .text-orange-400{ color:#c2410c !important; }
+.tema-claro .text-yellow-400, .tema-claro .text-yellow-300, .tema-claro .text-yellow-200, .tema-claro .text-yellow-100,
+.tema-claro .hover\:text-yellow-200:hover, .tema-claro .text-amber-400, .tema-claro .text-amber-300{ color:#8a5a00 !important; }
+.tema-claro .text-pink-300{ color:#be185d !important; }
+.tema-claro .text-indigo-300{ color:#4338ca !important; }
+.tema-claro .text-cyan-300{ color:#0e7490 !important; }
+
+/* bordas */
+.tema-claro [class*="border-white/"],
+.tema-claro [class*="border-bordercol"]{ border-color:var(--pl-grid) !important; }
+.tema-claro .divide-white\/5 > * + *,
+.tema-claro .divide-white\/10 > * + *{ border-color:var(--pl-grid) !important; }
+
+/* campos de formulário */
+.tema-claro input, .tema-claro select, .tema-claro textarea{ color:var(--pl-ink); }
+.tema-claro input::placeholder, .tema-claro textarea::placeholder{ color:#9aa3b0; }
+.tema-claro option{ background:#ffffff; color:var(--pl-ink); }
+
+/* gráficos (recharts): grade, eixos, legenda e dicas legíveis no claro */
+.tema-claro .recharts-cartesian-grid line{ stroke:#e2e6ec !important; }
+.tema-claro .recharts-cartesian-axis-tick-value{ fill:#4a5568 !important; }
+.tema-claro .recharts-legend-item-text{ color:var(--pl-ink) !important; }
+.tema-claro .recharts-default-tooltip{ background-color:#ffffff !important; border-color:var(--pl-grid-strong) !important; }
+.tema-claro .recharts-tooltip-label{ color:var(--pl-ink) !important; }
+.tema-claro .recharts-tooltip-item{ color:var(--pl-ink) !important; }
+/* trilhas de barra de progresso desenhadas com rgba(branco) inline */
+.tema-claro [style*="background: rgba(255, 255, 255"]{ background:#e9edf3 !important; }
+.tema-claro tr[style*="background: rgba(255, 255, 255"]{ background:#f4f6fa !important; }
+.tema-claro{ --verbas-sticky-sub:#e4e9f1; --verbas-sticky:#ffffff; }
+
+/* cores inline (hex pastel/vivo pensadas para fundo escuro) → tons mais escuros e legíveis no claro.
+   O seletor casa o style serializado pelo navegador ("color: rgb(r, g, b)"). */
+.tema-claro [style*="color: rgb(253, 203, 110)"]{ color:#9a6700 !important; }
+.tema-claro [style*="color: rgb(116, 185, 255)"]{ color:#1a56db !important; }
+.tema-claro [style*="color: rgb(0, 184, 148)"]{ color:#0a8f73 !important; }
+.tema-claro [style*="color: rgb(251, 191, 36)"]{ color:#8a5a00 !important; }
+.tema-claro [style*="color: rgb(22, 163, 74)"]{ color:#137333 !important; }
+.tema-claro [style*="color: rgb(148, 163, 184)"]{ color:#64748b !important; }
+.tema-claro [style*="color: rgb(245, 158, 11)"]{ color:#a15c00 !important; }
+.tema-claro [style*="color: rgb(168, 200, 255)"]{ color:#1a56db !important; }
+.tema-claro [style*="color: rgb(159, 232, 174)"]{ color:#137333 !important; }
+.tema-claro [style*="color: rgb(255, 233, 168)"]{ color:#8a5a00 !important; }
+.tema-claro [style*="color: rgb(162, 155, 254)"]{ color:#5b4fcf !important; }
+.tema-claro [style*="color: rgb(253, 121, 168)"]{ color:#be185d !important; }
+.tema-claro [style*="color: rgb(85, 239, 196)"]{ color:#0a8f73 !important; }
+.tema-claro [style*="color: rgb(255, 234, 167)"]{ color:#8a5a00 !important; }
+.tema-claro [style*="color: rgb(233, 69, 96)"]{ color:#c81e45 !important; }
+/* rosa da marca como texto (sobre branco ou sobre tinta rosa) e muted com opacidade */
+.tema-claro .text-primary,
+.tema-claro .text-accent,
+.tema-claro .hover\:text-primary:hover,
+.tema-claro .hover\:text-accent:hover{ color:#c81e45 !important; }
+.tema-claro [class*="text-text-muted/"],
+.tema-claro [class*="text-muted/"]{ color:#7a8594 !important; }
+.tema-claro [style*="color: rgb(205, 127, 50)"]{ color:#8c5a1f !important; }

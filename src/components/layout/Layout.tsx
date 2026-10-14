@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { Menu } from 'lucide-react'
 import { Sidebar } from './Sidebar'
+import { useTemaClaro } from '../../hooks/useTemaClaro'
 import allianceLogo from '../../assets/alliance-logo.png'
 
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const navigate = useNavigate()
+  const [temaClaro] = useTemaClaro()
 
   return (
     <div className="min-h-screen bg-bg flex">
@@ -35,7 +37,7 @@ export function Layout() {
           </button>
         </header>
 
-        <main className="flex-1 p-4 md:p-6 min-h-screen overflow-x-hidden">
+        <main className={`flex-1 p-4 md:p-6 min-h-screen overflow-x-hidden ${temaClaro ? 'tema-claro' : ''}`}>
           <Outlet />
         </main>
       </div>

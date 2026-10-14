@@ -3,6 +3,7 @@ import { LayoutDashboard, FolderOpen, BookOpen, BarChart2, DollarSign, Settings,
 import allianceLogo from '../../assets/alliance-logo.png'
 import { useGoogleAuth } from '../../contexts/GoogleAuthContext'
 import { useAuth } from '../../contexts/AuthContext'
+import { ToggleTemaClaro } from '../ui/ToggleTemaClaro'
 
 const links = [
   { to: '/projetos/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -96,7 +97,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         )}
       </div>
 
-      <div className="px-3 pb-1 border-t border-white/10 pt-2">
+      <div className="px-3 pt-2 border-t border-white/10">
+        <ToggleTemaClaro />
+      </div>
+
+      <div className="px-3 pb-1 pt-1">
         <button
           onClick={() => { navigate('/'); onClose() }}
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-text-muted hover:text-text-main hover:bg-white/5 transition-colors"
