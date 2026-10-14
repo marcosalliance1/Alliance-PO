@@ -126,24 +126,35 @@ export function ResumoGeralDRE({ projeto, mostrarFee = false }: { projeto: Proje
   return (
     <div className="space-y-6" style={{ fontFamily: "'Montserrat', ui-sans-serif, system-ui, sans-serif", color: '#1e2430' }}>
       <div className="overflow-x-auto rounded-md border border-[#e2e6ec] bg-white">
-        <table className="w-full border-collapse text-[12.5px] tabular-nums">
+        <table className="dre-planilha w-full border-collapse text-[12.5px] tabular-nums">
           <thead>
-            <tr className="bg-[#ef3935] text-[#ffffff]">
-              <th className={`${TH} min-w-[240px]`} style={{ textAlign: 'left' }}>Resumo geral</th>
-              <th className={TH}>Vendido</th><th className={TH}>% rec</th>
-              <th className={TH}>Cenário atual</th>
-              <th className={TH}>Orçado</th><th className={TH}>% rec</th>
-              <th className={TH}>Contratado</th><th className={TH}>% rec</th>
-              <th className={TH}>Pago</th><th className={TH}>Falta pagar</th>
+            {/* Grupos separados por uma coluna vazia, como na planilha: vendido | orçado | contratado | conciliação Everest */}
+            <tr className="text-[#ffffff]">
+              <th rowSpan={2} className={`${TH} min-w-[240px]`} style={{ textAlign: 'left' }}>Resumo geral</th>
+              <th colSpan={2} className={`${TH} dre-grupo`}>Vendido</th>
+              <th className="dre-gap" />
+              <th colSpan={2} className={`${TH} dre-grupo`}>Orçado</th>
+              <th className="dre-gap" />
+              <th colSpan={2} className={`${TH} dre-grupo`}>Contratado</th>
+              <th className="dre-gap" />
+              <th colSpan={2} className={`${TH} dre-grupo dre-azul`}>Conciliação Everest</th>
+            </tr>
+            <tr className="text-[#ffffff]">
+              <th className={`${TH} dre-sub`}>Valor</th><th className={`${TH} dre-sub`}>% rec</th>
+              <th className="dre-gap" />
+              <th className={`${TH} dre-sub`}>Valor</th><th className={`${TH} dre-sub`}>% rec</th>
+              <th className="dre-gap" />
+              <th className={`${TH} dre-sub`}>Valor</th><th className={`${TH} dre-sub`}>% rec</th>
+              <th className="dre-gap" />
+              <th className={`${TH} dre-sub dre-azul`}>Pago</th><th className={`${TH} dre-sub dre-azul`}>Falta pagar</th>
             </tr>
           </thead>
           <tbody>
             {linhas.map((l, n) => {
-              if (l.tipo === 'espaco') return <tr key={n}><td colSpan={10} className="h-8 bg-[#eceff3] p-0" /></tr>
+              if (l.tipo === 'espaco') return <tr key={n}><td colSpan={12} className="h-8 bg-[#eceff3] p-0" /></tr>
               const v = l.v
               const ehReceita = l.tipo === 'item' && l.receita
               const faltar = (l.tipo === 'total' && l.semFaltar) || ehReceita ? null : v.faltar
-              const atual = ehReceita ? null : v.atual
               const destaque = l.tipo === 'total'
               const negativo = l.tipo === 'total' && l.cor === 'margem'
               const linhaCls = l.tipo === 'secao'
@@ -157,11 +168,13 @@ export function ResumoGeralDRE({ projeto, mostrarFee = false }: { projeto: Proje
                   <td className={`${TDL} ${labelCls} sticky left-0 z-[1]`} style={l.tipo === 'secao' ? { fontSize: 14, borderLeft: '4px solid #ef3935' } : undefined}>{l.nome}</td>
                   <td className={TD}>{numero(v.vendido, negativo)}</td>
                   <td className={`${TD} ${mut}`}>{pct(v.vendido, receitaTotal.vendido)}</td>
-                  <td className={TD}>{atual === null ? '' : numero(atual, negativo)}</td>
+                  <td className="dre-gap" />
                   <td className={TD}>{numero(v.orcado, negativo)}</td>
                   <td className={`${TD} ${mut}`}>{pct(v.orcado, receitaTotal.orcado)}</td>
+                  <td className="dre-gap" />
                   <td className={TD}>{numero(v.contratado, negativo)}</td>
                   <td className={`${TD} ${mut}`}>{pct(v.contratado, receitaTotal.contratado)}</td>
+                  <td className="dre-gap" />
                   <td className={TD}>{numero(v.pago, negativo)}</td>
                   <td className={TD}>{faltar === null ? '' : numero(faltar)}</td>
                 </tr>

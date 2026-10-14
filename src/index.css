@@ -337,3 +337,11 @@
 .visual-novo table tbody tr.row-area:first-child td { border-top:0 !important; }
 .visual-novo .area-nome { font-size:15px; font-weight:800; color:#1e2430; }
 .visual-novo tr.row-area td span:not(.area-nome) { font-size:11px; }
+
+/* Resumo Geral (DRE): grupos de colunas separados por uma coluna vazia, como na planilha */
+.visual-novo .dre-planilha thead tr { background:transparent !important; }
+.visual-novo .dre-planilha thead th.dre-gap,
+.visual-novo .dre-planilha tbody td.dre-gap { background:#eceff3 !important; width:14px; min-width:14px; max-width:14px; padding:0 !important; border:0 !important; }
+.visual-novo .dre-planilha thead th.dre-azul { background:#0b5394 !important; }
+.visual-novo .dre-planilha thead th.dre-sub { background:#f3f3f3 !important; color:#1e2430 !important; text-transform:none; letter-spacing:0; font-weight:700 !important; }
+.visual-novo .dre-planilha thead th.dre-sub.dre-azul { background:#dbe7f5 !important; color:#0b3a6b !important; }
