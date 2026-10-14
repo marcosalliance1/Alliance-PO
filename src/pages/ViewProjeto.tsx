@@ -18,6 +18,7 @@ import { useVisualNovo } from '../hooks/useVisualNovo'
 import { ResumoGeralDRE } from '../components/projeto/ResumoGeralDRE'
 import { DashboardPlanilha } from '../components/projeto/DashboardPlanilha'
 import { SeletorProjeto } from '../components/projeto/SeletorProjeto'
+import { TAPPlanilha } from '../components/projeto/TAPPlanilha'
 import { padronizarCaixa } from '../utils/caixa'
 
 interface ViewProjetoProps {
@@ -37,7 +38,7 @@ interface ViewProjetoProps {
   /** Abas adicionais (ex.: espelho do Acomp. Atendimento) — entram logo depois da TAP. */
   abasExtras?: { id: string; label: string; conteudo: React.ReactNode }[]
   /** Troca o conteúdo de uma aba existente (ex.: { resumo: <ResumoGeralDRE …/> }). */
-  abasSubstituir?: Partial<Record<'resumo' | 'dashboard', React.ReactNode>>
+  abasSubstituir?: Partial<Record<'tap' | 'resumo' | 'dashboard', React.ReactNode>>
   /** Extras no cabeçalho (seletor de turma e botão do visual novo). */
   acoesExtras?: React.ReactNode
   /** Projeto como está no banco (o `projeto` pode vir com textos em "Título Com Iniciais" só para exibição). */
@@ -245,7 +246,9 @@ function ViewProjetoInterno({
         </div>
       )}
 
-      {abaAtiva === 'tap' && (
+      {abaAtiva === 'tap' && abasSubstituir.tap}
+
+      {abaAtiva === 'tap' && !abasSubstituir.tap && (
         <TAPForm
           tap={projeto.tap}
           onChange={onUpdateTAP}
@@ -337,10 +340,18 @@ export function ViewProjeto(props: ViewProjetoProps) {
     : null
 
   if (!visualNovo) {
-    return <ViewProjetoInterno {...props} acoesExtras={toggle} />
+    return <ViewProjetoInterno key={projeto.id} {...props} acoesExtras={toggle} />
   }
 
   const substituir: ViewProjetoProps['abasSubstituir'] = {
+    tap: (
+      <TAPPlanilha
+        tap={projeto.tap}
+        onChange={props.onUpdateTAP}
+        totalConvidadosAtual={projeto.totalConvidadosAtual}
+        isRealizado={projeto.status === 'realizado'}
+      />
+    ),
     resumo: (
       <div className="space-y-3">
         <ResumoGeralDRE projeto={projetoV} mostrarFee={isAdmin} />
@@ -357,6 +368,7 @@ export function ViewProjeto(props: ViewProjetoProps) {
   return (
     <div className="visual-novo modo-planilha">
       <ViewProjetoInterno
+        key={projeto.id}
         {...props}
         projeto={projetoV}
         projetoOriginal={projeto}
