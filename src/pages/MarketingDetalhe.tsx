@@ -4,6 +4,7 @@ import { ArrowLeft, Loader, ListChecks, CheckCircle2, Clock, AlertTriangle, Flam
 import { useMarketing, type MarketingGrupo } from '../hooks/useMarketing'
 import { KPICard } from '../components/dashboard/KPICard'
 import { TabelaArvore, type TabelaArvoreItem } from '../components/marketing/TabelaArvore'
+import { useTemaClaro } from '../hooks/useTemaClaro'
 
 const C_PRIMARY = '#e94560'
 const C_SUCCESS = '#00b894'
@@ -65,6 +66,7 @@ function BuscaSelect({ opcoes, valorSelecionado, onSelecionar, placeholder }: {
 
 export function MarketingDetalhe() {
   const navigate = useNavigate()
+  const [temaClaro] = useTemaClaro()
   const [searchParams, setSearchParams] = useSearchParams()
   const { grupos, demandas, responsaveis, subitens, carregando } = useMarketing()
 
@@ -245,7 +247,7 @@ export function MarketingDetalhe() {
   }
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className={`min-h-screen bg-bg ${temaClaro ? 'tema-claro' : ''}`}>
       <div className="p-6 max-w-screen-xl mx-auto space-y-5">
         {/* Header */}
         <div>
