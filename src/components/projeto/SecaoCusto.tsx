@@ -84,7 +84,7 @@ export function SecaoCusto({
   return (
     <div className="rounded-inner shadow-card">
       {/* Legenda de cores */}
-      <div className="flex items-center gap-4 px-3 py-1.5 bg-surface border-b border-white/5 text-[10px] text-text-muted">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-1.5 bg-surface border-b border-white/5 text-[10px] text-text-muted">
         <span className="font-medium">Status:</span>
         {[
           { color: '#ffffff', label: 'Orçar' },
@@ -126,7 +126,7 @@ export function SecaoCusto({
               {/* Linha separadora de área */}
               <tr key={`area-${area}`} className="row-area">
                 <td colSpan={COLUNAS.length}>
-                  {area}
+                  <span className="area-nome">{area}</span>
                   <span className="ml-3 text-xs font-normal text-gray-500">
                     {itens.length} {itens.length === 1 ? 'item' : 'itens'} —{' '}
                     Vendido: {formatBRL(itensCalculo.reduce((s, i) => s + i.totalAtual, 0))} |{' '}

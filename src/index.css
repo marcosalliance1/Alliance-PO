@@ -292,3 +292,48 @@
 /* alça de redimensionar coluna — vale nos dois modos */
 .col-resize-handle{ position:absolute; top:0; right:-3px; width:7px; height:100%; cursor:col-resize; z-index:5; touch-action:none; }
 .col-resize-handle:hover{ background:rgba(66,133,244,.35); }
+
+/* ═══════════════════ VISUAL NOVO — Projetos (opt-in, escopado em .visual-novo) ═══════════════════ */
+/* Usado JUNTO de .modo-planilha (tema claro). Tudo aqui só vale dentro de .visual-novo: desligado,
+   o app fica como era. Pedidos do Marcos (14/10/2026): Montserrat, conteúdo à esquerda, cabeçalho de
+   coluna vermelho e centralizado, colunas que se ajustam ao texto, linha em branco entre blocos. */
+.visual-novo, .visual-novo * { font-family:'Montserrat', ui-sans-serif, system-ui, sans-serif; }
+.visual-novo { background:#eceff3; min-height:60vh; padding:16px; border-radius:12px; }
+
+/* conteúdo sempre à esquerda (texto e números), inclusive dentro dos campos */
+.visual-novo table td { text-align:left !important; font-variant-numeric:tabular-nums; }
+.visual-novo table input,
+.visual-novo table select,
+.visual-novo table textarea { text-align:left !important; }
+.visual-novo .text-right { text-align:left !important; }
+
+/* cabeçalho de coluna: vermelho Alliance, texto branco, centralizado */
+.visual-novo table thead tr,
+.visual-novo table thead tr th { background:#ef3935 !important; }
+.visual-novo table thead th { color:#fff !important; font-weight:700 !important; text-transform:uppercase; letter-spacing:.03em; border-bottom:0 !important; text-align:center !important; }
+.visual-novo table thead th * { color:#fff !important; }
+/* componentes novos que definem o próprio cabeçalho (ex.: dashboard em azul) podem se isentar */
+.visual-novo .dash-azul table thead tr,
+.visual-novo .dash-azul table thead tr th { background:#4a72b0 !important; }
+
+/* a escrita cabe inteira: tabela e campos se ajustam ao conteúdo */
+.visual-novo table { table-layout:auto !important; width:max-content !important; min-width:100% !important; }
+.visual-novo table input:not([type=checkbox]):not([type=radio]),
+.visual-novo table select { width:auto !important; field-sizing:content; min-width:3ch; max-width:none !important; }
+.visual-novo table td { white-space:nowrap; }
+
+/* números em fonte menor que o texto */
+.visual-novo table td .tabular-nums,
+.visual-novo table td input[type=number],
+.visual-novo table td .text-blue-300 { font-size:11px !important; }
+
+/* blocos (áreas): faixa em branco bem maior entre eles + subtítulo com mais peso */
+.visual-novo table tbody tr.row-area td {
+  border-top:32px solid #eceff3 !important;
+  border-left:4px solid #ef3935 !important;
+  background:#e4e9f1 !important;
+  padding-top:10px; padding-bottom:10px;
+}
+.visual-novo table tbody tr.row-area:first-child td { border-top:0 !important; }
+.visual-novo .area-nome { font-size:15px; font-weight:800; color:#1e2430; }
+.visual-novo tr.row-area td span:not(.area-nome) { font-size:11px; }

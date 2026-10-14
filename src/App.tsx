@@ -136,6 +136,7 @@ function ProjetoPage({
       onDeleteItem={(secaoId: string, itemId: string) => excluirItem(projeto.id, secaoId, itemId)}
       onSalvar={() => salvarProjeto(projeto)}
       fornecedoresSugeridos={config.fornecedoresFavoritos}
+      projetosLista={projetos}
     />
   )
 }

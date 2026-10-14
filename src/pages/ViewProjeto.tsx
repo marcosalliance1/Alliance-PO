@@ -14,6 +14,11 @@ import { BadgeEscola } from '../components/ui/Badge'
 import { useAuth } from '../contexts/AuthContext'
 import { gerarRelatorioPendencias } from '../lib/gerarRelatorioPendencias'
 import { ArrowLeft, Save, Check, Loader, FileWarning, Boxes, CreditCard } from 'lucide-react'
+import { useVisualNovo } from '../hooks/useVisualNovo'
+import { ResumoGeralDRE } from '../components/projeto/ResumoGeralDRE'
+import { DashboardPlanilha } from '../components/projeto/DashboardPlanilha'
+import { SeletorProjeto } from '../components/projeto/SeletorProjeto'
+import { padronizarCaixa } from '../utils/caixa'
 
 interface ViewProjetoProps {
   projeto: Projeto
@@ -29,11 +34,21 @@ interface ViewProjetoProps {
   onDeleteItem: (secaoId: string, itemId: string) => void
   onSalvar: () => Promise<void>
   fornecedoresSugeridos?: string[]
+  /** Abas adicionais (ex.: espelho do Acomp. Atendimento) — entram logo depois da TAP. */
+  abasExtras?: { id: string; label: string; conteudo: React.ReactNode }[]
+  /** Troca o conteúdo de uma aba existente (ex.: { resumo: <ResumoGeralDRE …/> }). */
+  abasSubstituir?: Partial<Record<'resumo' | 'dashboard', React.ReactNode>>
+  /** Extras no cabeçalho (seletor de turma e botão do visual novo). */
+  acoesExtras?: React.ReactNode
+  /** Projeto como está no banco (o `projeto` pode vir com textos em "Título Com Iniciais" só para exibição). */
+  projetoOriginal?: Projeto
+  /** Lista para o seletor de turma do visual novo. */
+  projetosLista?: Projeto[]
 }
 
 type SalvarEstado = 'idle' | 'saving' | 'saved' | 'error'
 
-export function ViewProjeto({
+function ViewProjetoInterno({
   projeto,
   bancoItens = [],
   onUpdateTAP,
@@ -47,6 +62,10 @@ export function ViewProjeto({
   onDeleteItem,
   onSalvar,
   fornecedoresSugeridos = [],
+  abasExtras = [],
+  abasSubstituir = {},
+  acoesExtras,
+  projetoOriginal,
 }: ViewProjetoProps) {
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
@@ -67,6 +86,7 @@ export function ViewProjeto({
 
   const abas = [
     { id: 'tap', label: 'TAP' },
+    ...abasExtras.map((a) => ({ id: a.id, label: a.label })),
     ...projeto.secoes.map((s) => ({ id: s.id, label: s.numero })),
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'resumo', label: 'Resumo Geral' },
@@ -121,10 +141,11 @@ export function ViewProjeto({
         subtitle={`${projeto.tap.instituicao} — ${projeto.tap.anoRealizacao}`}
         actions={
           <>
+            {acoesExtras}
             <BadgeEscola tipo={projeto.tap.tipoEscola} />
             <button
               className="btn-secondary flex items-center gap-2"
-              onClick={() => gerarRelatorioPendencias(projeto)}
+              onClick={() => gerarRelatorioPendencias(projetoOriginal ?? projeto)}
               title="Gerar PDF com itens ainda não fechados (estimado/orçando) para enviar à produção"
             >
               <FileWarning size={15} /> Relatório Pendências
@@ -156,7 +177,7 @@ export function ViewProjeto({
             <button
               key={aba.id}
               onClick={() => setAbaAtiva(aba.id)}
-              className={`relative px-3 py-1.5 rounded-inner text-xs font-medium whitespace-nowrap transition-colors ${
+              className={`relative px-3 py-2.5 sm:py-1.5 rounded-inner text-xs font-medium whitespace-nowrap transition-colors ${
                 abaAtiva === aba.id
                   ? 'bg-primary text-white'
                   : 'bg-surface text-text-muted hover:text-text-main hover:bg-surface-2'
@@ -233,6 +254,8 @@ export function ViewProjeto({
         />
       )}
 
+      {abasExtras.map((a) => (abaAtiva === a.id ? <div key={a.id}>{a.conteudo}</div> : null))}
+
       {projeto.secoes.map((secao) =>
         abaAtiva === secao.id ? (
           <SecaoCusto
@@ -249,11 +272,11 @@ export function ViewProjeto({
         ) : null,
       )}
 
-      {abaAtiva === 'dashboard' && (
-        <ProjectDashboard projeto={projeto} />
-      )}
+      {abaAtiva === 'dashboard' && (abasSubstituir.dashboard ?? <ProjectDashboard projeto={projeto} />)}
 
-      {abaAtiva === 'resumo' && (
+      {abaAtiva === 'resumo' && abasSubstituir.resumo}
+
+      {abaAtiva === 'resumo' && !abasSubstituir.resumo && (
         <ResumoGeral
           projeto={projeto}
           onUpdateReceitas={onUpdateReceitas}
@@ -269,6 +292,77 @@ export function ViewProjeto({
       {abaAtiva === 'info-evento' && (
         <AbaInfoEvento projeto={projeto} onChange={onUpdateInfoEvento} isAdmin={isAdmin} />
       )}
+    </div>
+  )
+}
+
+// ── Wrapper: aplica o "visual novo" (opt-in, por navegador) sem mexer na lógica da tela ──────────────
+// Desligado: renderiza exatamente a tela de sempre. Ligado: fundo claro/Montserrat, Resumo Geral no
+// formato da planilha (somente leitura), Dashboard novo e seletor de turma agrupado. Os textos viram
+// "Título Com Iniciais" só na exibição — as edições continuam gravando só o campo alterado.
+function projetoComCaixaPadrao(p: Projeto): Projeto {
+  return {
+    ...p,
+    secoes: p.secoes.map((s) => ({
+      ...s,
+      itens: s.itens.map((i) => ({
+        ...i,
+        area: padronizarCaixa(i.area || ''),
+        subcategoria: padronizarCaixa(i.subcategoria || ''),
+        item: padronizarCaixa(i.item || ''),
+        fornecedor: padronizarCaixa(i.fornecedor || ''),
+      })),
+    })),
+  }
+}
+
+export function ViewProjeto(props: ViewProjetoProps) {
+  const [visualNovo, setVisualNovo] = useVisualNovo()
+  const { isAdmin } = useAuth()
+  const navigate = useNavigate()
+  const { projeto, projetosLista } = props
+  const projetoV = useMemo(() => (visualNovo ? projetoComCaixaPadrao(projeto) : projeto), [visualNovo, projeto])
+
+  const toggle = (
+    <button
+      className="btn-secondary flex items-center gap-2"
+      onClick={() => setVisualNovo(!visualNovo)}
+      title={visualNovo ? 'Voltar ao visual clássico' : 'Ativar o visual novo (fundo claro, estilo planilha)'}
+    >
+      {visualNovo ? 'Visual clássico' : 'Visual novo'}
+    </button>
+  )
+  const seletor = visualNovo && projetosLista && projetosLista.length > 1
+    ? <SeletorProjeto projetos={projetosLista} atualId={projeto.id} onChange={(id) => navigate(`/projetos/${id}`)} />
+    : null
+
+  if (!visualNovo) {
+    return <ViewProjetoInterno {...props} acoesExtras={toggle} />
+  }
+
+  const substituir: ViewProjetoProps['abasSubstituir'] = {
+    resumo: (
+      <div className="space-y-3">
+        <ResumoGeralDRE projeto={projetoV} mostrarFee={isAdmin} />
+        {isAdmin && (
+          <p className="text-[11px] text-[#64707f]">
+            Este resumo é somente leitura (espelha a planilha). Para editar receitas ou custos adicionais aqui no app, volte ao visual clássico pelo botão no topo.
+          </p>
+        )}
+      </div>
+    ),
+    dashboard: <DashboardPlanilha projeto={projetoV} />,
+    ...props.abasSubstituir,
+  }
+  return (
+    <div className="visual-novo modo-planilha">
+      <ViewProjetoInterno
+        {...props}
+        projeto={projetoV}
+        projetoOriginal={projeto}
+        abasSubstituir={substituir}
+        acoesExtras={<>{seletor}{toggle}</>}
+      />
     </div>
   )
 }

@@ -13,6 +13,8 @@ import { ProgressBar } from '../components/ui/ProgressBar'
 import { sincronizarComSheets, extrairSpreadsheetId } from '../utils/sheetsSync'
 import { useGoogleAuth } from '../contexts/GoogleAuthContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useVisualNovo } from '../hooks/useVisualNovo'
+import { ListaProjetosPainel } from '../components/projeto/ListaProjetosPainel'
 import { Plus, Upload, Trash2, ChevronDown, ChevronRight, RefreshCw, Cloud, Loader, Link, AlertTriangle, X, CheckCircle, ClipboardList } from 'lucide-react'
 
 function calcFrescor(atualizadoEm: string): { texto: string; cor: string } {
@@ -73,6 +75,7 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
   const navigate = useNavigate()
   const { accessToken, conectar, invalidarToken } = useGoogleAuth()
   const { isAdmin } = useAuth()
+  const [visualNovo, setVisualNovo] = useVisualNovo()
   const [showImportar, setShowImportar] = useState(false)
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null)
   const [deletando, setDeletando] = useState<string | null>(null)
@@ -563,6 +566,37 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
     )
   }
 
+  // ── Ações por projeto no painel (visual novo) — mesmos handlers dos cartões clássicos ──
+  function renderAcoesPainel(p: Projeto) {
+    const temSheets = !!p.sheetsUrl && !!extrairSpreadsheetId(p.sheetsUrl)
+    const isSincronizando = !!sincronizando[p.id]
+    const btn = 'inline-flex items-center gap-1 text-[#4a5568] hover:text-[#1e2430] disabled:opacity-50'
+    return (
+      <>
+        {temSheets ? (
+          <button className={btn} disabled={isSincronizando} onClick={() => handleSincronizar(p)} title="Sincronizar com a planilha">
+            {isSincronizando ? <><Loader size={12} className="animate-spin" /> Sinc...</> : <><Cloud size={12} /> Sincronizar</>}
+          </button>
+        ) : (
+          <button className={btn} onClick={() => setAtualizandoId(p.id)} title="Atualizar a partir de um arquivo">
+            <RefreshCw size={12} /> Atualizar
+          </button>
+        )}
+        <button className={btn} title="Configurar URL do Google Sheets" onClick={() => { setUrlModalId(p.id); setUrlInput(p.sheetsUrl ?? ''); setShowUrlModal(true) }}>
+          <Link size={12} />
+        </button>
+        {p.status !== 'realizado' && (
+          <button className={btn} title="Marcar como realizado" onClick={() => onMarcarRealizado(p.id)}>
+            <CheckCircle size={12} />
+          </button>
+        )}
+        <button className="inline-flex items-center gap-1 text-[#c0392b] hover:text-[#8e1f14]" title="Excluir projeto" onClick={() => setDeletando(p.id)}>
+          <Trash2 size={12} />
+        </button>
+      </>
+    )
+  }
+
   // ── Seção com agrupamento por ano/tipo ────────────────────────────────────
   function renderSecao(porAno: [number, Map<TipoEscola, Projeto[]>][], renderCard: (p: Projeto) => React.ReactNode) {
     return (
@@ -620,7 +654,15 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
         title="Projetos"
         subtitle={`${projetos.length} projeto${projetos.length !== 1 ? 's' : ''} cadastrado${projetos.length !== 1 ? 's' : ''}`}
         actions={
-          isAdmin ? (
+          <>
+            <button
+              className="btn-secondary flex items-center gap-2"
+              onClick={() => setVisualNovo(!visualNovo)}
+              title={visualNovo ? 'Voltar ao visual clássico' : 'Ativar o visual novo (fundo claro, painel por turma)'}
+            >
+              {visualNovo ? 'Visual clássico' : 'Visual novo'}
+            </button>
+            {isAdmin && (
             <>
               <button
                 className="btn-secondary flex items-center gap-2 disabled:opacity-50"
@@ -638,12 +680,13 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
                 <Plus size={15} /> Novo Projeto
               </button>
             </>
-          ) : undefined
+            )}
+          </>
         }
       />
 
-      {/* Filtros */}
-      <div className="flex gap-3 mb-5">
+      {/* Filtros (o visual novo tem filtros próprios dentro do painel) */}
+      {!visualNovo && <div className="flex gap-3 mb-5">
         <select
           className="bg-surface border border-white/10 rounded-inner px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary"
           value={filtroAno ?? ''}
@@ -662,7 +705,7 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
           <option value="MEDIO">Médio</option>
           <option value="SUPERIOR">Superior</option>
         </select>
-      </div>
+      </div>}
 
       {/* Barra de progresso de sync */}
       {progressoSync && (
@@ -706,6 +749,14 @@ export function ListaProjetos({ projetos, onImportar, onAtualizar, onExcluir, on
               </button>
             </div>
           )}
+        </div>
+      ) : visualNovo ? (
+        <div className="visual-novo modo-planilha">
+          <ListaProjetosPainel
+            projetos={projetos}
+            hrefProjeto={(p) => `/projetos/${p.id}`}
+            renderAcoes={isAdmin ? renderAcoesPainel : undefined}
+          />
         </div>
       ) : (
         <div className="space-y-6">
