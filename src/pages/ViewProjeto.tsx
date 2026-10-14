@@ -19,6 +19,7 @@ import { ResumoGeralDRE } from '../components/projeto/ResumoGeralDRE'
 import { DashboardPlanilha } from '../components/projeto/DashboardPlanilha'
 import { SeletorProjeto } from '../components/projeto/SeletorProjeto'
 import { TAPPlanilha } from '../components/projeto/TAPPlanilha'
+import { AbaAcompAtendimento } from '../components/projeto/AbaAcompAtendimento'
 import { padronizarCaixa } from '../utils/caixa'
 
 interface ViewProjetoProps {
@@ -373,6 +374,10 @@ export function ViewProjeto(props: ViewProjetoProps) {
         projeto={projetoV}
         projetoOriginal={projeto}
         abasSubstituir={substituir}
+        abasExtras={[
+          { id: 'acomp', label: 'Acomp. Atendimento', conteudo: <AbaAcompAtendimento projetoId={projeto.id} sheetsUrl={projeto.sheetsUrl} /> },
+          ...(props.abasExtras ?? []),
+        ]}
         acoesExtras={<>{seletor}{toggle}</>}
       />
     </div>
