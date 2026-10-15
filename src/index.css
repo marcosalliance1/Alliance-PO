@@ -459,3 +459,15 @@
 .tema-claro [class*="text-text-muted/"],
 .tema-claro [class*="text-muted/"]{ color:#7a8594 !important; }
 .tema-claro [style*="color: rgb(205, 127, 50)"]{ color:#8c5a1f !important; }
+
+/* Visual novo: a linha "TOTAL — <seção>" dos itens (escura no clássico) passa a ser clara como o resto */
+.visual-novo .table-po tr.row-total > td{ background-color:#e4e9f1 !important; color:#1e2430 !important; border-top:2px solid #cfd5df !important; }
+.visual-novo .table-po tr.row-total > td.text-blue-400{ color:#1a56db !important; }
+
+/* Tema claro (sem o "Visual novo"): as tabelas de itens (.table-po) tinham cabeçalho/total escuros fixos —
+   ficam claras também. Dentro do Visual novo valem as regras próprias dele (cabeçalho vermelho). */
+.tema-claro .table-po th:not(.visual-novo *){ background-color:#e9edf3 !important; color:#1e2430 !important; border-bottom:1px solid #cfd5df !important; }
+.tema-claro .table-po thead tr.row-grupos th:not(.visual-novo *){ background-color:#dfe5ee !important; color:#4a5568 !important; }
+.tema-claro .table-po th.col-sep:not(.visual-novo *){ background-color:#eceff3 !important; border-left-color:#cfd5df !important; border-right-color:#cfd5df !important; }
+.tema-claro .table-po tr.row-total > td:not(.visual-novo *){ background-color:#e4e9f1 !important; color:#1e2430 !important; border-top:2px solid #cfd5df !important; }
+.tema-claro .table-po tr.row-total > td.text-blue-400:not(.visual-novo *){ color:#1a56db !important; }
