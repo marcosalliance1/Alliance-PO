@@ -232,13 +232,13 @@ function parseItens(
     const blocosPorArea = new Map<string, Set<string>>()
     for (const it of itens) {
       const b = blocoPorItem.get(it.id)
-      if (!b) continue
+      if (!b || !it.area) continue
       if (!blocosPorArea.has(it.area)) blocosPorArea.set(it.area, new Set())
       blocosPorArea.get(it.area)!.add(b)
     }
     for (const it of itens) {
       const b = blocoPorItem.get(it.id)
-      if (b && (blocosPorArea.get(it.area)?.size ?? 0) > 1) it.area = b
+      if (b && it.area && (blocosPorArea.get(it.area)?.size ?? 0) > 1) it.area = b
     }
   }
 
