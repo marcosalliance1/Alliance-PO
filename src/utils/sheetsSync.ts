@@ -122,12 +122,14 @@ function parseTipoCusto(val: unknown): TipoCusto {
 // Quando 2+ blocos da MESMA aba usam o mesmo texto na coluna Área (ex.: "2.4.6 Extras - Alimentos e Bebidas" e
 // "2.4.6 Extras - Outros", ambos com Área = "Extras"), a Área dos itens passa a ser o título do bloco — senão o app
 // junta os dois num grupo só. Mantido em sincronia com sync_pos.js (flag --dividir-blocos).
-const DIVIDIR_BLOCOS = false
+// LIGADA desde 16/10/2026 (decisão do Marcos: blocos separados exatamente como na planilha).
+const DIVIDIR_BLOCOS = true
 
 // O número da seção no app passa a ser o número do NOME DA ABA da planilha (ex.: aba "2.8 CUSTOS ADMINISTRATIVOS" => 2.8).
 // Os templates de Médio/Fundamental numeravam Cerimônia/Colação/Administrativos como 2.5/2.6/2.7; as planilhas usam 2.6/2.7/2.8.
 // Mantido em sincronia com sync_pos.js (flag --renumerar-secoes).
-const RENUMERAR_SECOES = false
+// LIGADA desde 16/10/2026.
+const RENUMERAR_SECOES = true
 
 function parseItens(
   values: unknown[][], _secaoNumero: string, secaoNome: string, layout: 'A' | 'B' = 'A',
