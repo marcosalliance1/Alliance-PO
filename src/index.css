@@ -471,3 +471,6 @@
 .tema-claro .table-po th.col-sep:not(.visual-novo *){ background-color:#eceff3 !important; border-left-color:#cfd5df !important; border-right-color:#cfd5df !important; }
 .tema-claro .table-po tr.row-total > td:not(.visual-novo *){ background-color:#e4e9f1 !important; color:#1e2430 !important; border-top:2px solid #cfd5df !important; }
 .tema-claro .table-po tr.row-total > td.text-blue-400:not(.visual-novo *){ color:#1a56db !important; }
+
+/* Resumo Geral (DRE): o rótulo "Falta pagar" marca onde começam as despesas no grupo Conciliação Everest (como na planilha) */
+.visual-novo .dre-planilha tbody td.dre-faltapagar{ background:#dbe7f5 !important; color:#0b3a6b !important; font-weight:700; text-align:center !important; font-size:11px; }

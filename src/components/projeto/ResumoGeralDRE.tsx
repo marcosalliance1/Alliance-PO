@@ -146,7 +146,7 @@ export function ResumoGeralDRE({ projeto, mostrarFee = false }: { projeto: Proje
               <th className="dre-gap" />
               <th className={`${TH} dre-sub`}>Valor</th><th className={`${TH} dre-sub`}>% rec</th>
               <th className="dre-gap" />
-              <th className={`${TH} dre-sub dre-azul`}>Pago</th><th className={`${TH} dre-sub dre-azul`}>Falta pagar</th>
+              <th className={`${TH} dre-sub dre-azul`}>Valor</th><th className={`${TH} dre-sub dre-azul`}>% rec</th>
             </tr>
           </thead>
           <tbody>
@@ -154,7 +154,13 @@ export function ResumoGeralDRE({ projeto, mostrarFee = false }: { projeto: Proje
               if (l.tipo === 'espaco') return <tr key={n}><td colSpan={12} className="h-8 bg-[#eceff3] p-0" /></tr>
               const v = l.v
               const ehReceita = l.tipo === 'item' && l.receita
-              const faltar = (l.tipo === 'total' && l.semFaltar) || ehReceita ? null : v.faltar
+              const ehTotalReceita = l.tipo === 'total' && l.cor === 'receita'
+              const ehMargem = l.tipo === 'total' && l.cor === 'margem'
+              const segundaEverest = ehReceita || ehMargem
+                ? <span className={mut}>{pct(v.pago, receitaTotal.pago)}</span>
+                : ehTotalReceita
+                  ? null
+                  : numero(v.faltar)
               const destaque = l.tipo === 'total'
               const negativo = l.tipo === 'total' && l.cor === 'margem'
               const linhaCls = l.tipo === 'secao'
@@ -176,7 +182,9 @@ export function ResumoGeralDRE({ projeto, mostrarFee = false }: { projeto: Proje
                   <td className={`${TD} ${mut}`}>{pct(v.contratado, receitaTotal.contratado)}</td>
                   <td className="dre-gap" />
                   <td className={TD}>{numero(v.pago, negativo)}</td>
-                  <td className={TD}>{faltar === null ? '' : numero(faltar)}</td>
+                  {ehTotalReceita
+                    ? <td className={`${TD} dre-faltapagar`}>Falta pagar</td>
+                    : <td className={TD}>{segundaEverest}</td>}
                 </tr>
               )
             })}
