@@ -119,6 +119,11 @@ function parseTipoCusto(val: unknown): TipoCusto {
   return 'Custo Fixo'
 }
 
+// Quando 2+ blocos da MESMA aba usam o mesmo texto na coluna Área (ex.: "2.4.6 Extras - Alimentos e Bebidas" e
+// "2.4.6 Extras - Outros", ambos com Área = "Extras"), a Área dos itens passa a ser o título do bloco — senão o app
+// junta os dois num grupo só. Mantido em sincronia com sync_pos.js (flag --dividir-blocos).
+const DIVIDIR_BLOCOS = false
+
 function parseItens(
   values: unknown[][], _secaoNumero: string, secaoNome: string, layout: 'A' | 'B' = 'A',
 ): { itens: ItemCusto[], avisos: string[] } {
@@ -141,12 +146,19 @@ function parseItens(
     }
   }
 
+  let blocoAtual = ''
+  const blocoPorItem = new Map<string, string>()
   for (let r = inicioLeitura; r < values.length; r++) {
     const get = (c: number) => getCell(values, r, c)
 
     const subcategoria = parseStr(get(4))
     const item = parseStr(get(5))
-    if (!subcategoria && !item) continue
+    if (!subcategoria && !item) {
+      // linha de título de bloco: código hierárquico na col A ("2.4.6") + título na col B ("Extras - Outros")
+      const c0 = parseStr(get(0)), c1 = parseStr(get(1))
+      if (c0 && c1 && /^\d+(\.\d+)+$/.test(c0)) blocoAtual = c1
+      continue
+    }
     const codigo = parseCodigo(get(0))
     const area = parseStr(get(1))
     const moscow = parseStr(get(2))
@@ -198,8 +210,10 @@ function parseItens(
     const valorPago = parseNum(get(layout === 'B' ? 26 : 27))  // Layout A=AB(27) Layout B=AA(26)
     const faltaPagar = parseNum(get(28))
 
+    const idItem = uuid()
+    if (blocoAtual) blocoPorItem.set(idItem, blocoAtual)
     itens.push({
-      id: uuid(), codigo, area, subcategoria, item, fornecedor, tipoCusto, moscow,
+      id: idItem, codigo, area, subcategoria, item, fornecedor, tipoCusto, moscow,
       qtdeVendida, valorUnitarioAtual, totalAtual, valorProjetado, totalProjetado,
       qtdeOrcada, valorUnitarioOrcado, valorOrcado,
       qtdeContratada, valorUnitarioContratado, valorContratado,
@@ -207,6 +221,20 @@ function parseItens(
       valorFinal, valorPago, faltaPagar,
       totalProgramado: 0, emAberto: 0, jotform: [],
     })
+  }
+
+  if (DIVIDIR_BLOCOS) {
+    const blocosPorArea = new Map<string, Set<string>>()
+    for (const it of itens) {
+      const b = blocoPorItem.get(it.id)
+      if (!b) continue
+      if (!blocosPorArea.has(it.area)) blocosPorArea.set(it.area, new Set())
+      blocosPorArea.get(it.area)!.add(b)
+    }
+    for (const it of itens) {
+      const b = blocoPorItem.get(it.id)
+      if (b && (blocosPorArea.get(it.area)?.size ?? 0) > 1) it.area = b
+    }
   }
 
   return { itens, avisos }
