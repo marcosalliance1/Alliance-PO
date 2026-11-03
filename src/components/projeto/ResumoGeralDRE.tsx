@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { Projeto } from '../../types'
 import { calcResumoProjeto, filtrarItensCalculo } from '../../utils/calculos'
 import { padronizarCaixa } from '../../utils/caixa'
+import { metaMargemPct, corMargem } from '../../utils/metasMargem'
 
 // Resumo Geral no formato da planilha ("1. RESUMO GERAL"): receitas → receita total → custos por
 // seção/área (uma linha em branco entre blocos) → custo total → margem de contribuição.
@@ -113,6 +114,7 @@ export function ResumoGeralDRE({ projeto, mostrarFee = false }: { projeto: Proje
     return { linhas: out, receitaTotal }
   }, [projeto])
 
+  const meta = metaMargemPct(projeto.tap.tipoEscola)
   const fee = (projeto.resumoComercial ?? []).filter(l => l.valorComercial || l.valorProducao || l.percentual || l.valorReal)
 
   const TH = 'px-3 py-2 text-center text-[11px] font-bold uppercase tracking-wide whitespace-nowrap'
@@ -157,12 +159,14 @@ export function ResumoGeralDRE({ projeto, mostrarFee = false }: { projeto: Proje
               const ehTotalReceita = l.tipo === 'total' && l.cor === 'receita'
               const ehMargem = l.tipo === 'total' && l.cor === 'margem'
               const segundaEverest = ehReceita || ehMargem
-                ? <span className={mut}>{pct(v.pago, receitaTotal.pago)}</span>
+                ? <span className={ehMargem ? undefined : mut} style={ehMargem ? { color: corMargem(receitaTotal.pago > 0 ? (v.pago / receitaTotal.pago) * 100 : null, meta) } : undefined}>{pct(v.pago, receitaTotal.pago)}</span>
                 : ehTotalReceita
                   ? null
                   : numero(v.faltar)
               const destaque = l.tipo === 'total'
-              const negativo = l.tipo === 'total' && l.cor === 'margem'
+              const negativo = false
+              // linha de margem: cor pela meta do ensino (verde na meta ou acima, laranja abaixo, vermelho negativa)
+              const corM = (valor: number, base: number) => (ehMargem ? { color: corMargem(base > 0 ? (valor / base) * 100 : null, meta) } : undefined)
               const linhaCls = l.tipo === 'secao'
                 ? 'bg-[#e4e9f1] font-bold'
                 : destaque ? 'font-bold bg-[#ebeff1] border-t border-[#e2e6ec]' : `border-t border-[#e2e6ec] ${n % 2 ? 'bg-white' : 'bg-[#fafbfc]'}`
@@ -172,16 +176,16 @@ export function ResumoGeralDRE({ projeto, mostrarFee = false }: { projeto: Proje
               return (
                 <tr key={n} className={linhaCls}>
                   <td className={`${TDL} ${labelCls} sticky left-0 z-[1]`} style={l.tipo === 'secao' ? { fontSize: 14, borderLeft: '4px solid #ef3935' } : undefined}>{l.nome}</td>
-                  <td className={TD}>{numero(v.vendido, negativo)}</td>
-                  <td className={`${TD} ${mut}`}>{pct(v.vendido, receitaTotal.vendido)}</td>
+                  <td className={TD} style={corM(v.vendido, receitaTotal.vendido)}>{numero(v.vendido, negativo)}</td>
+                  <td className={`${TD} ${ehMargem ? '' : mut}`} style={corM(v.vendido, receitaTotal.vendido)}>{pct(v.vendido, receitaTotal.vendido)}</td>
                   <td className="dre-gap" />
-                  <td className={TD}>{numero(v.orcado, negativo)}</td>
-                  <td className={`${TD} ${mut}`}>{pct(v.orcado, receitaTotal.orcado)}</td>
+                  <td className={TD} style={corM(v.orcado, receitaTotal.orcado)}>{numero(v.orcado, negativo)}</td>
+                  <td className={`${TD} ${ehMargem ? '' : mut}`} style={corM(v.orcado, receitaTotal.orcado)}>{pct(v.orcado, receitaTotal.orcado)}</td>
                   <td className="dre-gap" />
-                  <td className={TD}>{numero(v.contratado, negativo)}</td>
-                  <td className={`${TD} ${mut}`}>{pct(v.contratado, receitaTotal.contratado)}</td>
+                  <td className={TD} style={corM(v.contratado, receitaTotal.contratado)}>{numero(v.contratado, negativo)}</td>
+                  <td className={`${TD} ${ehMargem ? '' : mut}`} style={corM(v.contratado, receitaTotal.contratado)}>{pct(v.contratado, receitaTotal.contratado)}</td>
                   <td className="dre-gap" />
-                  <td className={TD}>{numero(v.pago, negativo)}</td>
+                  <td className={TD} style={corM(v.pago, receitaTotal.pago)}>{numero(v.pago, negativo)}</td>
                   {ehTotalReceita
                     ? <td className={`${TD} dre-faltapagar`}>Falta pagar</td>
                     : <td className={TD}>{segundaEverest}</td>}

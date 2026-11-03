@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type { Projeto } from '../../types'
 import { calcResumoProjeto, filtrarItensCalculo } from '../../utils/calculos'
 import { padronizarCaixa } from '../../utils/caixa'
+import { metaMargemPct, corMargem } from '../../utils/metasMargem'
 import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 
 // Dashboard do projeto no estilo da planilha, em azul (dashboard pede cor mais calma que o vermelho das
@@ -99,11 +100,12 @@ export function DashboardPlanilha({ projeto }: { projeto: Projeto }) {
   const ct = resumo.custoTotal
   const pct = (n: number, d: number) => (d > 0 ? (n / d) * 100 : 0)
 
+  const meta = metaMargemPct(projeto.tap.tipoEscola)
   const margens = [
-    { rotulo: 'Projetada', valor: receita.vendido - ct.projetado, p: pct(receita.vendido - ct.projetado, receita.vendido) },
-    { rotulo: 'Orçada', valor: receita.orcado - ct.orcado, p: pct(receita.orcado - ct.orcado, receita.orcado) },
-    { rotulo: 'Contratada', valor: receita.contratado - ct.contratado, p: pct(receita.contratado - ct.contratado, receita.contratado) },
-    { rotulo: 'Real (Everest)', valor: receita.pago - ct.pago, p: pct(receita.pago - ct.pago, receita.pago) },
+    { rotulo: 'Projetada', base: receita.vendido, valor: receita.vendido - ct.projetado, p: pct(receita.vendido - ct.projetado, receita.vendido) },
+    { rotulo: 'Orçada', base: receita.orcado, valor: receita.orcado - ct.orcado, p: pct(receita.orcado - ct.orcado, receita.orcado) },
+    { rotulo: 'Contratada', base: receita.contratado, valor: receita.contratado - ct.contratado, p: pct(receita.contratado - ct.contratado, receita.contratado) },
+    { rotulo: 'Real (Everest)', base: receita.pago, valor: receita.pago - ct.pago, p: pct(receita.pago - ct.pago, receita.pago) },
   ]
 
   const dados1: LinhaSecao[] = resumo.custos.map(c => ({ nome: c.nome.split(' ')[0], secaoId: c.secaoId, titulo: padronizarCaixa(c.nome), valor: Math.round(c.projetado) }))
@@ -179,7 +181,7 @@ export function DashboardPlanilha({ projeto }: { projeto: Projeto }) {
           {margens.map(m => (
             <div key={m.rotulo} className="rounded-md border border-[#e2e6ec] bg-[#fafbfc] px-3 py-2">
               <div className="text-[10px] font-semibold uppercase tracking-wider text-[#64707f]">{m.rotulo}</div>
-              <div className="text-[16px] font-bold tabular-nums" style={{ color: m.p >= 0 ? '#137333' : '#c0392b' }}>{pct1(m.p)}</div>
+              <div className="text-[16px] font-bold tabular-nums" style={{ color: corMargem(m.base > 0 ? m.p : null, meta) }}>{pct1(m.p)}</div>
               <div className="text-[11px] tabular-nums text-[#1e2430]">{brl(m.valor)}</div>
             </div>
           ))}
@@ -193,7 +195,7 @@ export function DashboardPlanilha({ projeto }: { projeto: Projeto }) {
               <tr className="border-t border-[#e2e6ec]">
                 <td className={`${TD} bg-[#f5f7fa] font-medium text-[12.5px]`}>Margem %</td>
                 {margens.map(m => (
-                  <td key={m.rotulo} className={`${TD} text-[15px] font-bold`} style={{ color: m.p >= 0 ? '#137333' : '#c0392b' }}>{pct1(m.p)}</td>
+                  <td key={m.rotulo} className={`${TD} text-[15px] font-bold`} style={{ color: corMargem(m.base > 0 ? m.p : null, meta) }}>{pct1(m.p)}</td>
                 ))}
               </tr>
               <tr className="border-t border-[#e2e6ec] bg-[#fafbfc]">
@@ -203,6 +205,9 @@ export function DashboardPlanilha({ projeto }: { projeto: Projeto }) {
             </tbody>
           </table>
         </div>
+        <p className="mt-3 text-[11px] text-[#64707f]">
+          Meta de margem desta turma: <b className="text-[#1e2430]">{meta}%</b> (verde = na meta ou acima · laranja = abaixo da meta · vermelho = negativa)
+        </p>
         {feePago > 0 && (
           <p className="mt-3 text-[11px] text-[#64707f]">
             Despesa fee já paga: <b className="tabular-nums text-[#1e2430]">{brl(feePago)}</b> ({pct1(pct(feePago, ct.pago))} do total pago)
