@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type { Projeto } from '../../types'
 import { calcResumoProjeto } from '../../utils/calculos'
 import { padronizarCaixa } from '../../utils/caixa'
+import { metaMargemPct, corMargem } from '../../utils/metasMargem'
 
 // Tela inicial dos projetos como painel de carteira: uma linha por turma, agrupada por
 // "ano de realização · ensino" (igual ao seletor), com totais do recorte e saúde do sync.
@@ -232,7 +233,7 @@ export function ListaProjetosPainel({ projetos, hrefProjeto, renderAcoes }: {
                     </div>
                     <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] tabular-nums">
                       <div><div className="text-[9px] uppercase tracking-wide text-[#64707f]">Receita orç.</div><div className="font-medium">{brlCurto(l.receitaOrc)}</div></div>
-                      <div><div className="text-[9px] uppercase tracking-wide text-[#64707f]">Margem orç.</div><div className="font-bold" style={{ color: l.margemOrc === null ? '#9aa3b0' : l.margemOrc < 0 ? '#c0392b' : '#137333' }}>{pct(l.margemOrc)}</div></div>
+                      <div><div className="text-[9px] uppercase tracking-wide text-[#64707f]">Margem orç.</div><div className="font-bold" style={{ color: corMargem(l.margemOrc, metaMargemPct(l.p.tap.tipoEscola)) }}>{pct(l.margemOrc)}</div></div>
                       <div><div className="text-[9px] uppercase tracking-wide text-[#64707f]">% pago</div><div className="font-medium">{pct(l.pctPago)}</div></div>
                     </div>
                     {l.saude.nivel !== 'ok' && <div className="mt-1.5 text-[10px]" style={{ color: COR_NIVEL[l.saude.nivel] }}>{l.saude.motivos[0]}</div>}
@@ -276,12 +277,12 @@ export function ListaProjetosPainel({ projetos, hrefProjeto, renderAcoes }: {
                   </td>
                   <td className={`${TD} font-bold`}>{brlCurto(s.receita)}</td>
                   <td className={`${TD} font-bold`}>{brlCurto(s.custo)}</td>
-                  <td className={`${TD} font-bold`}>{pct(s.margem)}</td>
+                  <td className={`${TD} font-bold`} style={{ color: corMargem(s.margem, metaMargemPct(g.itens[0]?.p.tap.tipoEscola)) }} title={`Meta ${metaMargemPct(g.itens[0]?.p.tap.tipoEscola)}%`}>{pct(s.margem)}</td>
                   <td colSpan={renderAcoes ? 5 : 4} />
                 </tr>,
                 ...g.itens.map((l, n) => {
                   const href = hrefProjeto(l.p)
-                  const margemRuim = l.margemOrc !== null && l.margemOrc < 0
+                  const meta = metaMargemPct(l.p.tap.tipoEscola)
                   return (
                     <tr key={l.p.id} className={`cursor-pointer border-t border-[#e2e6ec] hover:bg-[#fff5f4] ${n % 2 ? 'bg-[#fafbfc]' : 'bg-white'}`}
                         onClick={() => { window.location.href = href }}>
@@ -291,14 +292,14 @@ export function ListaProjetosPainel({ projetos, hrefProjeto, renderAcoes }: {
                       </td>
                       <td className={TD}>{brl(l.receitaOrc)}</td>
                       <td className={TD}>{brl(l.custoOrc)}</td>
-                      <td className={TD} style={{ color: l.margemOrc === null ? '#9aa3b0' : margemRuim ? '#c0392b' : '#137333', fontWeight: 700 }}>{pct(l.margemOrc)}</td>
+                      <td className={TD} style={{ color: corMargem(l.margemOrc, meta), fontWeight: 700 }} title={`Meta ${meta}%`}>{pct(l.margemOrc)}</td>
                       <td className={TD}>
                         <Barra v={l.pctContratado} cor="#137333" />
                       </td>
                       <td className={TD}>
                         <Barra v={l.pctPago} cor="#4a72b0" />
                       </td>
-                      <td className={TD} style={{ color: l.margemReal === null ? '#9aa3b0' : l.margemReal < 0 ? '#c0392b' : undefined }}>{pct(l.margemReal)}</td>
+                      <td className={TD} style={{ color: corMargem(l.margemReal, meta), fontWeight: 600 }} title={`Meta ${meta}%`}>{pct(l.margemReal)}</td>
                       <td className={TD} title={l.saude.motivos.length ? l.saude.motivos.join('\n') : 'Sem alertas'}>
                         <span className="inline-flex items-center gap-1.5">
                           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COR_NIVEL[l.saude.nivel] }} />
@@ -321,7 +322,7 @@ export function ListaProjetosPainel({ projetos, hrefProjeto, renderAcoes }: {
         </table>
       </div>
       <p className="text-[11px] text-[#64707f]">
-        Passe o mouse na coluna Sync para ver os motivos do alerta. % contratado = custo contratado ÷ custo orçado; % pago = pago ÷ contratado.
+        Metas de margem: Superior e Fundamental 15% · Médio 25% (verde = na meta ou acima, laranja = abaixo da meta, vermelho = negativa). Passe o mouse na coluna Sync para ver os motivos do alerta. % contratado = custo contratado ÷ custo orçado; % pago = pago ÷ contratado.
       </p>
     </div>
   )
