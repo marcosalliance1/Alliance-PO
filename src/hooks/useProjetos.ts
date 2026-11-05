@@ -301,7 +301,13 @@ export function useProjetos() {
     const now = new Date().toISOString()
     const { error: err } = await supabase
       .from('projetos')
-      .update({ secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacao_everest: novaConciliacao, resumo_comercial: result.resumoComercial, total_convidados_atual: result.totalConvidadosAtual ?? null, total_adesoes_atual: result.totalAdesoesAtual ?? null, atualizado_em: now })
+      .update({
+        secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacao_everest: novaConciliacao, resumo_comercial: result.resumoComercial, total_convidados_atual: result.totalConvidadosAtual ?? null, total_adesoes_atual: result.totalAdesoesAtual ?? null, atualizado_em: now,
+        // só grava quando o layout foi reconhecido — nunca zera um orçado já salvo
+        ...(result.resumoGeralOrcado && result.resumoGeralOrcado.receita != null && result.resumoGeralOrcado.custo != null
+          ? { resumo_geral_orcado: { ...result.resumoGeralOrcado, lidoEm: now } }
+          : {}),
+      })
       .eq('id', id)
     if (err) throw new Error(err.message)
     setProjetos((prev) => prev.map((p) =>

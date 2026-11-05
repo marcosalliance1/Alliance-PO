@@ -13,6 +13,7 @@ import { NovoProjeto } from './pages/NovoProjeto'
 import { ViewProjeto } from './pages/ViewProjeto'
 import { BancoDeItens } from './pages/BancoDeItens'
 import { Verbas } from './pages/Verbas'
+import { MetasMargem } from './pages/MetasMargem'
 import { Financeiro } from './pages/Financeiro'
 import { Marketing } from './pages/Marketing'
 import { MarketingDetalhe } from './pages/MarketingDetalhe'
@@ -301,6 +302,7 @@ function AppRoutes() {
         />
         <Route path="/operacional" element={<Operacional />} />
         <Route path="/verbas" element={<Verbas />} />
+        <Route path="/metas-margem" element={<MetasMargem />} />
         <Route path="/financeiro" element={<Financeiro />} />
         <Route path="/portal-admin" element={<AdminPortal />} />
         <Route

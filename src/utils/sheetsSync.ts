@@ -9,7 +9,69 @@ export interface SyncResult {
   resumoComercial: LinhaResumoComercial[]
   totalConvidadosAtual: number | null
   totalAdesoesAtual: number | null
+  /** ORÇADO do "1. RESUMO GERAL" (receita, custo total, margem). null = layout não reconhecido → não grava. */
+  resumoGeralOrcado: ResumoGeralOrcado | null
   avisos: string[]
+}
+
+export interface ResumoGeralOrcado {
+  receita: number | null
+  custo: number | null
+  margem: number | null
+  celulas: string
+}
+
+function numResumo(v: unknown): number | null {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  if (v == null) return null
+  let t = String(v).replace(/[R$\s]/g, '')
+  if (!t || /[#A-Za-z]/.test(t)) return null
+  if (/^[-–—]+$/.test(t)) return 0 // formato contábil mostra zero como "-"
+  const neg = /^\(.*\)$/.test(t) || t.startsWith('-')
+  t = t.replace(/[()-]/g, '').replace(/\./g, '').replace(',', '.')
+  const n = parseFloat(t)
+  return Number.isNaN(n) ? null : neg ? -n : n
+}
+
+function letraColuna(i: number): string {
+  let s = ''
+  let n = i + 1
+  while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26) }
+  return s
+}
+
+/** Lê receita / custo total / margem ORÇADOS da aba "1. RESUMO GERAL" (mesma regra do sync_pos.js). */
+export function lerResumoOrcado(v: unknown[][]): ResumoGeralOrcado | null {
+  const n = (x: unknown) => norm(String(x ?? ''))
+  let rowRec = -1
+  let colLab = -1
+  for (let i = 0; i < v.length && rowRec < 0; i++) {
+    for (let j = 0; j < 4; j++) {
+      if (/^(receita baile|receita total)\b/.test(n((v[i] ?? [])[j]))) { rowRec = i; colLab = j; break }
+    }
+  }
+  if (rowRec < 0) return null
+  let colOrc = -1
+  for (let i = rowRec - 1; i >= 0 && colOrc < 0; i--) {
+    ;(v[i] ?? []).forEach((c, j) => { if (colOrc < 0 && n(c) === 'orcado') colOrc = j })
+  }
+  if (colOrc < 0) return null
+  let rowCusto = -1
+  let rowMargem = -1
+  for (let i = rowRec + 1; i < v.length; i++) {
+    const t = n((v[i] ?? [])[colLab])
+    if (rowCusto < 0 && /^custo total\b/.test(t)) rowCusto = i
+    else if (rowCusto >= 0 && /^margem contribuicao\b/.test(t)) { rowMargem = i; break }
+  }
+  if (rowCusto < 0) return null
+  const g = (r: number) => (r < 0 ? null : numResumo((v[r] ?? [])[colOrc]))
+  const c = letraColuna(colOrc)
+  return {
+    receita: g(rowRec),
+    custo: g(rowCusto),
+    margem: g(rowMargem),
+    celulas: `${c}${rowRec + 1}/${c}${rowCusto + 1}/${rowMargem >= 0 ? c + (rowMargem + 1) : '-'}`,
+  }
 }
 
 const MAPA_SECOES: Record<string, string> = {
@@ -655,6 +717,7 @@ export async function sincronizarComSheets(
   let tapParsed: Partial<TAP> = {}
   let receitasParsed: Partial<Receitas> = {}
   let resumoEncontrado = false
+  let resumoGeralOrcado: ResumoGeralOrcado | null = null
   let resumoComercialParsed: LinhaResumoComercial[] = []
   let totalConvidadosAtual: number | null = null
   let totalAdesoesAtual: number | null = null
@@ -723,7 +786,10 @@ export async function sincronizarComSheets(
       onProgress(`Lendo Resumo Geral (${nomeAba})...`)
       try {
         const values = await fetchAba(spreadsheetId, nomeAba, accessToken, `'${nomeAba}'!A1:Z100`)
-        if (values) receitasParsed = parseReceitasFromResumo(values)
+        if (values) {
+          receitasParsed = parseReceitasFromResumo(values)
+          if (!ehAbaBackup(nomeAba)) resumoGeralOrcado = lerResumoOrcado(values)
+        }
       } catch (e) {
         if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
         console.warn(`Erro ao ler aba Resumo "${nomeAba}":`, e)
@@ -878,6 +944,7 @@ export async function sincronizarComSheets(
     resumoComercial: resumoComercialParsed.length > 0 ? resumoComercialParsed : (projeto.resumoComercial ?? []),
     totalConvidadosAtual,
     totalAdesoesAtual,
+    resumoGeralOrcado,
     avisos,
   }
 }
