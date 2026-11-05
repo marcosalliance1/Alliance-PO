@@ -54,7 +54,7 @@ function situacaoEconomia(falta: number, ainda: number): string {
 
 const CAB_METAS = ['Projeto', 'Ensino', 'Receita orçada (R$)', 'Custo orçado (R$)', 'Margem (R$)', 'Margem %', 'Meta %', 'Margem na meta (R$)', 'FALTA p/ meta (R$)', 'EXCEDENTE (R$)', 'Situação']
 const FMT_METAS = [undefined, undefined, MONEY, MONEY, MONEY, PCT, PCT, MONEY, MONEY, MONEY]
-const CAB_ECON = ['Projeto', 'Ensino', 'FALTA p/ meta (R$)', 'Orçado dos fechados (R$)', 'Contratado dos fechados (R$)', 'Economias (R$)', 'Estouros (R$)', 'ECONOMIA LÍQUIDA (R$)', 'dos quais fechados a zero (R$)', '% da falta coberta', 'AINDA FALTA (R$)', 'AINDA FALTA sem os fechados a zero (R$)', 'Situação']
+const CAB_ECON = ['Projeto', 'Ensino', 'FALTA p/ meta (R$)', 'Orçado dos fechados (R$)', 'Contratado dos fechados (R$)', 'Economias (R$)', 'Estouros (R$)', 'ECONOMIA LÍQUIDA (R$)', 'dos quais fechados a zero (R$)', '% da falta coberta', 'AINDA FALTA (R$)', 'Potencial a economizar - estimados (R$)', 'Situação']
 const FMT_ECON = [undefined, undefined, MONEY, MONEY, MONEY, MONEY, MONEY, MONEY, MONEY, PCT, MONEY, MONEY]
 
 function linhaMetasProjeto(r: ResultadoProjeto): Cel[] {
@@ -69,12 +69,12 @@ function linhaMetasTotal(rotulo: string, rs: ResultadoProjeto[], t: Totais): Cel
 }
 function linhaEconProjeto(r: ResultadoProjeto): Cel[] {
   return [nome(r), ens(r), r.falta, r.orcadoFechados, r.contratadoFechados, r.economias, r.estouros, r.liquida, r.fechadosZero,
-    r.cobertura, r.aindaFalta, r.aindaFaltaConservador, situacaoEconomia(r.falta, r.aindaFalta)]
+    r.cobertura, r.aindaFalta, r.estimadosOrcado, situacaoEconomia(r.falta, r.aindaFalta)]
 }
 function linhaEconTotal(rotulo: string, rs: ResultadoProjeto[], t: Totais): Cel[] {
   const of = rs.reduce((s, r) => s + r.orcadoFechados, 0)
   const cf = rs.reduce((s, r) => s + r.contratadoFechados, 0)
-  return [rotulo, '', t.falta, of, cf, t.economias, t.estouros, t.liquida, t.fechadosZero, t.cobertura, t.aindaFalta, t.aindaFaltaConservador, situacaoEconomia(t.falta, t.aindaFalta)]
+  return [rotulo, '', t.falta, of, cf, t.economias, t.estouros, t.liquida, t.fechadosZero, t.cobertura, t.aindaFalta, t.estimadosOrcado, situacaoEconomia(t.falta, t.aindaFalta)]
 }
 
 function abaMetas(rs: ResultadoProjeto[], metas: MetasPct, geradoEm: string): XLSX.WorkSheet {
@@ -111,12 +111,12 @@ function abaMetas(rs: ResultadoProjeto[], metas: MetasPct, geradoEm: string): XL
   return f.toSheet([34, 13, 18, 18, 16, 11, 9, 18, 18, 16, 18])
 }
 
-function abaEconomia(rs: ResultadoProjeto[], geradoEm: string, descontaZero: boolean): XLSX.WorkSheet {
+function abaEconomia(rs: ResultadoProjeto[], geradoEm: string): XLSX.WorkSheet {
   const f = new Folha()
   const grupos = agruparPorLocal(rs)
   const tot = somarResultados(rs)
   f.mesclar(f.add(['QUANTO JÁ FIZEMOS dos itens FECHADOS para a margem — contra o que falta p/ a meta']), 12)
-  f.mesclar(f.add([`Economia = orçado − contratado dos itens com status FECHADO (todas as abas de custo). Líquido = economias − estouros. "Fechados a zero" = parte da economia que vem de itens fechados com contratado R$ 0. AINDA FALTA = falta − economia líquida. Dados lidos em ${geradoEm}.${descontaZero ? ' (Tela com "Descontar fechados a zero" ligado.)' : ''}`]), 12)
+  f.mesclar(f.add([`Economia = orçado − contratado dos itens com status FECHADO (todas as abas de custo). Líquido = economias − estouros. "Fechados a zero" = parte da economia que vem de itens fechados com contratado R$ 0. AINDA FALTA = falta − economia líquida. Potencial a economizar = orçado dos itens com status ESTIMADO (ainda não contratados). Dados lidos em ${geradoEm}.`]), 12)
   f.vazia()
   f.add(['RESUMO POR LOCAL'])
   f.add(CAB_ECON)
@@ -146,10 +146,10 @@ function baixar(blob: Blob, arquivo: string) {
 const hoje = () => new Date().toISOString().slice(0, 10)
 const dataBR = () => new Date().toLocaleDateString('pt-BR')
 
-export function exportarMetasMargemXlsx(rs: ResultadoProjeto[], metas: MetasPct, descontaZero: boolean) {
+export function exportarMetasMargemXlsx(rs: ResultadoProjeto[], metas: MetasPct) {
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, abaMetas(rs, metas, dataBR()), 'Metas de margem')
-  XLSX.utils.book_append_sheet(wb, abaEconomia(rs, dataBR(), descontaZero), 'Economia dos fechados')
+  XLSX.utils.book_append_sheet(wb, abaEconomia(rs, dataBR()), 'Economia dos fechados')
   XLSX.writeFile(wb, `metas_margem_${hoje()}.xlsx`)
 }
 
@@ -161,7 +161,7 @@ export function exportarMetasMargemCsv(rs: ResultadoProjeto[]) {
     for (const r of g.projetos) {
       linhas.push([
         g.local, nome(r), ens(r), r.receita, r.custo, r.margem, frac(r.margemPct), frac(r.metaPct), r.margemNaMeta, r.falta, r.excedente,
-        r.orcadoFechados, r.contratadoFechados, r.economias, r.estouros, r.liquida, r.fechadosZero, r.cobertura, r.aindaFalta, r.aindaFaltaConservador,
+        r.orcadoFechados, r.contratadoFechados, r.economias, r.estouros, r.liquida, r.fechadosZero, r.cobertura, r.aindaFalta, r.estimadosOrcado,
         r.fonte === 'planilha' ? 'Resumo Geral da planilha' : r.fonte === 'itens' ? 'Soma dos itens' : 'Sem dados',
       ])
     }

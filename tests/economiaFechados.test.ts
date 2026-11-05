@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  calcularProjeto, descontarFechadosZero, lerPercentual, somarResultados, agruparPorLocal, agruparPorEnsino, localDoProjeto, METAS_PADRAO,
+  calcularProjeto, lerPercentual, somarResultados, agruparPorLocal, agruparPorEnsino, localDoProjeto, METAS_PADRAO,
   LOCAL_MIX, LOCAL_AVA, LOCAL_PAV3, LOCAL_ARENA, LOCAL_OUTROS,
   type ProjetoBruto, type ItemBruto,
 } from '../src/lib/economiaFechados.ts'
@@ -35,10 +35,10 @@ test('caminho feliz: margem, FALTA, economias, estouros, líquida, fechados a ze
   assert.equal(r.estouros, 30)
   assert.equal(r.liquida, 30)
   assert.equal(r.fechadosZero, 20)
-  assert.equal(r.abertoOrcado, 500)
+  assert.equal(r.estimadosOrcado, 500)
+  assert.equal(r.nEstimados, 1)
   assert.equal(r.cobertura, 30 / 150_000)
   assert.equal(r.aindaFalta, 150_000 - 30)
-  assert.equal(r.aindaFaltaConservador, 150_000 - (30 - 20))
 })
 
 test('itens não fechados (estimado, orçar, orçando, N/A) não entram nas economias', () => {
@@ -51,7 +51,7 @@ test('itens não fechados (estimado, orçar, orçando, N/A) não entram nas econ
   assert.equal(r.nFechados, 0)
   assert.equal(r.economias, 0)
   assert.equal(r.liquida, 0)
-  assert.equal(r.abertoOrcado, 300) // N/A fica de fora do potencial
+  assert.equal(r.estimadosOrcado, 100) // só o 'estimado' conta como potencial; orçar/orçando/N/A ficam de fora
 })
 
 test('falha 1 — projeto sem receita: não calcula FALTA e avisa', () => {
@@ -130,27 +130,31 @@ test('linha agrupadora, N/A e subcategoria vazia ficam fora do cálculo', () => 
   assert.ok(r.avisos.includes('fonte-itens'))
 })
 
-test('descontar fechados a zero: líquida e AINDA FALTA recalculadas, sem mexer no que não tem zero', () => {
-  const r = calcularProjeto(base()) // economias 60 (inclui 20 de fechado a zero), estouros 30, líquida 30
-  const d = descontarFechadosZero(r)
-  assert.equal(d.economias, 40)
-  assert.equal(d.liquida, 10)
-  assert.equal(d.aindaFalta, 150_000 - 10)
-  assert.equal(d.aindaFalta, r.aindaFaltaConservador) // modo conservador = a coluna "sem os fechados a zero"
-  assert.equal(d.fechadosZero, 20)
-  const sem = calcularProjeto(base({ secoes: [{ numero: '2.1', itens: [item({ valorOrcado: 100, valorContratado: 60 })] }] }))
-  assert.equal(descontarFechadosZero(sem), sem)
+test('potencial a economizar: soma o orçado dos itens estimados (maiores primeiro), ignora estimado sem orçado, N/A e agrupadora', () => {
+  const r = calcularProjeto(base({ secoes: [{ numero: '2.4', nome: 'Custo Bar', itens: [
+    item({ id: 'e1', item: 'Buffet', status: 'estimado', valorOrcado: 1000 }),
+    item({ id: 'e2', item: 'Som', status: 'estimado', valorOrcado: 5000 }),
+    item({ id: 'e3', item: 'Sem valor', status: 'estimado', valorOrcado: 0 }),
+    item({ id: 'e4', item: 'Cancelado', status: 'N/A', valorOrcado: 777 }),
+    item({ id: 'mae', codigo: '2.4.1', status: 'estimado', valorOrcado: 9999 }), // agrupadora (tem filha)
+    item({ id: 'filha', codigo: '2.4.1.1', status: 'estimado', valorOrcado: 300 }),
+    item({ id: 'f', item: 'Fechado', status: 'fechado', valorOrcado: 40, valorContratado: 30 }),
+  ] }] }))
+  assert.equal(r.nEstimados, 3)
+  assert.equal(r.estimadosOrcado, 6300)
+  assert.deepEqual(r.estimados.map((e) => e.item), ['Som', 'Buffet', 'Geral']) // a filha não tem nome: usa o nome do bloco
+  assert.equal(r.economias, 10) // o potencial não vira economia
 })
 
-test('totais com "descontar fechados a zero": conservador não desconta duas vezes', () => {
-  const a = calcularProjeto(base({ id: 'a' }))
-  const b = calcularProjeto(base({ id: 'b' }))
-  const normal = somarResultados([a, b])
-  assert.equal(normal.aindaFaltaConservador, normal.falta - (normal.liquida - normal.fechadosZero))
-  const desc = somarResultados([a, b].map(descontarFechadosZero))
-  assert.equal(desc.liquida, normal.liquida - normal.fechadosZero)
-  assert.equal(desc.aindaFalta, normal.aindaFaltaConservador) // a visão conservadora vira a visão principal
-  assert.equal(desc.aindaFaltaConservador, normal.aindaFaltaConservador) // e não muda de novo
+test('totais somam o potencial dos projetos', () => {
+  const mk = (id: string, o: number) => calcularProjeto(base({ id, secoes: [{ numero: '2.1', itens: [item({ status: 'estimado', valorOrcado: o })] }] }))
+  assert.equal(somarResultados([mk('a', 100), mk('b', 250)]).estimadosOrcado, 350)
+})
+
+test('falha — projeto sem itens estimados: potencial zero e lista vazia', () => {
+  const r = calcularProjeto(base({ secoes: [{ numero: '2.1', itens: [item({ valorOrcado: 10, valorContratado: 10 })] }] }))
+  assert.equal(r.estimadosOrcado, 0)
+  assert.deepEqual(r.estimados, [])
 })
 
 test('falha — meta digitada inválida é recusada (vazio, texto, negativo, >100); válidas aceitam vírgula e %', () => {

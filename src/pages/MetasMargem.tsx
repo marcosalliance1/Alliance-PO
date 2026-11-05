@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Download, FileSpreadsheet, FilterX, SlidersHorizontal } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import {
-  COR_LOCAL, LOCAIS_ORDEM, ROTULO_ENSINO, agruparPorLocal, calcularProjeto, descontarFechadosZero, somarResultados,
+  COR_LOCAL, LOCAIS_ORDEM, ROTULO_ENSINO, agruparPorLocal, calcularProjeto, somarResultados,
   type Ensino, type MetasPct, type ProjetoBruto, type ResultadoProjeto,
 } from '../lib/economiaFechados'
 import { exportarMetasMargemCsv, exportarMetasMargemXlsx } from '../lib/exportarMetasMargemExcel'
@@ -11,7 +11,7 @@ import { TabelaLocal } from '../components/metas/TabelaLocal'
 import { GraficosMetas } from '../components/metas/GraficosMetas'
 import { DetalheProjeto } from '../components/metas/DetalheProjeto'
 import { EditorMetas } from '../components/metas/EditorMetas'
-import { COR_ECONOMIA, COR_FALTA, COR_META, ensinoCurto, pct0, reais } from '../components/metas/formato'
+import { COR_ECONOMIA, COR_FALTA, COR_META, COR_POTENCIAL, ensinoCurto, pct0, reais } from '../components/metas/formato'
 import { lerMetas, salvarMetas } from '../utils/metasMargem'
 import { padronizarCaixa } from '../utils/caixa'
 
@@ -47,7 +47,6 @@ export function MetasMargem() {
   const [fEnsinos, setFEnsinos] = useState<Set<string>>(new Set())
   const [fProjetos, setFProjetos] = useState<Set<string>>(new Set())
   const [busca, setBusca] = useState('')
-  const [descontaZero, setDescontaZero] = useState(false)
   const [incluirRealizados, setIncluirRealizados] = useState(false)
   const [anoPadraoAplicado, setAnoPadraoAplicado] = useState(false)
   const [abertoId, setAbertoId] = useState<string | null>(null)
@@ -89,8 +88,8 @@ export function MetasMargem() {
   }, [incluirRealizados, fAnos, fLocais, fEnsinos, fProjetos, busca])
 
   const resultados = useMemo(
-    () => todos.filter((r) => passa(r)).map((r) => (descontaZero ? descontarFechadosZero(r) : r)),
-    [todos, passa, descontaZero],
+    () => todos.filter((r) => passa(r)),
+    [todos, passa],
   )
   const grupos = useMemo(() => agruparPorLocal(resultados), [resultados])
   const tot = useMemo(() => somarResultados(resultados), [resultados])
@@ -110,10 +109,10 @@ export function MetasMargem() {
       .map((r) => ({ value: r.id, label: padronizarCaixa(r.turma), grupo: String(r.ano ?? 'Sem ano'), subgrupo: ensinoCurto(r), cor: COR_LOCAL[r.local], dica: r.local })),
   [todos, passa])
 
-  const temFiltro = fAnos.size > 0 || fLocais.size > 0 || fEnsinos.size > 0 || fProjetos.size > 0 || busca.trim() !== '' || incluirRealizados || descontaZero
+  const temFiltro = fAnos.size > 0 || fLocais.size > 0 || fEnsinos.size > 0 || fProjetos.size > 0 || busca.trim() !== '' || incluirRealizados
   function limpar() {
     setFAnos(new Set()); setFLocais(new Set()); setFEnsinos(new Set()); setFProjetos(new Set()); setBusca('')
-    setIncluirRealizados(false); setDescontaZero(false)
+    setIncluirRealizados(false)
   }
 
   function salvar(m: MetasPct) {
@@ -148,7 +147,7 @@ export function MetasMargem() {
           <button type="button" onClick={() => exportarMetasMargemCsv(resultados)} disabled={resultados.length === 0} className="btn-secondary flex items-center gap-2 disabled:opacity-60">
             <FileSpreadsheet size={16} /> CSV
           </button>
-          <button type="button" onClick={() => exportarMetasMargemXlsx(resultados, metas, descontaZero)} disabled={resultados.length === 0} className="btn-primary flex items-center gap-2 disabled:opacity-60">
+          <button type="button" onClick={() => exportarMetasMargemXlsx(resultados, metas)} disabled={resultados.length === 0} className="btn-primary flex items-center gap-2 disabled:opacity-60">
             <Download size={16} /> Exportar Excel
           </button>
         </div>
@@ -177,10 +176,6 @@ export function MetasMargem() {
           )}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/10 pt-3 text-sm">
-          <label className="inline-flex cursor-pointer items-center gap-2 text-text-main" title="Tira da economia o orçado dos itens fechados com contratado R$ 0 (visão conservadora)">
-            <input type="checkbox" checked={descontaZero} onChange={(e) => setDescontaZero(e.target.checked)} className="h-4 w-4 accent-[#e94560]" />
-            Descontar fechados a zero
-          </label>
           <label className="inline-flex cursor-pointer items-center gap-2 text-text-main" title="Por padrão, festas já realizadas ficam de fora">
             <input type="checkbox" checked={incluirRealizados} onChange={(e) => setIncluirRealizados(e.target.checked)} className="h-4 w-4 accent-[#e94560]" />
             Incluir festas já realizadas
@@ -204,7 +199,7 @@ export function MetasMargem() {
             <Kpi rotulo="Economia líquida" valor={reais(tot.liquida)} cor={tot.liquida >= 0 ? COR_ECONOMIA : COR_FALTA} sub={`economias ${reais(tot.economias)} − estouros ${reais(tot.estouros)}`} />
             <Kpi rotulo="% da falta coberta" valor={pct0(tot.cobertura)} cor={tot.cobertura !== null && tot.cobertura >= 1 ? COR_ECONOMIA : COR_META} sub="economia líquida ÷ falta" />
             <Kpi rotulo="Ainda falta" valor={reais(tot.aindaFalta)} cor={tot.aindaFalta > 0 ? COR_FALTA : COR_ECONOMIA} sub={tot.aindaFalta > 0 ? 'falta menos economia líquida' : 'meta coberta no total'} />
-            <Kpi rotulo="Ainda falta conservador" valor={reais(tot.aindaFaltaConservador)} cor={tot.aindaFaltaConservador > 0 ? COR_FALTA : COR_ECONOMIA} sub="sem contar os fechados a zero" />
+            <Kpi rotulo="Potencial a economizar" valor={reais(tot.estimadosOrcado)} cor={COR_POTENCIAL} sub="orçado dos itens estimados, ainda não contratados" />
             <Kpi rotulo="Fechados a zero" valor={reais(tot.fechadosZero)} sub="orçado de itens fechados com contratado R$ 0" />
             <Kpi rotulo="Abaixo da meta" valor={`${tot.nAbaixoMeta} de ${tot.nProjetos}`} cor={tot.nAbaixoMeta > 0 ? COR_META : COR_ECONOMIA} sub={tot.nAbaixoMeta === 1 ? 'projeto' : 'projetos'} />
           </div>

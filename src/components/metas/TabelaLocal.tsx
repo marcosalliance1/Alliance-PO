@@ -3,7 +3,7 @@ import { COR_LOCAL, type ResultadoProjeto, type Totais } from '../../lib/economi
 import { corMargem } from '../../utils/metasMargem'
 import { padronizarCaixa } from '../../utils/caixa'
 import {
-  COR_ECONOMIA, COR_FALTA, TEXTO_AVISO, corCobertura, ensinoCurto, num2, num2OuTraco, pct0, pct1, reais,
+  COR_ECONOMIA, COR_FALTA, COR_POTENCIAL, TEXTO_AVISO, corCobertura, ensinoCurto, num2, num2OuTraco, pct0, pct1, reais,
 } from './formato'
 
 interface Props {
@@ -81,6 +81,7 @@ export function TabelaLocal({ local, projetos, totais, onAbrir }: Props) {
           <span className="text-text-muted">Falta <b style={{ color: totais.falta > 0 ? COR_FALTA : COR_ECONOMIA }}>{reais(totais.falta)}</b></span>
           <span className="text-text-muted">Líquida <b style={{ color: totais.liquida >= 0 ? COR_ECONOMIA : COR_FALTA }}>{reais(totais.liquida)}</b></span>
           <span className="text-text-muted">Ainda falta <b style={{ color: totais.aindaFalta > 0 ? COR_FALTA : COR_ECONOMIA }}>{reais(totais.aindaFalta)}</b></span>
+          <span className="text-text-muted" title="Orçado dos itens estimados, ainda não contratados">Potencial <b style={{ color: COR_POTENCIAL }}>{reais(totais.estimadosOrcado)}</b></span>
         </div>
       </header>
 
@@ -126,7 +127,9 @@ export function TabelaLocal({ local, projetos, totais, onAbrir }: Props) {
                 <td className={`${TD} font-semibold`} style={{ color: r.liquida > 0 ? COR_ECONOMIA : r.liquida < 0 ? COR_FALTA : undefined }}>{num2OuTraco(r.liquida)}</td>
                 <td className={`${TD} text-text-muted`}>{num2OuTraco(r.fechadosZero)}</td>
                 <td className={TD}><Cobertura r={r} /></td>
-                <td className={`${TD} font-bold`} style={{ color: r.falta <= 0 ? undefined : r.aindaFalta > 0 ? COR_FALTA : COR_ECONOMIA }}>{r.falta <= 0 ? '—' : num2(r.aindaFalta)}</td>
+                <td className={`${TD} font-bold`} style={{ color: r.falta <= 0 ? undefined : r.aindaFalta > 0 ? COR_FALTA : COR_ECONOMIA }}>{r.falta <= 0 ? '—' : num2(r.aindaFalta)}
+                  {r.estimadosOrcado > 0 && <div className="text-[10px] font-normal" style={{ color: COR_POTENCIAL }} title="Potencial a economizar: orçado dos itens estimados">pot. {num2(r.estimadosOrcado)}</div>}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -145,7 +148,9 @@ export function TabelaLocal({ local, projetos, totais, onAbrir }: Props) {
               <td className={TD} style={{ color: totais.liquida >= 0 ? COR_ECONOMIA : COR_FALTA }}>{num2OuTraco(totais.liquida)}</td>
               <td className={`${TD} text-text-muted`}>{num2OuTraco(totais.fechadosZero)}</td>
               <td className={TD}><Cobertura r={totais} /></td>
-              <td className={TD} style={{ color: totais.falta <= 0 ? undefined : totais.aindaFalta > 0 ? COR_FALTA : COR_ECONOMIA }}>{totais.falta <= 0 ? '—' : num2(totais.aindaFalta)}</td>
+              <td className={TD} style={{ color: totais.falta <= 0 ? undefined : totais.aindaFalta > 0 ? COR_FALTA : COR_ECONOMIA }}>{totais.falta <= 0 ? '—' : num2(totais.aindaFalta)}
+                {totais.estimadosOrcado > 0 && <div className="text-[10px] font-normal" style={{ color: COR_POTENCIAL }}>pot. {num2(totais.estimadosOrcado)}</div>}
+              </td>
             </tr>
           </tfoot>
         </table>
@@ -185,6 +190,12 @@ export function TabelaLocal({ local, projetos, totais, onAbrir }: Props) {
                 <span>Cobertura</span>
                 <div className="ml-auto"><Cobertura r={r} /></div>
               </div>
+              {r.estimadosOrcado > 0 && (
+                <div className="mt-1 flex items-center justify-between text-[11px] text-text-muted">
+                  <span>Potencial (estimados)</span>
+                  <b className="tabular-nums" style={{ color: COR_POTENCIAL }}>{num2(r.estimadosOrcado)}</b>
+                </div>
+              )}
             </button>
           </li>
         ))}

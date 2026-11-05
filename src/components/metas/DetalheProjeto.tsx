@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { COR_LOCAL, type DetalheItem, type ResultadoProjeto } from '../../lib/economiaFechados'
 import { padronizarCaixa } from '../../utils/caixa'
 import { corMargem } from '../../utils/metasMargem'
-import { COR_ECONOMIA, COR_FALTA, TEXTO_AVISO, ensinoCurto, num2, pct0, pct1, reais } from './formato'
+import { COR_ECONOMIA, COR_FALTA, COR_POTENCIAL, TEXTO_AVISO, ensinoCurto, num2, pct0, pct1, reais } from './formato'
 
 interface Props {
   r: ResultadoProjeto
@@ -41,7 +41,7 @@ function Lista({ titulo, subtitulo, itens, cor, vazio, mostrarDif = true, max }:
           {/* cabeçalho (só desktop) */}
           <div className="hidden grid-cols-[minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] gap-2 border-b border-white/10 bg-white/[0.03] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted sm:grid">
             <span>Item</span><span>Aba</span><span>Bloco</span>
-            <span className="text-right">Orçado</span><span className="text-right">Contratado</span><span className="text-right">{mostrarDif ? 'Diferença' : ''}</span>
+            <span className="text-right">Orçado</span><span className="text-right">{mostrarDif ? 'Contratado' : ''}</span><span className="text-right">{mostrarDif ? 'Diferença' : ''}</span>
           </div>
           <ul className="divide-y divide-white/5">
             {itens.map((d, i) => (
@@ -51,11 +51,11 @@ function Lista({ titulo, subtitulo, itens, cor, vazio, mostrarDif = true, max }:
                 <span className="hidden truncate text-text-muted sm:block" title={d.bloco}>{padronizarCaixa(d.bloco)}</span>
                 <span className="order-last col-span-2 text-[11px] text-text-muted sm:hidden">{padronizarCaixa(d.aba)} · {padronizarCaixa(d.bloco)}</span>
                 <span className="hidden text-right tabular-nums text-text-main sm:block">{num2(d.orcado)}</span>
-                <span className="hidden text-right tabular-nums text-text-main sm:block">{num2(d.contratado)}</span>
+                <span className="hidden text-right tabular-nums text-text-main sm:block">{mostrarDif ? num2(d.contratado) : ''}</span>
                 <span className="text-right font-semibold tabular-nums" style={{ color: d.dif > 0 ? COR_ECONOMIA : d.dif < 0 ? COR_FALTA : undefined }}>
-                  {mostrarDif ? `${d.dif > 0 ? '+' : ''}${num2(d.dif)}` : num2(d.orcado)}
+                  {mostrarDif ? `${d.dif > 0 ? '+' : ''}${num2(d.dif)}` : <span className="sm:hidden">{num2(d.orcado)}</span>}
                 </span>
-                <span className="col-span-2 text-[11px] tabular-nums text-text-muted sm:hidden">orçado {num2(d.orcado)} · contratado {num2(d.contratado)}</span>
+                {mostrarDif && <span className="col-span-2 text-[11px] tabular-nums text-text-muted sm:hidden">orçado {num2(d.orcado)} · contratado {num2(d.contratado)}</span>}
               </li>
             ))}
           </ul>
@@ -116,7 +116,7 @@ export function DetalheProjeto({ r, onFechar }: Props) {
             <Mini rotulo="Economias" valor={reais(r.economias)} cor={COR_ECONOMIA} />
             <Mini rotulo="Estouros" valor={reais(r.estouros)} cor={r.estouros > 0 ? COR_FALTA : undefined} />
             <Mini rotulo="Fechados a zero" valor={reais(r.fechadosZero)} />
-            <Mini rotulo="Itens fechados" valor={String(r.nFechados)} />
+            <Mini rotulo="Potencial (estimados)" valor={reais(r.estimadosOrcado)} cor={COR_POTENCIAL} />
           </div>
 
           {r.avisos.length > 0 && (
@@ -137,10 +137,14 @@ export function DetalheProjeto({ r, onFechar }: Props) {
             max={288}
           />
 
-          <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs text-text-muted">
-            Ainda em aberto (itens não fechados): <b className="tabular-nums text-text-main">{reais(r.abertoOrcado)}</b> de orçado — é o que ainda pode render
-            economia (ou estouro) até o fechamento.
-          </p>
+          <Lista
+            titulo="Potencial a economizar"
+            subtitulo={`${r.nEstimados} ${r.nEstimados === 1 ? 'item estimado' : 'itens estimados'} · ${reais(r.estimadosOrcado)} de orçado ainda não contratado`}
+            itens={r.estimados.slice(0, 15).map((e) => ({ aba: e.aba, bloco: e.bloco, item: e.item, orcado: e.orcado, contratado: 0, dif: 0 }))}
+            cor={COR_POTENCIAL}
+            vazio="Nenhum item com status estimado."
+            mostrarDif={false}
+          />
         </div>
       </div>
     </div>

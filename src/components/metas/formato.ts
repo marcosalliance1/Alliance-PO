@@ -5,6 +5,7 @@ export const COR_FALTA = '#d93f44'
 export const COR_ECONOMIA = '#0e9060'
 export const COR_NEUTRA = '#8892a4'
 export const COR_META = '#c2680a'
+export const COR_POTENCIAL = '#3b82c4' // azul: ainda não é economia, é onde pode haver
 
 export const num2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 export const reais = (n: number) => `${n < 0 ? '-' : ''}R$ ${num2(Math.abs(n))}`

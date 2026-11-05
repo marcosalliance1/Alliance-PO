@@ -11,7 +11,7 @@
 //     Economias = Σ d (d>0) · Estouros = Σ −d (d<0) · Líquida = Economias − Estouros
 //     Fechados a zero = Σ orçado dos fechados com contratado = 0 e orçado > 0
 //   Cobertura = Líquida ÷ FALTA · AINDA FALTA = FALTA − Líquida
-//   AINDA FALTA conservador = FALTA − (Líquida − Fechados a zero)
+//   Potencial a economizar = Σ orçado dos itens com status 'estimado' (ainda não contratados; é onde ainda pode haver economia)
 
 export type Ensino = 'MEDIO' | 'SUPERIOR' | 'FUNDAMENTAL'
 export interface MetasPct { MEDIO: number; SUPERIOR: number; FUNDAMENTAL: number }
@@ -106,6 +106,13 @@ export interface DetalheItem {
   dif: number // orçado − contratado (positivo = economia)
 }
 
+export interface DetalheEstimado {
+  aba: string
+  bloco: string
+  item: string
+  orcado: number
+}
+
 export type FonteValores = 'planilha' | 'itens' | 'sem-dado'
 export type Aviso = 'sem-receita' | 'sem-ensino' | 'sem-fechados' | 'fonte-itens' | 'local-corrigido'
 
@@ -135,8 +142,9 @@ export interface ResultadoProjeto {
   fechadosZero: number
   cobertura: number | null // liquida ÷ falta (null quando não há falta)
   aindaFalta: number
-  aindaFaltaConservador: number
-  abertoOrcado: number // Σ orçado dos itens ainda NÃO fechados (potencial de economia)
+  nEstimados: number
+  estimadosOrcado: number // Σ orçado dos itens 'estimado': potencial a economizar
+  estimados: DetalheEstimado[] // maiores primeiro
   detalhe: DetalheItem[]
   avisos: Aviso[]
   atualizadoEm: string | null
@@ -170,7 +178,8 @@ export function calcularProjeto(p: ProjetoBruto, metas: MetasPct = METAS_PADRAO)
 
   // ── itens: soma dos orçados (fallback) + fechados ──
   let custoItens = 0
-  let abertoOrcado = 0
+  let estimadosOrcado = 0
+  const estimados: DetalheEstimado[] = []
   let orcadoFechados = 0
   let contratadoFechados = 0
   let economias = 0
@@ -183,7 +192,13 @@ export function calcularProjeto(p: ProjetoBruto, metas: MetasPct = METAS_PADRAO)
     for (const it of itensDeCalculo(s.itens ?? [])) {
       const o = n0(it.valorOrcado)
       custoItens += o
-      if (it.status !== 'fechado') { abertoOrcado += o; continue }
+      if (it.status !== 'fechado') {
+        if (it.status === 'estimado' && o > 0) {
+          estimadosOrcado += o
+          estimados.push({ aba, bloco: (it.subcategoria ?? '').trim(), item: (it.item ?? '').trim() || (it.subcategoria ?? '').trim() || '(sem nome)', orcado: o })
+        }
+        continue
+      }
       const c = n0(it.valorContratado)
       const d = o - c
       orcadoFechados += o
@@ -237,27 +252,8 @@ export function calcularProjeto(p: ProjetoBruto, metas: MetasPct = METAS_PADRAO)
     nFechados: detalhe.length, orcadoFechados, contratadoFechados, economias, estouros, liquida, fechadosZero,
     cobertura: falta > 0 ? liquida / falta : null,
     aindaFalta: falta - liquida,
-    aindaFaltaConservador: falta - (liquida - fechadosZero),
-    abertoOrcado, detalhe, avisos, atualizadoEm: p.atualizado_em ?? null,
-  }
-}
-
-/**
- * Visão conservadora ("Descontar fechados a zero"): tira da economia o orçado dos itens fechados com contratado R$ 0
- * (podem ser itens que se resolveram em outra linha, não economia real). Recalcula economias, líquida,
- * cobertura e AINDA FALTA; "fechadosZero" continua informado.
- */
-export function descontarFechadosZero(r: ResultadoProjeto): ResultadoProjeto {
-  if (r.fechadosZero === 0) return r
-  const economias = r.economias - r.fechadosZero
-  const liquida = r.liquida - r.fechadosZero
-  return {
-    ...r,
-    economias,
-    liquida,
-    cobertura: r.falta > 0 ? liquida / r.falta : null,
-    aindaFalta: r.falta - liquida,
-    aindaFaltaConservador: r.falta - liquida,
+    nEstimados: estimados.length, estimadosOrcado, estimados: estimados.sort((a, b) => b.orcado - a.orcado),
+    detalhe, avisos, atualizadoEm: p.atualizado_em ?? null,
   }
 }
 
@@ -274,13 +270,13 @@ export interface Totais {
   fechadosZero: number
   cobertura: number | null
   aindaFalta: number
-  aindaFaltaConservador: number
+  estimadosOrcado: number
 }
 
 export function somarResultados(rs: ResultadoProjeto[]): Totais {
   const t: Totais = {
     nProjetos: rs.length, nAbaixoMeta: 0, receita: 0, falta: 0, excedente: 0, economias: 0, estouros: 0,
-    liquida: 0, fechadosZero: 0, cobertura: null, aindaFalta: 0, aindaFaltaConservador: 0,
+    liquida: 0, fechadosZero: 0, cobertura: null, aindaFalta: 0, estimadosOrcado: 0,
   }
   for (const r of rs) {
     t.receita += r.receita ?? 0
@@ -291,9 +287,7 @@ export function somarResultados(rs: ResultadoProjeto[]): Totais {
     t.liquida += r.liquida
     t.fechadosZero += r.fechadosZero
     t.aindaFalta += r.falta - r.liquida
-    // soma o conservador de cada projeto (e não recalcula a partir dos totais): assim continua certo
-    // quando a visão "descontar fechados a zero" já abateu o zero da líquida
-    t.aindaFaltaConservador += r.aindaFaltaConservador
+    t.estimadosOrcado += r.estimadosOrcado
     if (r.falta > 0) t.nAbaixoMeta++
   }
   t.cobertura = t.falta > 0 ? t.liquida / t.falta : null
