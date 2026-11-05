@@ -1,4 +1,4 @@
-import type { Projeto, SecaoCusto, ItemCusto, StatusItem, StatusPagamento, TipoCusto, TAP, TipoEscola, Receitas, LinhaResumoComercial } from '../types'
+import type { Projeto, SecaoCusto, ItemCusto, StatusItem, StatusPagamento, TipoCusto, TAP, TipoEscola, Receitas, LinhaResumoComercial, CustoAdicional } from '../types'
 import { v4 as uuid } from './uuid'
 
 
@@ -11,6 +11,8 @@ export interface SyncResult {
   totalAdesoesAtual: number | null
   /** ORÇADO do "1. RESUMO GERAL" (receita, custo total, margem). null = layout não reconhecido → não grava. */
   resumoGeralOrcado: ResumoGeralOrcado | null
+  /** Linhas "Verba extra" da P.O.; null = layout não reconhecido (não mexe nos custos adicionais do app). */
+  verbasExtra: VerbaExtraPO[] | null
   avisos: string[]
 }
 
@@ -72,6 +74,86 @@ export function lerResumoOrcado(v: unknown[][]): ResumoGeralOrcado | null {
     margem: g(rowMargem),
     celulas: `${c}${rowRec + 1}/${c}${rowCusto + 1}/${rowMargem >= 0 ? c + (rowMargem + 1) : '-'}`,
   }
+}
+
+// ── Verba Extra: a P.O. manda ───────────────────────────────────────────────────────────────────
+// As linhas "Verba extra…" do 1. RESUMO GERAL (entre a receita e o CUSTO TOTAL) alimentam os "Custos adicionais"
+// do app. Antes elas eram digitadas à mão e divergiam da P.O. Mesma regra do sync_pos.js.
+export interface VerbaExtraPO { descricao: string; vendido: number; orcado: number; contratado: number; pago: number }
+
+const COL_ORCADO_PADRAO = 8 // coluna I: nos outros layouts as colunas de contratado/pago ficam em outro lugar
+
+/** Linhas "Verba extra…" da P.O. Devolve null se o layout do Resumo Geral não é o padrão (aí o app não é tocado). */
+export function lerVerbasExtra(v: unknown[][]): VerbaExtraPO[] | null {
+  const n = (x: unknown) => norm(String(x ?? ''))
+  let rowRec = -1
+  let colLab = -1
+  for (let i = 0; i < v.length && rowRec < 0; i++) {
+    for (let j = 0; j < 4; j++) {
+      if (/^(receita baile|receita total)\b/.test(n((v[i] ?? [])[j]))) { rowRec = i; colLab = j; break }
+    }
+  }
+  if (rowRec < 0) return null
+  let colOrc = -1
+  for (let i = rowRec - 1; i >= 0 && colOrc < 0; i--) {
+    ;(v[i] ?? []).forEach((c, j) => { if (colOrc < 0 && n(c) === 'orcado') colOrc = j })
+  }
+  if (colOrc !== COL_ORCADO_PADRAO) return null
+  let rowCusto = -1
+  for (let i = rowRec + 1; i < v.length && rowCusto < 0; i++) {
+    if (/^custo total\b/.test(n((v[i] ?? [])[colLab]))) rowCusto = i
+  }
+  if (rowCusto < 0) return null
+  const num = (c: unknown) => numResumo(c) ?? 0
+  const out: VerbaExtraPO[] = []
+  for (let i = rowRec + 1; i < rowCusto; i++) {
+    const row = v[i] ?? []
+    if (!n(row[colLab]).startsWith('verba extra')) continue
+    out.push({
+      descricao: String(row[colLab]).trim(),
+      vendido: num(row[2]), // C
+      orcado: num(row[colOrc]), // I
+      contratado: num(row[colOrc + 4]), // M
+      pago: num(row[colOrc + 7]), // P (conciliação Everest)
+    })
+  }
+  return out
+}
+
+/**
+ * Aplica as Verbas Extra da P.O. nos custos adicionais do app: a P.O. manda.
+ * - Só mexe em linhas cujo nome começa com "verba extra" (Fee Alliance e outras ficam como estão).
+ * - Linha da P.O. com o mesmo nome → atualiza os valores e mantém o id; sem par → cria.
+ * - Linha do app sem par na P.O. → sai (a P.O. não tem mais essa verba).
+ * - Linha da P.O. toda zerada e sem par no app → não cria (evita linha vazia).
+ * - verbas === null (layout não reconhecido) → devolve a lista como veio, intacta.
+ */
+export function mesclarVerbasExtra(atual: CustoAdicional[], verbas: VerbaExtraPO[] | null, novoId: () => string): CustoAdicional[] {
+  if (verbas === null) return atual
+  const ehVerba = (d: string) => norm(d).startsWith('verba extra')
+  const pool = atual.filter((c) => ehVerba(c.descricao))
+  const casados = new Map<string, CustoAdicional>() // id antigo → linha atualizada (mantém a posição)
+  const criados: CustoAdicional[] = []
+  for (const vb of verbas) {
+    const i = pool.findIndex((a) => norm(a.descricao) === norm(vb.descricao))
+    const par = i >= 0 ? pool.splice(i, 1)[0] : undefined
+    const zerada = vb.vendido === 0 && vb.orcado === 0 && vb.contratado === 0 && vb.pago === 0
+    if (par) casados.set(par.id, { id: par.id, descricao: par.descricao, vendido: vb.vendido, orcado: vb.orcado, contratado: vb.contratado, pago: vb.pago })
+    else if (!zerada) criados.push({ id: novoId(), descricao: vb.descricao, vendido: vb.vendido, orcado: vb.orcado, contratado: vb.contratado, pago: vb.pago })
+  }
+  // linhas que não são Verba Extra ficam; Verba Extra casada é atualizada no mesmo lugar; sem par na P.O. sai
+  const mantidos = atual.flatMap((c) => (!ehVerba(c.descricao) ? [c] : casados.has(c.id) ? [casados.get(c.id)!] : []))
+  return [...mantidos, ...criados]
+}
+
+/** Compara duas listas de custos adicionais campo a campo (a ordem das chaves do JSON do banco não importa). */
+export function custosIguais(a: CustoAdicional[], b: CustoAdicional[]): boolean {
+  if (a.length !== b.length) return false
+  return a.every((x, i) => {
+    const y = b[i]
+    return x.id === y.id && x.descricao === y.descricao && (x.vendido || 0) === (y.vendido || 0) && (x.orcado || 0) === (y.orcado || 0)
+      && (x.contratado || 0) === (y.contratado || 0) && (x.pago || 0) === (y.pago || 0)
+  })
 }
 
 const MAPA_SECOES: Record<string, string> = {
@@ -718,6 +800,7 @@ export async function sincronizarComSheets(
   let receitasParsed: Partial<Receitas> = {}
   let resumoEncontrado = false
   let resumoGeralOrcado: ResumoGeralOrcado | null = null
+  let verbasExtra: VerbaExtraPO[] | null = null
   let resumoComercialParsed: LinhaResumoComercial[] = []
   let totalConvidadosAtual: number | null = null
   let totalAdesoesAtual: number | null = null
@@ -788,7 +871,7 @@ export async function sincronizarComSheets(
         const values = await fetchAba(spreadsheetId, nomeAba, accessToken, `'${nomeAba}'!A1:Z100`)
         if (values) {
           receitasParsed = parseReceitasFromResumo(values)
-          if (!ehAbaBackup(nomeAba)) resumoGeralOrcado = lerResumoOrcado(values)
+          if (!ehAbaBackup(nomeAba)) { resumoGeralOrcado = lerResumoOrcado(values); verbasExtra = lerVerbasExtra(values) }
         }
       } catch (e) {
         if ((e as Error & { tipo?: string }).tipo === 'TOKEN_EXPIRADO') throw e
@@ -945,6 +1028,7 @@ export async function sincronizarComSheets(
     totalConvidadosAtual,
     totalAdesoesAtual,
     resumoGeralOrcado,
+    verbasExtra,
     avisos,
   }
 }

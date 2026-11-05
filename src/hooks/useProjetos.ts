@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Projeto, SecaoCusto, ItemCusto, TAP, Receitas, ConciliacaoEverest, CustoAdicional, LinhaResumoComercial, InfoEvento } from '../types'
 import type { SyncResult } from '../utils/sheetsSync'
+import { mesclarVerbasExtra, custosIguais } from '../utils/sheetsSync'
 import { v4 as uuid } from '../utils/uuid'
 import { getSecoesPorTipo } from '../data/secoesPorTipo'
 import { calcItemTotais, filtrarItensCalculo, migrateReceitas, emptyReceitas } from '../utils/calculos'
@@ -298,10 +299,16 @@ export function useProjetos() {
       observacaoGeral: projeto.conciliacaoEverest?.observacaoGeral ?? '',
     }
 
+    // Verba Extra: a P.O. manda (layout não reconhecido → null → custos adicionais intactos)
+    const custosAtuais = projeto.custosAdicionais ?? []
+    const novosCustos = mesclarVerbasExtra(custosAtuais, result.verbasExtra, uuid)
+    const custosMudaram = novosCustos !== custosAtuais && !custosIguais(novosCustos, custosAtuais)
+
     const now = new Date().toISOString()
     const { error: err } = await supabase
       .from('projetos')
       .update({
+        ...(custosMudaram ? { custos_adicionais: novosCustos } : {}),
         secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacao_everest: novaConciliacao, resumo_comercial: result.resumoComercial, total_convidados_atual: result.totalConvidadosAtual ?? null, total_adesoes_atual: result.totalAdesoesAtual ?? null, atualizado_em: now,
         // só grava quando o layout foi reconhecido — nunca zera um orçado já salvo
         ...(result.resumoGeralOrcado && result.resumoGeralOrcado.receita != null && result.resumoGeralOrcado.custo != null
@@ -312,7 +319,7 @@ export function useProjetos() {
     if (err) throw new Error(err.message)
     setProjetos((prev) => prev.map((p) =>
       p.id === id
-        ? { ...p, secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacaoEverest: novaConciliacao, resumoComercial: result.resumoComercial, totalConvidadosAtual: result.totalConvidadosAtual ?? undefined, totalAdesoesAtual: result.totalAdesoesAtual ?? undefined, atualizadoEm: now }
+        ? { ...p, ...(custosMudaram ? { custosAdicionais: novosCustos } : {}), secoes: result.secoes, tap: novoTAP, receitas: novasReceitas, conciliacaoEverest: novaConciliacao, resumoComercial: result.resumoComercial, totalConvidadosAtual: result.totalConvidadosAtual ?? undefined, totalAdesoesAtual: result.totalAdesoesAtual ?? undefined, atualizadoEm: now }
         : p
     ))
   }, [projetos])
