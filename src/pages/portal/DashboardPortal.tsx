@@ -388,47 +388,43 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
                   const key = maeAtual?.key ?? `sub:${label}`
                   grupoPorId.set(it.id, { key, label })
                 })
-                const porSubcat: Record<string, { label: string; contratado: number; pago: number; itens: typeof itensFiltrados }> = {}
-                for (const item of itensFiltrados) {
-                  const fallback = item.subcategoria?.trim() || item.area?.trim() || 'Geral'
-                  const g = grupoPorId.get(item.id) ?? { key: `sub:${fallback}`, label: fallback }
-                  if (!porSubcat[g.key]) porSubcat[g.key] = { label: g.label, contratado: 0, pago: 0, itens: [] }
-                  porSubcat[g.key].contratado += item.valorContratado
-                  porSubcat[g.key].pago += item.valorPago
-                  porSubcat[g.key].itens.push(item)
-                }
+                const totalSecao = itensFiltrados.reduce((s, i) => s + (i.valorContratado || 0), 0)
+                let maeRenderizada: string | null = null
                 return (
                   <div className="border-t border-white/8 px-4 pb-4 pt-3">
-                    {/* Cabeçalho de colunas — estilo tabela da P.O. */}
+                    {/* Tabela estilo P.O.: Item · Fornecedor · Valor */}
                     <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_7rem] gap-x-3 px-1 pb-1.5 text-[10px] uppercase tracking-wide text-text-muted/50">
                       <span>Item</span>
                       <span>Fornecedor</span>
                       <span className="text-right">Valor</span>
                     </div>
-                    {Object.entries(porSubcat).map(([key, vals]) => {
-                      const mostrarGrupo = (vals.label ?? '').trim().toLowerCase() !== 'geral'
-                      return (
-                        <div key={key} className="border-t border-white/8 pt-2 mt-2 first:border-t-0 first:pt-0 first:mt-0">
-                          {/* Separador do item-mãe / subcategoria + subtotal */}
-                          {mostrarGrupo && (
-                            <div className="grid grid-cols-[1fr_7rem] gap-x-3 px-1 pb-1">
-                              <span className="text-xs font-semibold text-text-main truncate">{vals.label}</span>
-                              <span className="text-xs font-semibold text-text-main tabular-nums text-right">{fmtBRL(vals.contratado)}</span>
-                            </div>
-                          )}
-                          {/* Linhas: Item · Fornecedor · Valor (lado a lado, como na P.O.) */}
-                          <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_7rem] gap-x-3 gap-y-1 px-1 text-xs">
-                            {vals.itens.map(item => (
-                              <div key={item.id} className="contents">
-                                <span className="text-text-main truncate" title={item.item || vals.label}>{item.item || vals.label}</span>
-                                <span className="text-text-muted truncate" title={item.fornecedor?.trim() || ''}>{item.fornecedor?.trim() || '—'}</span>
-                                <span className="text-text-main tabular-nums text-right whitespace-nowrap">{fmtBRL(item.valorContratado)}</span>
-                              </div>
-                            ))}
+                    <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_7rem] gap-x-3 gap-y-1.5 px-1 text-xs">
+                      {itensFiltrados.map(item => {
+                        const g = grupoPorId.get(item.id)
+                        const ehMae = g?.key?.startsWith('mae:') ?? false
+                        const mostrarSep = ehMae && g!.label !== maeRenderizada
+                        if (ehMae) maeRenderizada = g!.label
+                        // Normaliza: em algumas P.O.s o fornecedor guarda a QTD (número) e os
+                        // nomes vêm trocados (item real na subcategoria, fornecedor real no campo item).
+                        const forn = (item.fornecedor ?? '').trim()
+                        const fornEhQtd = forn !== '' && /^\d+([.,]\d+)?$/.test(forn)
+                        const nomeItem = (fornEhQtd ? (item.subcategoria?.trim() || item.item?.trim()) : (item.item?.trim() || item.subcategoria?.trim())) || '—'
+                        const nomeForn = (fornEhQtd ? item.item?.trim() : forn) || ''
+                        return (
+                          <div key={item.id} className="contents">
+                            {mostrarSep && (
+                              <span className="col-span-3 text-xs font-semibold text-text-main pt-1.5">{g!.label}</span>
+                            )}
+                            <span className="text-text-main truncate" title={nomeItem}>{nomeItem}</span>
+                            <span className="text-text-muted truncate" title={nomeForn}>{nomeForn || '—'}</span>
+                            <span className="text-text-main tabular-nums text-right whitespace-nowrap">{fmtBRL(item.valorContratado)}</span>
                           </div>
-                        </div>
-                      )
-                    })}
+                        )
+                      })}
+                      {/* Somatório da seção */}
+                      <span className="col-span-2 text-xs font-semibold text-text-main border-t border-white/10 pt-2 mt-0.5">Total</span>
+                      <span className="text-xs font-semibold text-text-main tabular-nums text-right border-t border-white/10 pt-2 mt-0.5 whitespace-nowrap">{fmtBRL(totalSecao)}</span>
+                    </div>
                   </div>
                 )
               })()}
