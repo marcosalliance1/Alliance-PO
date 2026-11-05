@@ -354,12 +354,14 @@ function parseItens(
       }
     }
 
-    const responsavel = parseStr(get(20))
-    const status = parseStatus(get(21))
-    const statusPagamento = parsePgto(get(24))
-    const valorFinal = parseNum(get(26))
-    const valorPago = parseNum(get(layout === 'B' ? 26 : 27))  // Layout A=AB(27) Layout B=AA(26)
-    const faltaPagar = parseNum(get(28))
+    // Layout B: da coluna do responsável em diante tudo anda 1 para a esquerda (A: V=status, Y=pgto, AA=final, AB=pago, AC=falta pagar)
+    const dB = layout === 'B' ? 1 : 0
+    const responsavel = parseStr(get(20 - dB))
+    const status = parseStatus(get(21 - dB))
+    const statusPagamento = parsePgto(get(24 - dB))
+    const valorFinal = parseNum(get(26 - dB))
+    const valorPago = parseNum(get(27 - dB))  // Layout A=AB(27) Layout B=AA(26)
+    const faltaPagar = parseNum(get(28 - dB))
 
     const idItem = uuid()
     if (blocoAtual) blocoPorItem.set(idItem, blocoAtual)
