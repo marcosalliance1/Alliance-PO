@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
-import { CheckCircle2, AlertTriangle, LogOut, ChevronDown, ChevronRight, Download, Wallet, CalendarDays, ArrowRight, Gift } from 'lucide-react'
+import { LogOut, ChevronDown, ChevronRight, Download, Wallet, CalendarDays, ArrowRight, Gift } from 'lucide-react'
 import { gerarPrestacaoContas } from '../../lib/gerarPrestacaoContas'
 import { supabase } from '../../lib/supabase'
 import { usePortalAuth } from '../../contexts/PortalAuthContext'
@@ -64,7 +64,32 @@ function feeCerimonialPct(projeto: Projeto): number {
 
 function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; vencimentos: CapVencimento[] }) {
   const resumo = useMemo(() => calcResumoProjeto(projeto), [projeto])
-  const receitaRecebida = resumo.receitaBaile.pago
+
+  // Receita vem do SGE (posição ao vivo), a fonte mais fiel da realidade. Fallback
+  // para a P.O. (Everest recebido / orçado) quando a turma não está mapeada no SGE.
+  const [sge, setSge] = useState<{ recebido: number; previsto: number; atualizadoEm: string } | null>(null)
+  useEffect(() => {
+    if (!projeto.id) return
+    let cancel = false
+    supabase
+      .from('sge_receita_portal')
+      .select('recebido, previsto, sge_atualizado_em')
+      .eq('projeto_id', projeto.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancel && data) {
+          setSge({
+            recebido: Number(data.recebido) || 0,
+            previsto: Number(data.previsto) || 0,
+            atualizadoEm: String(data.sge_atualizado_em ?? '').slice(0, 10),
+          })
+        }
+      })
+    return () => { cancel = true }
+  }, [projeto.id])
+  const temSge = sge != null
+
+  const receitaRecebida = temSge ? sge.recebido : resumo.receitaBaile.pago
   const ccPct = feeCerimonialPct(projeto)
   const fee = receitaRecebida * (ccPct / 100)
   const arrecadadoLiquido = receitaRecebida - fee
@@ -74,10 +99,12 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
   const saldoLiquido = arrecadadoLiquido - custoPago
   const pctPago = custoContratado > 0 ? Math.min(100, (custoPago / custoContratado) * 100) : 0
 
-  // Previsão de receita em valores BRUTOS (igual à P.O.): previsto = ORÇADO (fallback
-  // contratado), já entrou = recebido do Everest. O fee aparece como divisória: parte já
-  // foi (do recebido) e parte ainda vai (do que falta receber).
-  const receitaPrevista = resumo.receitaBaile.orcado || resumo.receitaBaile.contratado
+  // Previsão de receita em valores BRUTOS: previsto = posição total do SGE (recebido +
+  // a vencer + vencido), já entrou = recebido do SGE. O fee aparece como divisória:
+  // parte já foi (do recebido) e parte ainda vai (do que falta receber).
+  const receitaPrevista = temSge
+    ? sge.previsto
+    : resumo.receitaBaile.orcado || resumo.receitaBaile.contratado
   const feeRecebido = receitaRecebida * (ccPct / 100)
   const liqRecebido = receitaRecebida - feeRecebido
   const aReceberBruto = Math.max(0, receitaPrevista - receitaRecebida)
@@ -150,7 +177,9 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
         <div className="bg-bg rounded-xl px-4 py-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-text-main text-xs font-medium">Previsão de receita da turma</span>
-            <span className="text-[10px] uppercase tracking-wide text-text-muted/70 border border-white/10 rounded px-1.5 py-0.5">estimativa</span>
+            <span className="text-[10px] uppercase tracking-wide text-text-muted/70 border border-white/10 rounded px-1.5 py-0.5">
+              {temSge ? `SGE${sge.atualizadoEm ? ' · ' + fmtData(sge.atualizadoEm) : ''}` : 'estimativa'}
+            </span>
           </div>
 
           {/* Barra segmentada: turma (verde) + fee (âmbar); tom cheio = recebido, tom claro = a receber. Divisória no ponto de hoje. */}
@@ -197,10 +226,14 @@ function SecaoFinanceiro({ projeto, vencimentos: _v }: { projeto: Projeto; venci
           </div>
 
           <div className="flex justify-between text-xs border-t border-white/8 pt-2">
-            <span className="text-text-main font-medium">Previsto total (orçado)</span>
+            <span className="text-text-main font-medium">{temSge ? 'Previsto total (SGE)' : 'Previsto total (orçado)'}</span>
             <span className="text-text-main font-semibold tabular-nums">{fmtBRL(receitaPrevista)}</span>
           </div>
-          <div className="text-text-muted/50 text-[10px]">Estimativa pela receita orçada da P.O. Não considera inadimplência.</div>
+          <div className="text-text-muted/50 text-[10px]">
+            {temSge
+              ? 'Posição ao vivo do SGE (recebido + a vencer + vencido). Não considera inadimplência.'
+              : 'Estimativa pela receita orçada da P.O. Não considera inadimplência.'}
+          </div>
         </div>
       )}
 
@@ -366,45 +399,33 @@ function SecaoPO({ projeto }: { projeto: Projeto }) {
                 }
                 return (
                   <div className="border-t border-white/8 px-4 pb-4 pt-3">
+                    {/* Cabeçalho de colunas — estilo tabela da P.O. */}
+                    <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_7rem] gap-x-3 px-1 pb-1.5 text-[10px] uppercase tracking-wide text-text-muted/50">
+                      <span>Item</span>
+                      <span>Fornecedor</span>
+                      <span className="text-right">Valor</span>
+                    </div>
                     {Object.entries(porSubcat).map(([key, vals]) => {
-                      const p = vals.contratado > 0 ? Math.min(100, (vals.pago / vals.contratado) * 100) : 0
+                      const mostrarGrupo = (vals.label ?? '').trim().toLowerCase() !== 'geral'
                       return (
-                        <div key={key} className="space-y-1 border-t border-white/8 pt-3 mt-3 first:border-t-0 first:pt-0 first:mt-0">
-                          <div className="flex items-center gap-3">
-                            {vals.contratado > 0
-                              ? <CheckCircle2 size={13} className="text-success shrink-0" />
-                              : <AlertTriangle size={13} className="text-warning/60 shrink-0" />
-                            }
-                            <span className="text-sm text-text-main font-semibold flex-1">{vals.label}</span>
-                            <span className="text-xs text-text-main font-medium tabular-nums shrink-0">{fmtBRL(vals.contratado)}</span>
+                        <div key={key} className="border-t border-white/8 pt-2 mt-2 first:border-t-0 first:pt-0 first:mt-0">
+                          {/* Separador do item-mãe / subcategoria + subtotal */}
+                          {mostrarGrupo && (
+                            <div className="grid grid-cols-[1fr_7rem] gap-x-3 px-1 pb-1">
+                              <span className="text-xs font-semibold text-text-main truncate">{vals.label}</span>
+                              <span className="text-xs font-semibold text-text-main tabular-nums text-right">{fmtBRL(vals.contratado)}</span>
+                            </div>
+                          )}
+                          {/* Linhas: Item · Fornecedor · Valor (lado a lado, como na P.O.) */}
+                          <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_7rem] gap-x-3 gap-y-1 px-1 text-xs">
+                            {vals.itens.map(item => (
+                              <div key={item.id} className="contents">
+                                <span className="text-text-main truncate" title={item.item || vals.label}>{item.item || vals.label}</span>
+                                <span className="text-text-muted truncate" title={item.fornecedor?.trim() || ''}>{item.fornecedor?.trim() || '—'}</span>
+                                <span className="text-text-main tabular-nums text-right whitespace-nowrap">{fmtBRL(item.valorContratado)}</span>
+                              </div>
+                            ))}
                           </div>
-                          {vals.contratado > 0 && (
-                            <div className="ml-[25px] h-1 bg-white/10 rounded-full overflow-hidden">
-                              <div className="h-full bg-success/60 rounded-full" style={{ width: `${p}%` }} />
-                            </div>
-                          )}
-
-                          {/* Itens da subcategoria — qual item custou o quê */}
-                          {vals.itens.length > 0 && (
-                            <div className="ml-[25px] mt-1.5 space-y-1.5 border-l border-white/8 pl-3">
-                              {vals.itens.map(item => {
-                                const pi = item.valorContratado > 0 ? Math.min(100, (item.valorPago / item.valorContratado) * 100) : 0
-                                return (
-                                  <div key={item.id} className="space-y-0.5">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-xs text-text-muted flex-1 truncate">{item.item || vals.label}</span>
-                                      <span className="text-[11px] text-text-main tabular-nums shrink-0">{fmtBRL(item.valorContratado)}</span>
-                                    </div>
-                                    {item.valorContratado > 0 && (
-                                      <div className="h-0.5 bg-white/10 rounded-full overflow-hidden">
-                                        <div className="h-full bg-success/50 rounded-full" style={{ width: `${pi}%` }} />
-                                      </div>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
                         </div>
                       )
                     })}
@@ -1044,7 +1065,7 @@ const TABS: { id: TabId; label: string }[] = [
 
 // ─── Capa do portal (tela inicial: turma + caminhos) ──────────────────────────
 
-function CapaPortal({ projeto, onIr }: { projeto: Projeto; onIr: (t: TabId) => void }) {
+function CapaPortal({ projeto, onIr, mostrarPreEventos }: { projeto: Projeto; onIr: (t: TabId) => void; mostrarPreEventos: boolean }) {
   const inst = projeto.tap.instituicao || ''
   const turma = projeto.tap.turma || 'Sua turma'
   const cardCls = 'bg-surface border border-white/8 rounded-2xl p-6 text-left transition-colors'
@@ -1055,7 +1076,7 @@ function CapaPortal({ projeto, onIr }: { projeto: Projeto; onIr: (t: TabId) => v
         <div className="text-text-main text-3xl font-bold mt-1">{turma}</div>
         <div className="text-text-muted text-sm mt-2">Bem-vindos, comissão de formatura 👋</div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${mostrarPreEventos ? 'sm:grid-cols-2' : ''}`}>
         <button onClick={() => onIr('financeiro')} className={`${cardCls} hover:border-success/50`}>
           <div className="w-11 h-11 rounded-xl bg-success/15 flex items-center justify-center mb-4">
             <Wallet size={22} className="text-success" />
@@ -1064,14 +1085,16 @@ function CapaPortal({ projeto, onIr }: { projeto: Projeto; onIr: (t: TabId) => v
           <div className="text-text-muted text-xs mt-1 leading-relaxed">Receitas, custos e a prestação de contas da turma.</div>
           <div className="text-primary text-xs mt-4 flex items-center gap-1">Abrir <ArrowRight size={13} /></div>
         </button>
-        <button onClick={() => onIr('pre-eventos')} className={`${cardCls} hover:border-warning/50`}>
-          <div className="w-11 h-11 rounded-xl bg-warning/15 flex items-center justify-center mb-4">
-            <CalendarDays size={22} className="text-warning" />
-          </div>
-          <div className="text-text-main text-lg font-semibold">Pré-Eventos</div>
-          <div className="text-text-muted text-xs mt-1 leading-relaxed">Cronograma e orçamento de cada festa da turma.</div>
-          <div className="text-primary text-xs mt-4 flex items-center gap-1">Abrir <ArrowRight size={13} /></div>
-        </button>
+        {mostrarPreEventos && (
+          <button onClick={() => onIr('pre-eventos')} className={`${cardCls} hover:border-warning/50`}>
+            <div className="w-11 h-11 rounded-xl bg-warning/15 flex items-center justify-center mb-4">
+              <CalendarDays size={22} className="text-warning" />
+            </div>
+            <div className="text-text-main text-lg font-semibold">Pré-Eventos</div>
+            <div className="text-text-muted text-xs mt-1 leading-relaxed">Cronograma e orçamento de cada festa da turma.</div>
+            <div className="text-primary text-xs mt-4 flex items-center gap-1">Abrir <ArrowRight size={13} /></div>
+          </button>
+        )}
       </div>
     </div>
   )
@@ -1139,6 +1162,9 @@ export function DashboardPortal() {
   const nomeEvento = [projeto.tap.instituicao, projeto.tap.turma].filter(Boolean).join(' — ')
   // Visão do cliente: remove linhas internas "Despesa Fee" antes de renderizar (spec #1).
   const projetoCliente = projetoVisaoCliente(projeto)
+  // Pré-eventos só existem para turmas de ensino superior (faculdade). Médio/fundamental não têm.
+  const temPreEventos = projeto.tap.tipoEscola === 'SUPERIOR'
+  const tabsVisiveis = temPreEventos ? TABS : TABS.filter(t => t.id !== 'pre-eventos')
 
   return (
     <div className="min-h-screen bg-bg">
@@ -1174,13 +1200,13 @@ export function DashboardPortal() {
       </header>
 
       {naCapa ? (
-        <CapaPortal projeto={projeto} onIr={(t) => { setTabAtiva(t); setNaCapa(false) }} />
+        <CapaPortal projeto={projeto} mostrarPreEventos={temPreEventos} onIr={(t) => { setTabAtiva(t); setNaCapa(false) }} />
       ) : (
         <>
           {/* Tabs */}
           <div className="border-b border-white/10 px-4 sm:px-8 overflow-x-auto">
             <div className="flex gap-0 min-w-max">
-              {TABS.map(({ id, label }) => (
+              {tabsVisiveis.map(({ id, label }) => (
                 <button
                   key={id}
                   onClick={() => setTabAtiva(id)}
