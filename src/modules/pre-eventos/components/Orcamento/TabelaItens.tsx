@@ -1,6 +1,7 @@
 ﻿import React, { memo, useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { Plus, Trash2, Paperclip, Download, X, Eye, ChevronDown, ChevronRight, GripVertical } from 'lucide-react'
 import type { ItemOrcamento, ItemStatus, NotaFiscal } from '../../types'
+import { notasFiscaisDe } from '../../types'
 import { formatBRL, newItemId } from '../../utils/formatters'
 import { recalcularItem } from '../../utils/automacoes'
 import CampoMoeda from '../UI/CampoMoeda'
@@ -47,63 +48,55 @@ function emptyItem(): ItemOrcamento {
   }
 }
 
-// ─── Célula NF ────────────────────────────────────────────────────────────────
+// ─── Célula NF (múltiplas) ────────────────────────────────────────────────────
+const btnIc = 'text-muted transition-colors shrink-0 min-w-[20px] min-h-[20px] flex items-center justify-center'
 const CelulaNotaFiscal: React.FC<{
-  notaFiscal?: NotaFiscal
-  onAnexar: (nf: NotaFiscal) => void
-  onRemover: () => void
-}> = ({ notaFiscal, onAnexar, onRemover }) => {
+  notas: NotaFiscal[]
+  onChange: (nfs: NotaFiscal[]) => void
+}> = ({ notas, onChange }) => {
   const inputRef = useRef<HTMLInputElement>(null)
   const [erro, setErro] = useState('')
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > MAX_SIZE) {
-      setErro('Máx. 4MB'); setTimeout(() => setErro(''), 3000); return
-    }
-    const reader = new FileReader()
-    reader.onload = () => onAnexar({ nome: file.name, tipo: file.type, dados: reader.result as string, tamanho: file.size })
-    reader.readAsDataURL(file)
+  function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
     e.target.value = ''
+    if (!files.length) return
+    const validos = files.filter(f => f.size <= MAX_SIZE)
+    if (validos.length < files.length) { setErro('Alguns > 4MB (ignorados)'); setTimeout(() => setErro(''), 3000) }
+    Promise.all(validos.map(file => new Promise<NotaFiscal>(resolve => {
+      const r = new FileReader()
+      r.onload = () => resolve({ nome: file.name, tipo: file.type, dados: r.result as string, tamanho: file.size })
+      r.readAsDataURL(file)
+    }))).then(novas => { if (novas.length) onChange([...notas, ...novas]) })
   }
 
-  function handleDownload() {
-    if (!notaFiscal) return
-    const a = document.createElement('a'); a.href = notaFiscal.dados; a.download = notaFiscal.nome; a.click()
-  }
-
-  function handleVisualizar() {
-    if (!notaFiscal) return
+  function ver(nf: NotaFiscal) {
     const w = window.open()
-    if (w) {
-      if (notaFiscal.tipo === 'application/pdf')
-        w.document.write(`<iframe src="${notaFiscal.dados}" width="100%" height="100%" style="border:none"></iframe>`)
-      else
-        w.document.write(`<img src="${notaFiscal.dados}" style="max-width:100%" />`)
-    }
+    if (w) w.document.write(nf.tipo === 'application/pdf'
+      ? `<iframe src="${nf.dados}" width="100%" height="100%" style="border:none"></iframe>`
+      : `<img src="${nf.dados}" style="max-width:100%" />`)
   }
-
-  if (notaFiscal) return (
-    <div className="flex items-center gap-1 min-w-0">
-      <span className="text-[10px] text-success truncate max-w-[80px] cursor-pointer hover:underline"
-        title={`${notaFiscal.nome} (${formatBytes(notaFiscal.tamanho)})`} onClick={handleVisualizar}>
-        {notaFiscal.nome}
-      </span>
-      <button onClick={handleVisualizar} className="text-muted hover:text-white transition-colors shrink-0 min-w-[20px] min-h-[20px] flex items-center justify-center" title="Visualizar"><Eye className="w-3 h-3" /></button>
-      <button onClick={handleDownload} className="text-muted hover:text-blue-400 transition-colors shrink-0 min-w-[20px] min-h-[20px] flex items-center justify-center" title="Baixar"><Download className="w-3 h-3" /></button>
-      <button onClick={onRemover} className="text-muted hover:text-danger transition-colors shrink-0 min-w-[20px] min-h-[20px] flex items-center justify-center" title="Remover NF"><X className="w-3 h-3" /></button>
-    </div>
-  )
+  function baixar(nf: NotaFiscal) {
+    const a = document.createElement('a'); a.href = nf.dados; a.download = nf.nome; a.click()
+  }
 
   return (
-    <div className="flex flex-col items-start">
+    <div className="flex flex-col items-start gap-0.5 min-w-0">
+      {notas.map((nf, i) => (
+        <div key={i} className="flex items-center gap-1 min-w-0 w-full">
+          <span className="text-[10px] text-success truncate max-w-[80px] cursor-pointer hover:underline"
+            title={`${nf.nome} (${formatBytes(nf.tamanho)})`} onClick={() => ver(nf)}>{nf.nome}</span>
+          <button onClick={() => ver(nf)} className={`${btnIc} hover:text-white`} title="Visualizar"><Eye className="w-3 h-3" /></button>
+          <button onClick={() => baixar(nf)} className={`${btnIc} hover:text-blue-400`} title="Baixar"><Download className="w-3 h-3" /></button>
+          <button onClick={() => onChange(notas.filter((_, j) => j !== i))} className={`${btnIc} hover:text-danger`} title="Remover NF"><X className="w-3 h-3" /></button>
+        </div>
+      ))}
       <button onClick={() => inputRef.current?.click()}
         className="flex items-center gap-1 text-[10px] text-muted hover:text-accent transition-colors border border-dashed border-bordercol hover:border-accent/50 rounded px-1.5 py-0.5">
-        <Paperclip className="w-3 h-3" /> Anexar
+        <Paperclip className="w-3 h-3" /> {notas.length ? '+ NF' : 'Anexar'}
       </button>
       {erro && <span className="text-[9px] text-danger mt-0.5">{erro}</span>}
-      <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" onChange={handleFile} />
+      <input ref={inputRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" onChange={handleFiles} />
     </div>
   )
 }
@@ -116,7 +109,7 @@ const LinhaItem: React.FC<{
   fornecedores: string[]
   datalistItemId?: string
   onUpdate: (id: string, field: keyof ItemOrcamento, val: string | number) => void
-  onUpdateNF: (id: string, nf: NotaFiscal | undefined) => void
+  onUpdateNFs: (id: string, nfs: NotaFiscal[]) => void
   onRemove: (id: string) => void
   onDragStartRow: (id: string) => void
   onDragOverRow: (id: string) => void
@@ -124,7 +117,7 @@ const LinhaItem: React.FC<{
   onDragEndRow: () => void
   isDragging: boolean
   isOver: boolean
-}> = ({ item, idx, indentado = false, fornecedores, datalistItemId, onUpdate, onUpdateNF, onRemove,
+}> = ({ item, idx, indentado = false, fornecedores, datalistItemId, onUpdate, onUpdateNFs, onRemove,
        onDragStartRow, onDragOverRow, onDropRow, onDragEndRow, isDragging, isOver }) => {
   const tdBase   = 'px-2 py-1.5 text-xs text-gray-300 border-b border-bordercol'
   const inputCls = 'w-full bg-transparent text-xs text-white outline-none border border-transparent hover:border-bordercol focus:border-accent rounded px-1 py-0.5 transition-colors'
@@ -234,8 +227,7 @@ const LinhaItem: React.FC<{
       </td>
       {/* NF */}
       <td className={tdBase}>
-        <CelulaNotaFiscal notaFiscal={item.notaFiscal}
-          onAnexar={nf => onUpdateNF(item.id, nf)} onRemover={() => onUpdateNF(item.id, undefined)} />
+        <CelulaNotaFiscal notas={notasFiscaisDe(item)} onChange={nfs => onUpdateNFs(item.id, nfs)} />
       </td>
       {/* Notas */}
       <td className={tdBase}>
@@ -329,8 +321,9 @@ const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true, f
     onChange(items.map(item => item.id !== id ? item : recalcularItem({ ...item, [field]: raw })))
   }, [items, onChange])
 
-  const updateNF = useCallback((id: string, nf: NotaFiscal | undefined) => {
-    onChange(items.map(item => item.id === id ? { ...item, notaFiscal: nf } : item))
+  const updateNFs = useCallback((id: string, nfs: NotaFiscal[]) => {
+    // Migra pro campo novo (array) e limpa o legado de 1 NF, pra não duplicar.
+    onChange(items.map(item => item.id === id ? { ...item, notasFiscais: nfs, notaFiscal: undefined } : item))
   }, [items, onChange])
 
   const addRow    = useCallback(() => onChange([...items, emptyItem()]), [items, onChange])
@@ -453,7 +446,7 @@ const TabelaItens: React.FC<Props> = ({ items, onChange, podeAdicionar = true, f
                 fornecedores={fornecedores}
                 datalistItemId={temSugestoes ? datalistId : undefined}
                 onUpdate={update}
-                onUpdateNF={updateNF}
+                onUpdateNFs={updateNFs}
                 onRemove={removeRow}
                 onDragStartRow={onDragStartRow}
                 onDragOverRow={onDragOverRow}

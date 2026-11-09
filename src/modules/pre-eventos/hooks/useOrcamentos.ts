@@ -159,7 +159,7 @@ export function duplicarOrcamentoModelo(orc: Orcamento): Orcamento {
   copia.atualizadoEm = now
   copia.atualizadoPor = undefined
   const limpar = (arr: ItemOrcamento[]) => arr.map(i => recalcularItem({
-    ...i, id: newItemId(), totalPagoReal: 0, dataPagamento: null, notaFiscal: undefined, status: 'PENDENTE' as const,
+    ...i, id: newItemId(), totalPagoReal: 0, dataPagamento: null, notaFiscal: undefined, notasFiscais: undefined, status: 'PENDENTE' as const,
   }))
   copia.operacaoEstrutura = limpar(copia.operacaoEstrutura)
   copia.equipe = limpar(copia.equipe)

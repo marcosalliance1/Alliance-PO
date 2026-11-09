@@ -53,7 +53,14 @@ export interface ItemOrcamento {
   automatico: boolean
   fixo: boolean
   grupo?: string          // ex: 'Time Alliance' → aparece agrupado
-  notaFiscal?: NotaFiscal
+  notaFiscal?: NotaFiscal      // legado — 1 NF (dados antigos; ler via notasFiscaisDe())
+  notasFiscais?: NotaFiscal[]  // múltiplas NFs por item
+}
+
+// Lê as NFs de um item cobrindo dados antigos (campo único notaFiscal).
+export function notasFiscaisDe(i: { notaFiscal?: NotaFiscal; notasFiscais?: NotaFiscal[] }): NotaFiscal[] {
+  if (i.notasFiscais && i.notasFiscais.length) return i.notasFiscais
+  return i.notaFiscal ? [i.notaFiscal] : []
 }
 
 export interface SymplaLote {
