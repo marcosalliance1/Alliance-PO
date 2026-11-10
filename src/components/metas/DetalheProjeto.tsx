@@ -19,13 +19,15 @@ function Mini({ rotulo, valor, cor }: { rotulo: string; valor: string; cor?: str
   )
 }
 
-function Lista({ titulo, subtitulo, itens, cor, vazio, mostrarDif = true, max }: {
+type Modo = 'dif' | 'orcado' | 'zero'
+
+function Lista({ titulo, subtitulo, itens, cor, vazio, modo = 'dif', max }: {
   titulo: string
   subtitulo?: string
   itens: DetalheItem[]
   cor: string
   vazio: string
-  mostrarDif?: boolean
+  modo?: Modo
   max?: number
 }) {
   return (
@@ -41,7 +43,7 @@ function Lista({ titulo, subtitulo, itens, cor, vazio, mostrarDif = true, max }:
           {/* cabeçalho (só desktop) */}
           <div className="hidden grid-cols-[minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] gap-2 border-b border-white/10 bg-white/[0.03] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted sm:grid">
             <span>Item</span><span>Aba</span><span>Bloco</span>
-            <span className="text-right">Orçado</span><span className="text-right">{mostrarDif ? 'Contratado' : ''}</span><span className="text-right">{mostrarDif ? 'Diferença' : ''}</span>
+            <span className="text-right">Orçado</span><span className="text-right">{modo === 'dif' ? 'Contratado' : modo === 'zero' ? 'Consumido' : ''}</span><span className="text-right">{modo === 'dif' ? 'Diferença' : modo === 'zero' ? 'Sobra' : ''}</span>
           </div>
           <ul className="divide-y divide-white/5">
             {itens.map((d, i) => (
@@ -51,11 +53,12 @@ function Lista({ titulo, subtitulo, itens, cor, vazio, mostrarDif = true, max }:
                 <span className="hidden truncate text-text-muted sm:block" title={d.bloco}>{padronizarCaixa(d.bloco)}</span>
                 <span className="order-last col-span-2 text-[11px] text-text-muted sm:hidden">{padronizarCaixa(d.aba)} · {padronizarCaixa(d.bloco)}</span>
                 <span className="hidden text-right tabular-nums text-text-main sm:block">{num2(d.orcado)}</span>
-                <span className="hidden text-right tabular-nums text-text-main sm:block">{mostrarDif ? num2(d.contratado) : ''}</span>
-                <span className="text-right font-semibold tabular-nums" style={{ color: d.dif > 0 ? COR_ECONOMIA : d.dif < 0 ? COR_FALTA : undefined }}>
-                  {mostrarDif ? `${d.dif > 0 ? '+' : ''}${num2(d.dif)}` : <span className="sm:hidden">{num2(d.orcado)}</span>}
+                <span className="hidden text-right tabular-nums text-text-main sm:block">{modo === 'dif' ? num2(d.contratado) : modo === 'zero' ? num2(d.consumido) : ''}</span>
+                <span className="text-right font-semibold tabular-nums" style={{ color: modo === 'dif' ? (d.difAjustada > 0 ? COR_ECONOMIA : d.difAjustada < 0 ? COR_FALTA : undefined) : undefined }}>
+                  {modo === 'dif' ? `${d.difAjustada > 0 ? '+' : ''}${num2(d.difAjustada)}` : modo === 'zero' ? num2(d.orcado - d.consumido) : <span className="sm:hidden">{num2(d.orcado)}</span>}
                 </span>
-                {mostrarDif && <span className="col-span-2 text-[11px] tabular-nums text-text-muted sm:hidden">orçado {num2(d.orcado)} · contratado {num2(d.contratado)}</span>}
+                {modo === 'dif' && <span className="col-span-2 text-[11px] tabular-nums text-text-muted sm:hidden">orçado {num2(d.orcado)} · contratado {num2(d.contratado)}</span>}
+                {modo === 'zero' && <span className="col-span-2 text-[11px] tabular-nums text-text-muted sm:hidden">orçado {num2(d.orcado)} · consumido {num2(d.consumido)}</span>}
               </li>
             ))}
           </ul>
@@ -75,12 +78,12 @@ export function DetalheProjeto({ r, onFechar }: Props) {
   }, [onFechar])
 
   const { economias, estouros, zeros } = useMemo(() => ({
-    economias: r.detalhe.filter((d) => d.dif > 0).sort((a, b) => b.dif - a.dif).slice(0, 10),
-    estouros: r.detalhe.filter((d) => d.dif < 0).sort((a, b) => a.dif - b.dif).slice(0, 10),
+    economias: r.detalhe.filter((d) => d.difAjustada > 0.005).sort((a, b) => b.difAjustada - a.difAjustada).slice(0, 10),
+    estouros: r.detalhe.filter((d) => d.difAjustada < -0.005).sort((a, b) => a.difAjustada - b.difAjustada).slice(0, 10),
     zeros: r.detalhe.filter((d) => d.contratado === 0 && d.orcado > 0).sort((a, b) => b.orcado - a.orcado),
   }), [r.detalhe])
-  const nEcon = r.detalhe.filter((d) => d.dif > 0).length
-  const nEst = r.detalhe.filter((d) => d.dif < 0).length
+  const nEcon = r.detalhe.filter((d) => d.difAjustada > 0.005).length
+  const nEst = r.detalhe.filter((d) => d.difAjustada < -0.005).length
   const cor = COR_LOCAL[r.local] ?? '#1F2A44'
 
   return (
@@ -125,25 +128,32 @@ export function DetalheProjeto({ r, onFechar }: Props) {
             </ul>
           )}
 
+          {r.verbaConsumida > 0 && (
+            <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs text-text-muted">
+              <b className="tabular-nums text-text-main">{reais(r.verbaConsumida)}</b> de itens fechados a zero foram <b className="text-text-main">consumidos por estouros do mesmo bloco</b>
+              {' '}(verba “Geral” destrinchada em outras linhas, ou pacote fechado numa linha só). Esse valor já saiu das economias <i>e</i> dos estouros nas listas abaixo; a economia líquida não muda.
+            </p>
+          )}
+
           <Lista titulo="Maiores economias" subtitulo={`${economias.length} de ${nEcon} itens`} itens={economias} cor={COR_ECONOMIA} vazio="Nenhum item fechado abaixo do orçado." />
           <Lista titulo="Maiores estouros" subtitulo={`${estouros.length} de ${nEst} itens`} itens={estouros} cor={COR_FALTA} vazio="Nenhum item fechado acima do orçado." />
           <Lista
             titulo="Fechados a zero"
-            subtitulo={`${zeros.length} ${zeros.length === 1 ? 'item' : 'itens'} · ${reais(r.fechadosZero)} de orçado que saiu da conta`}
+            subtitulo={`${zeros.length} ${zeros.length === 1 ? 'item' : 'itens'} · ${reais(r.fechadosZero)} sem estouro correspondente no bloco`}
             itens={zeros}
             cor="var(--pl-muted, #8892b0)"
             vazio="Nenhum item fechado com contratado R$ 0."
-            mostrarDif={false}
+            modo="zero"
             max={288}
           />
 
           <Lista
             titulo="Potencial a economizar"
             subtitulo={`${r.nEstimados} ${r.nEstimados === 1 ? 'item estimado' : 'itens estimados'} · ${reais(r.estimadosOrcado)} de orçado ainda não contratado`}
-            itens={r.estimados.slice(0, 15).map((e) => ({ aba: e.aba, bloco: e.bloco, item: e.item, orcado: e.orcado, contratado: 0, dif: 0 }))}
+            itens={r.estimados.slice(0, 15).map((e) => ({ aba: e.aba, bloco: e.bloco, item: e.item, orcado: e.orcado, contratado: 0, dif: 0, consumido: 0, difAjustada: 0 }))}
             cor={COR_POTENCIAL}
             vazio="Nenhum item com status estimado."
-            mostrarDif={false}
+            modo="orcado"
           />
         </div>
       </div>

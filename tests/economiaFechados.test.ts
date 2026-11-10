@@ -31,10 +31,12 @@ test('caminho feliz: margem, FALTA, economias, estouros, líquida, fechados a ze
   assert.equal(r.falta, 150_000)
   assert.equal(r.excedente, 0)
   assert.equal(r.nFechados, 3)
-  assert.equal(r.economias, 60)
-  assert.equal(r.estouros, 30)
+  // C (20 a zero) é consumido pelo estouro de B (30) no mesmo bloco: economias 60−20, estouros 30−20, líquida igual
+  assert.equal(r.economias, 40)
+  assert.equal(r.estouros, 10)
   assert.equal(r.liquida, 30)
-  assert.equal(r.fechadosZero, 20)
+  assert.equal(r.fechadosZero, 0)
+  assert.equal(r.verbaConsumida, 20)
   assert.equal(r.estimadosOrcado, 500)
   assert.equal(r.nEstimados, 1)
   assert.equal(r.cobertura, 30 / 150_000)
@@ -155,6 +157,83 @@ test('falha — projeto sem itens estimados: potencial zero e lista vazia', () =
   const r = calcularProjeto(base({ secoes: [{ numero: '2.1', itens: [item({ valorOrcado: 10, valorContratado: 10 })] }] }))
   assert.equal(r.estimadosOrcado, 0)
   assert.deepEqual(r.estimados, [])
+})
+
+const dec = (o: Partial<ItemBruto>): ItemBruto => item({ subcategoria: 'Decoração', ...o })
+const proj = (itens: ItemBruto[]) => calcularProjeto(base({ secoes: [{ numero: '2.1', nome: 'Custo Produção', itens }] }))
+const near = (a: number, b: number) => assert.ok(Math.abs(a - b) < 0.005, `${a} ≠ ${b}`)
+
+test('verba Geral destrinchada (Loyola 2026): o Geral só conta a sobra e os estouros das linhas somem; líquida igual', () => {
+  const r = proj([
+    dec({ id: 'g', item: 'Mobiliário - Geral', valorOrcado: 26000, valorContratado: 0 }),
+    dec({ id: 'b', item: 'Mobiliario - Buffet', valorOrcado: 0, valorContratado: 6803.22 }),
+    dec({ id: 'c', item: 'Mobiliario - Convidados', valorOrcado: 0, valorContratado: 12472.58 }),
+    dec({ id: 'e', item: 'Mobiliario - Extras', valorOrcado: 0, valorContratado: 4535.48 }),
+    dec({ id: 'bar', item: 'Mobiliario - Bar', valorOrcado: 4750, valorContratado: 4750 }),
+  ])
+  near(r.verbaConsumida, 23811.28)
+  near(r.economias, 2188.72)
+  near(r.estouros, 0)
+  near(r.liquida, 2188.72) // = orçado do grupo (30.750) − contratado (28.561,28)
+  near(r.fechadosZero, 2188.72)
+  const geral = r.detalhe.find((d) => d.item === 'Mobiliário - Geral')!
+  near(geral.consumido, 23811.28)
+  near(geral.difAjustada, 2188.72)
+  near(r.detalhe.find((d) => d.item === 'Mobiliario - Buffet')!.difAjustada, 0)
+})
+
+test('pacote fechado numa linha (MED PUC T18): o estouro do pacote consome os itens a zero, rateado', () => {
+  const r = proj([
+    dec({ id: 'p', item: 'Cenografia Geral', valorOrcado: 60000, valorContratado: 140000 }), // estouro 80.000
+    dec({ id: 'a', item: 'Floral - Convidados', valorOrcado: 62426.21, valorContratado: 0 }),
+    dec({ id: 'b', item: 'Projeto - Arquitetura', valorOrcado: 10000, valorContratado: 0 }),
+    dec({ id: 'c', item: 'Cenica', valorOrcado: 8000, valorContratado: 0 }),
+    dec({ id: 'd', item: 'Mobiliario - Extras', valorOrcado: 12000, valorContratado: 0 }),
+    dec({ id: 'e', item: 'Hall', valorOrcado: 8000, valorContratado: 0 }),
+    dec({ id: 'f', item: 'Floral - Complemento', valorOrcado: 15000, valorContratado: 0 }),
+    dec({ id: 'g', item: 'Floral - Buffet', valorOrcado: 3600, valorContratado: 0 }),
+    dec({ id: 'h', item: 'Mobiliario - Convidados', valorOrcado: 13300, valorContratado: 0 }),
+    dec({ id: 'i', item: 'Mobiliario - Buffet + Bar', valorOrcado: 4500, valorContratado: 0 }),
+  ])
+  near(r.verbaConsumida, 80000)
+  near(r.fechadosZero, 136826.21 - 80000)
+  near(r.economias, 56826.21)
+  near(r.estouros, 0)
+  near(r.liquida, 196826.21 - 140000) // orçado do grupo − contratado do pacote
+  const soma = r.detalhe.reduce((s, d) => s + d.consumido, 0)
+  near(soma, 80000) // o rateio fecha
+})
+
+test('sem estouro no bloco (Japonês da CSAG): nada é consumido e o item continua a zero', () => {
+  const r = proj([dec({ item: 'Japonês', valorOrcado: 64515, valorContratado: 0 }), dec({ item: 'Outro', valorOrcado: 100, valorContratado: 100 })])
+  assert.equal(r.verbaConsumida, 0)
+  assert.equal(r.fechadosZero, 64515)
+  assert.equal(r.economias, 64515)
+})
+
+test('blocos diferentes não se consomem: o estouro de um bloco não apaga o item a zero de outro', () => {
+  const r = proj([
+    dec({ item: 'Zero', valorOrcado: 1000, valorContratado: 0 }),
+    item({ subcategoria: 'Infraestrutura', item: 'Estourou', valorOrcado: 100, valorContratado: 900 }),
+  ])
+  assert.equal(r.verbaConsumida, 0)
+  assert.equal(r.fechadosZero, 1000)
+  assert.equal(r.estouros, 800)
+})
+
+test('verba consumida nunca passa do orçado a zero nem do estouro e a líquida nunca muda', () => {
+  const itens = [
+    dec({ item: 'Z1', valorOrcado: 500, valorContratado: 0 }),
+    dec({ item: 'Z2', valorOrcado: 1500, valorContratado: 0 }),
+    dec({ item: 'E1', valorOrcado: 100, valorContratado: 700 }), // estouro 600 < zeros 2000
+    dec({ item: 'Ok', valorOrcado: 900, valorContratado: 400 }),
+  ]
+  const r = proj(itens)
+  near(r.verbaConsumida, 600)
+  near(r.fechadosZero, 1400)
+  const liquidaBruta = itens.reduce((s, i) => s + (i.valorOrcado ?? 0) - (i.valorContratado ?? 0), 0)
+  near(r.liquida, liquidaBruta)
+  near(r.economias - r.estouros, liquidaBruta)
 })
 
 test('falha — meta digitada inválida é recusada (vazio, texto, negativo, >100); válidas aceitam vírgula e %', () => {

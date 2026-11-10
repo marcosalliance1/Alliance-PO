@@ -116,7 +116,7 @@ function abaEconomia(rs: ResultadoProjeto[], geradoEm: string): XLSX.WorkSheet {
   const grupos = agruparPorLocal(rs)
   const tot = somarResultados(rs)
   f.mesclar(f.add(['QUANTO JÁ FIZEMOS dos itens FECHADOS para a margem — contra o que falta p/ a meta']), 12)
-  f.mesclar(f.add([`Economia = orçado − contratado dos itens com status FECHADO (todas as abas de custo). Líquido = economias − estouros. "Fechados a zero" = parte da economia que vem de itens fechados com contratado R$ 0. AINDA FALTA = falta − economia líquida. Potencial a economizar = orçado dos itens com status ESTIMADO (ainda não contratados). Dados lidos em ${geradoEm}.`]), 12)
+  f.mesclar(f.add([`Economia = orçado − contratado dos itens com status FECHADO (todas as abas de custo). Líquido = economias − estouros. "Fechados a zero" = parte da economia que vem de itens fechados com contratado R$ 0, já descontada a verba consumida por estouros do mesmo bloco (verba Geral destrinchada ou pacote fechado numa linha só). AINDA FALTA = falta − economia líquida. Potencial a economizar = orçado dos itens com status ESTIMADO (ainda não contratados). Dados lidos em ${geradoEm}.`]), 12)
   f.vazia()
   f.add(['RESUMO POR LOCAL'])
   f.add(CAB_ECON)

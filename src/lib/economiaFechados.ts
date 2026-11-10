@@ -10,6 +10,9 @@
 //   Fechados (status = 'fechado', abas 2.1–2.9): d = orçado − contratado
 //     Economias = Σ d (d>0) · Estouros = Σ −d (d<0) · Líquida = Economias − Estouros
 //     Fechados a zero = Σ orçado dos fechados com contratado = 0 e orçado > 0
+//   Verba consumida: dentro de cada bloco (aba + subcategoria), o estouro consome a economia dos itens fechados a zero
+//     (verba "Geral" destrinchada em outras linhas, ou pacote fechado numa linha só). consumido = min(Σ orçado dos zeros, Σ estouros
+//     do bloco); sai das economias E dos estouros, então a Líquida não muda.
 //   Cobertura = Líquida ÷ FALTA · AINDA FALTA = FALTA − Líquida
 //   Potencial a economizar = Σ orçado dos itens com status 'estimado' (ainda não contratados; é onde ainda pode haver economia)
 
@@ -104,6 +107,8 @@ export interface DetalheItem {
   orcado: number
   contratado: number
   dif: number // orçado − contratado (positivo = economia)
+  consumido: number // item a zero: parte do orçado consumida por estouros do mesmo bloco
+  difAjustada: number // dif depois de descontar a verba consumida (é o que as listas mostram)
 }
 
 export interface DetalheEstimado {
@@ -139,7 +144,8 @@ export interface ResultadoProjeto {
   economias: number
   estouros: number
   liquida: number
-  fechadosZero: number
+  fechadosZero: number // depois de descontar a verba consumida
+  verbaConsumida: number // Σ da verba de itens a zero consumida por estouros do mesmo bloco
   cobertura: number | null // liquida ÷ falta (null quando não há falta)
   aindaFalta: number
   nEstimados: number
@@ -206,10 +212,33 @@ export function calcularProjeto(p: ProjetoBruto, metas: MetasPct = METAS_PADRAO)
       if (d > 0) economias += d
       if (d < 0) estouros += -d
       if (c === 0 && o > 0) fechadosZero += o
-      detalhe.push({ aba, bloco: (it.subcategoria ?? '').trim(), item: (it.item ?? '').trim() || (it.subcategoria ?? '').trim() || '(sem nome)', orcado: o, contratado: c, dif: d })
+      detalhe.push({ aba, bloco: (it.subcategoria ?? '').trim(), item: (it.item ?? '').trim() || (it.subcategoria ?? '').trim() || '(sem nome)', orcado: o, contratado: c, dif: d, consumido: 0, difAjustada: d })
     }
   }
   if (detalhe.length === 0) avisos.push('sem-fechados')
+
+  // ── Verba consumida: em cada bloco, o estouro consome a economia dos itens fechados a zero ──
+  let verbaConsumida = 0
+  const blocos = new Map<string, DetalheItem[]>()
+  for (const d of detalhe) {
+    const k = `${d.aba}|${d.bloco}`
+    const l = blocos.get(k)
+    if (l) l.push(d); else blocos.set(k, [d])
+  }
+  for (const its of blocos.values()) {
+    const zeros = its.filter((d) => d.contratado === 0 && d.orcado > 0)
+    const estourados = its.filter((d) => d.contratado > 0 && d.dif < 0)
+    const z = zeros.reduce((s, d) => s + d.orcado, 0)
+    const e = estourados.reduce((s, d) => s - d.dif, 0)
+    const consumido = Math.min(z, e)
+    if (!(consumido > 0)) continue
+    verbaConsumida += consumido
+    for (const d of zeros) { d.consumido = (d.orcado / z) * consumido; d.difAjustada = d.orcado - d.consumido }
+    for (const d of estourados) d.difAjustada = d.dif * (1 - consumido / e)
+  }
+  economias -= verbaConsumida
+  estouros -= verbaConsumida
+  fechadosZero -= verbaConsumida
 
   // ── receita / custo orçados: RESUMO GERAL da planilha; sem ele, soma dos itens ──
   const rg = p.resumo_geral_orcado
@@ -249,7 +278,7 @@ export function calcularProjeto(p: ProjetoBruto, metas: MetasPct = METAS_PADRAO)
   return {
     id: p.id, turma, local, localCorrigido: corrigido, ensino, ano, status: p.status ?? '',
     fonte, receita, custo, margem, margemPct, metaPct, margemNaMeta, falta, excedente,
-    nFechados: detalhe.length, orcadoFechados, contratadoFechados, economias, estouros, liquida, fechadosZero,
+    nFechados: detalhe.length, orcadoFechados, contratadoFechados, economias, estouros, liquida, fechadosZero, verbaConsumida,
     cobertura: falta > 0 ? liquida / falta : null,
     aindaFalta: falta - liquida,
     nEstimados: estimados.length, estimadosOrcado, estimados: estimados.sort((a, b) => b.orcado - a.orcado),

@@ -200,7 +200,7 @@ export function MetasMargem() {
             <Kpi rotulo="% da falta coberta" valor={pct0(tot.cobertura)} cor={tot.cobertura !== null && tot.cobertura >= 1 ? COR_ECONOMIA : COR_META} sub="economia líquida ÷ falta" />
             <Kpi rotulo="Ainda falta" valor={reais(tot.aindaFalta)} cor={tot.aindaFalta > 0 ? COR_FALTA : COR_ECONOMIA} sub={tot.aindaFalta > 0 ? 'falta menos economia líquida' : 'meta coberta no total'} />
             <Kpi rotulo="Potencial a economizar" valor={reais(tot.estimadosOrcado)} cor={COR_POTENCIAL} sub="orçado dos itens estimados, ainda não contratados" />
-            <Kpi rotulo="Fechados a zero" valor={reais(tot.fechadosZero)} sub="orçado de itens fechados com contratado R$ 0" />
+            <Kpi rotulo="Fechados a zero" valor={reais(tot.fechadosZero)} sub="itens fechados com contratado R$ 0, já descontados os estouros do mesmo bloco" />
             <Kpi rotulo="Abaixo da meta" valor={`${tot.nAbaixoMeta} de ${tot.nProjetos}`} cor={tot.nAbaixoMeta > 0 ? COR_META : COR_ECONOMIA} sub={tot.nAbaixoMeta === 1 ? 'projeto' : 'projetos'} />
           </div>
 
