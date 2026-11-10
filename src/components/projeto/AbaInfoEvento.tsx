@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react'
-import { Calendar, Music, Users, Plus, Trash2, Paperclip, X } from 'lucide-react'
+import { Calendar, Music, Users, Plus, Trash2, Paperclip, X, FileUp } from 'lucide-react'
+import { ModalImportarOs } from './ModalImportarOs'
 import type { Projeto, InfoEvento, FornecedorStatus, NotaFiscal } from '../../types'
 import { statusFornecedor, lineupView } from '../../types'
 
@@ -70,14 +71,23 @@ const CAMPOS: [keyof InfoEvento, string][] = [
 
 export const AbaInfoEvento: React.FC<Props> = ({ projeto, onChange, isAdmin }) => {
   const info = projeto.infoEvento ?? INFO_EVENTO_VAZIO
-  const upd = (patch: Partial<InfoEvento>) => onChange({ ...info, ...patch })
+  const [importando, setImportando] = useState(false)
+  const upd =(patch: Partial<InfoEvento>) => onChange({ ...info, ...patch })
 
   const inputCls = 'w-full bg-surface border border-bordercol rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-accent transition-colors'
   const labelCls = 'block text-[11px] text-muted mb-1'
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted">Preencha as informações do evento.</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-xs text-muted">Preencha as informações do evento.</p>
+        {isAdmin && (
+          <button onClick={() => setImportando(true)} className="flex items-center gap-1.5 text-xs text-accent border border-accent/40 hover:bg-accent/10 rounded-lg px-3 py-1.5 transition-colors">
+            <FileUp className="w-3.5 h-3.5" /> Importar OS (PDF)
+          </button>
+        )}
+      </div>
+      {importando && <ModalImportarOs projeto={projeto} info={info} onAplicar={(novo) => { onChange(novo); setImportando(false) }} onFechar={() => setImportando(false)} />}
 
       {/* Dados gerais */}
       <div className="bg-surface-2 border border-bordercol rounded-card p-5">
