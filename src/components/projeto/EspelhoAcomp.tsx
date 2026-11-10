@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { ExternalLink } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import { montarEspelho, linkPlanilha, type GradeAcomp, type EspelhoBloco } from '../../utils/espelhoAcomp'
 
 export type TemaEspelho = 'claro' | 'escuro'
@@ -89,6 +89,7 @@ function Cartao({ bloco, grade }: { bloco: EspelhoBloco; grade: GradeAcomp }) {
 
 export default function EspelhoAcomp({ grade, tema = 'claro' }: { grade: GradeAcomp; tema?: TemaEspelho }) {
   const esp = useMemo(() => montarEspelho(grade), [grade])
+  const [mostrarOutros, setMostrarOutros] = useState(false) // anotações soltas da planilha: recolhidas por padrão (são rascunho)
   return (
     <div
       style={{ ...(TEMAS[tema] as CSSProperties), fontFamily: "'Montserrat', ui-sans-serif, system-ui, sans-serif" }}
@@ -137,17 +138,24 @@ export default function EspelhoAcomp({ grade, tema = 'claro' }: { grade: GradeAc
 
       {esp.outros.length > 0 && (
         <section className="overflow-hidden rounded-md border border-dashed border-[color:var(--e-borda)] bg-[color:var(--e-card)]">
-          <header className="border-b border-[color:var(--e-borda)] px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-[color:var(--e-muted)]">
-            Outras anotações da aba (fora dos blocos)
-          </header>
-          <ul className="text-[12.5px]">
+          <button
+            type="button"
+            onClick={() => setMostrarOutros(v => !v)}
+            aria-expanded={mostrarOutros}
+            className={`flex w-full items-center gap-1.5 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-[color:var(--e-muted)] hover:opacity-80 ${mostrarOutros ? 'border-b border-[color:var(--e-borda)]' : ''}`}
+          >
+            {mostrarOutros ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            Outras anotações da aba (fora dos blocos) · {esp.outros.length}
+            <span className="ml-auto font-medium normal-case tracking-normal">{mostrarOutros ? 'ocultar' : 'mostrar'}</span>
+          </button>
+          {mostrarOutros && <ul className="text-[12.5px]">
             {esp.outros.map((o, n) => (
               <li key={o.linha} className={`flex items-baseline justify-between gap-3 px-3 py-1.5 ${n % 2 === 1 ? 'bg-[color:var(--e-zebra)]' : ''}`}>
                 <span>{o.textos.join('  ·  ')}</span>
                 <a href={linkPlanilha(grade, o.ref)} target="_blank" rel="noreferrer" className="shrink-0 text-[11px] text-[color:var(--e-muted)] hover:underline">{o.ref}</a>
               </li>
             ))}
-          </ul>
+          </ul>}
         </section>
       )}
     </div>

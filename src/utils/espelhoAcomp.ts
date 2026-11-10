@@ -85,7 +85,7 @@ export function montarEspelho(grade: GradeAcomp): Espelho {
   for (let r = 0; r < H; r++) {
     let c = 0
     while (c < W) {
-      if (!barra[r][c]) { c++; continue }
+      if (!barra[r][c] || coberto[r][c]) { c++; continue } // célula já usada como linha de um bloco acima não abre bloco novo
       const c0 = c
       while (c < W && barra[r][c]) c++
       const c1 = c - 1
@@ -101,13 +101,17 @@ export function montarEspelho(grade: GradeAcomp): Espelho {
       const corpo: { r: number; cells: (CelulaGrade | undefined)[] }[] = []
       let rr = r + 1
       while (rr < H) {
-        let temBarra = false, temTexto = false, temSombra = false
+        let nBarra = 0, temTexto = false, temSombra = false, valorAoLado = false
         for (let k = c0; k <= c1; k++) {
-          if (barra[rr][k]) temBarra = true
+          if (barra[rr][k]) nBarra++
+          else if (txt(rr, k)) valorAoLado = true
           if (txt(rr, k)) temTexto = true
           if (cel(rr, k)?.bg) temSombra = true
         }
-        if (temBarra) break
+        // Rótulo de linha: célula colorida de letra branca na 1ª coluna do bloco, com valores ao lado dentro do bloco, é
+        // linha da tabela e não uma barra de título nova (ex.: "ATRAÇÃO VERBA" → "01 convite | 1 | 20").
+        const rotuloDeLinha = nBarra > 0 && nBarra < c1 - c0 + 1 && barra[rr][c0] && valorAoLado
+        if (nBarra > 0 && !rotuloDeLinha) break
         if (!temTexto && !temSombra) break
         for (let k = c0; k <= c1; k++) coberto[rr][k] = true
         if (temTexto) corpo.push({ r: rr, cells: Array.from({ length: c1 - c0 + 1 }, (_, i) => cel(rr, c0 + i)) })
@@ -182,7 +186,8 @@ export function montarEspelho(grade: GradeAcomp): Espelho {
   const prioridade = ['total adesoes', 'total formandos', 'cenario atual', 'total convites', 'total comissao', 'total atual', 'total projetado']
   const destaques: Espelho['destaques'] = []
   for (const p of prioridade) {
-    for (const b of lista) {
+    // a tabela "Atração Verba" tem "Total Adesões" em R$ (não é a contagem de adesões): não vira cartão de destaque
+    for (const b of lista.filter(x => !/^atracao verba/.test(norm(x.titulo)))) {
       const l = b.linhas.find(x => norm(x.celulas[0]?.texto ?? '') === p)
       if (!l) continue
       const v = [...l.celulas].reverse().find(x => x.num && x.texto !== '—')
