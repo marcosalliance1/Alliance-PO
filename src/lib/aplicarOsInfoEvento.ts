@@ -45,7 +45,7 @@ export interface ResumoMescla { novos: number; atualizados: number }
 
 /** 'mesclar' mantém o que já existe e só acrescenta/corrige; 'substituir' troca tudo pela OS. */
 export function mesclarFornecedores(atuais: InfoEventoFornecedor[], os: OsFornecedor[], modo: 'mesclar' | 'substituir'): { lista: InfoEventoFornecedor[]; resumo: ResumoMescla } {
-  const novoDaOs = (f: OsFornecedor): InfoEventoFornecedor => ({ categoria: f.servico, fornecedor: f.nome, status: 'fechado' })
+  const novoDaOs = (f: OsFornecedor): InfoEventoFornecedor => ({ categoria: f.servico, fornecedor: f.nome, status: 'fechado', contato: f.contato, telefone: f.telefone, chegada: f.chegada })
   if (modo === 'substituir') return { lista: os.map(novoDaOs), resumo: { novos: os.length, atualizados: 0 } }
 
   const lista = atuais.map((f) => ({ ...f }))
@@ -56,10 +56,14 @@ export function mesclarFornecedores(atuais: InfoEventoFornecedor[], os: OsFornec
     if (i < 0) { lista.push(novoDaOs(f)); usados.add(lista.length - 1); novos++; continue }
     usados.add(i)
     const a = lista[i]
-    if (!a.fornecedor) { // nome foi digitado no campo "categoria": move para o lugar certo
-      lista[i] = { ...a, categoria: f.servico, fornecedor: f.nome }
-      atualizados++
-    } else if (!a.categoria) { lista[i] = { ...a, categoria: f.servico }; atualizados++ }
+    let novo = a
+    if (!a.fornecedor) novo = { ...novo, categoria: f.servico, fornecedor: f.nome } // nome foi digitado no campo "categoria": move para o lugar certo
+    else if (!a.categoria) novo = { ...novo, categoria: f.servico }
+    // contato/telefone/chegada: só preenche o que está vazio (nunca sobrescreve o que a pessoa digitou)
+    if (!a.contato && f.contato) novo = { ...novo, contato: f.contato }
+    if (!a.telefone && f.telefone) novo = { ...novo, telefone: f.telefone }
+    if (!a.chegada && f.chegada) novo = { ...novo, chegada: f.chegada }
+    if (novo !== a) { lista[i] = novo; atualizados++ }
   }
   return { lista, resumo: { novos, atualizados } }
 }

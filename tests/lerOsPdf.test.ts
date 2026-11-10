@@ -129,16 +129,42 @@ test('fornecedores (caso Bernoulli CJ): nome digitado em "categoria" é movido; 
     { nome: 'Rokkon', servico: 'Japonês', contato: '', telefone: '', chegada: '18h' },
   ], 'mesclar')
   assert.equal(lista.length, 4) // 3 existentes (incl. vazia) + Rokkon
-  assert.deepEqual(lista[0], { categoria: 'Buffet, cerveja e soft drinks', fornecedor: 'Maria Célia Feitosa', status: 'aberto' }) // mantém status
+  assert.deepEqual(lista[0], { categoria: 'Buffet, cerveja e soft drinks', fornecedor: 'Maria Célia Feitosa', status: 'aberto', chegada: '18h' }) // mantém status; chegada estava vazia → preenche
   assert.equal(lista[1].fornecedor, 'Up Drinks')
   assert.equal(lista[2].categoria, '') // a linha em branco não foi tocada nem casou com nada
-  assert.deepEqual(lista[3], { categoria: 'Japonês', fornecedor: 'Rokkon', status: 'fechado' })
+  assert.deepEqual(lista[3], { categoria: 'Japonês', fornecedor: 'Rokkon', status: 'fechado', contato: '', telefone: '', chegada: '18h' })
   assert.deepEqual(resumo, { novos: 1, atualizados: 2 })
 })
 
 test('fornecedores: modo substituir troca tudo pela OS', () => {
   const { lista } = mesclarFornecedores([{ categoria: 'x', fornecedor: 'y' }], [{ nome: 'A', servico: 'S', contato: '', telefone: '', chegada: '' }], 'substituir')
-  assert.deepEqual(lista, [{ categoria: 'S', fornecedor: 'A', status: 'fechado' }])
+  assert.deepEqual(lista, [{ categoria: 'S', fornecedor: 'A', status: 'fechado', contato: '', telefone: '', chegada: '' }])
+})
+
+test('fornecedores: contato/telefone/chegada entram nos novos e preenchem SÓ o vazio dos existentes (nunca sobrescreve)', () => {
+  const atuais = [
+    { categoria: 'Segurança', fornecedor: 'Aliança Real (Agatha)', status: 'fechado' as const }, // importado antes, sem contato
+    { categoria: 'Buffet', fornecedor: 'Bravo', status: 'fechado' as const, telefone: '(31) 11111-1111', contato: 'Digitado' }, // pessoa digitou
+  ]
+  const { lista, resumo } = mesclarFornecedores(atuais, [
+    { nome: 'Aliança Real (Agatha)', servico: 'Segurança', contato: 'Farley', telefone: '(31) 97195-1820', chegada: '18h' },
+    { nome: 'Bravo', servico: 'Buffet, cerveja e soft drinks', contato: 'Stela', telefone: '(31) 98357-9432', chegada: '18h' },
+    { nome: 'Zoom Vip', servico: 'Fotografia', contato: '', telefone: '', chegada: '18h' },
+  ], 'mesclar')
+  assert.deepEqual(lista[0], { categoria: 'Segurança', fornecedor: 'Aliança Real (Agatha)', status: 'fechado', contato: 'Farley', telefone: '(31) 97195-1820', chegada: '18h' })
+  assert.equal(lista[1].contato, 'Digitado') // preservado
+  assert.equal(lista[1].telefone, '(31) 11111-1111') // preservado
+  assert.equal(lista[1].categoria, 'Buffet') // serviço digitado preservado
+  assert.equal(lista[1].chegada, '18h') // estava vazio → preenche
+  assert.equal(lista[2].fornecedor, 'Zoom Vip')
+  assert.deepEqual(resumo, { novos: 1, atualizados: 2 })
+  // idempotente: importar a mesma OS de novo não muda mais nada
+  const de_novo = mesclarFornecedores(lista, [
+    { nome: 'Aliança Real (Agatha)', servico: 'Segurança', contato: 'Farley', telefone: '(31) 97195-1820', chegada: '18h' },
+    { nome: 'Bravo', servico: 'Buffet, cerveja e soft drinks', contato: 'Stela', telefone: '(31) 98357-9432', chegada: '18h' },
+    { nome: 'Zoom Vip', servico: 'Fotografia', contato: '', telefone: '', chegada: '18h' },
+  ], 'mesclar')
+  assert.deepEqual(de_novo.resumo, { novos: 0, atualizados: 0 })
 })
 
 test('lineup (caso Bernoulli CJ): "DJ Mayrink" casa com "Mayrink"; igual não muda nada; rider/status preservados', () => {

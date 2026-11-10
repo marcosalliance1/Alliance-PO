@@ -150,6 +150,10 @@ export interface InfoEventoFornecedor {
   fornecedor: string
   status?: FornecedorStatus // 3 estados (aberto | aguardando assinatura | fechado)
   fechado?: boolean         // legado — dados antigos; ler via statusFornecedor()
+  // `categoria` = serviço. Contato/telefone/chegada vêm da importação da OS (opcionais; dados antigos não têm).
+  contato?: string
+  telefone?: string
+  chegada?: string
 }
 // Deriva o status novo, cobrindo dados antigos que só tinham `fechado`.
 export function statusFornecedor(f: InfoEventoFornecedor): FornecedorStatus {

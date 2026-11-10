@@ -50,6 +50,9 @@ const STATUS_COR: Record<FornecedorStatus, string> = {
   fechado: 'text-success border-success/30 bg-success/10',
 }
 
+// celular: cartão de 2 colunas (grid grid-cols-2 na linha); tela larga (lg): uma linha de tabela
+const GRADE_FORN = 'lg:grid lg:grid-cols-[1.1fr_2.1fr_6.5rem_8.5rem_6.5rem_7.5rem_1.5rem] lg:items-center gap-2'
+
 export const INFO_EVENTO_VAZIO: InfoEvento = {
   nomeEvento: '', tipo: '', data: '', diaSemana: '', local: '', horario: '', tematica: '',
   totalConvidados: '', formandos: '', pagantes: '', bolsaFolia: '', dataAdimplencia: '',
@@ -179,27 +182,45 @@ export const AbaInfoEvento: React.FC<Props> = ({ projeto, onChange, isAdmin }) =
               className="flex items-center gap-1 text-xs text-accent hover:underline"><Plus className="w-3.5 h-3.5" /> fornecedor</button>
           )}
         </div>
-        <div className="space-y-2">
-          {info.fornecedores.length === 0 && <p className="text-xs text-muted">Nenhum fornecedor ainda.</p>}
-          {info.fornecedores.map((f, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input className={`${inputCls} w-40`} placeholder="Categoria" value={f.categoria} readOnly={!isAdmin}
-                onChange={e => upd({ fornecedores: info.fornecedores.map((x, j) => j === i ? { ...x, categoria: e.target.value } : x) })} />
-              <input className={`${inputCls} flex-1`} placeholder="Fornecedor" value={f.fornecedor} readOnly={!isAdmin}
-                onChange={e => upd({ fornecedores: info.fornecedores.map((x, j) => j === i ? { ...x, fornecedor: e.target.value } : x) })} />
-              <select value={statusFornecedor(f)} disabled={!isAdmin}
-                onChange={e => upd({ fornecedores: info.fornecedores.map((x, j) => j === i ? { ...x, status: e.target.value as FornecedorStatus } : x) })}
-                className={`text-[11px] font-medium border rounded px-2 py-1.5 shrink-0 outline-none cursor-pointer disabled:cursor-not-allowed ${STATUS_COR[statusFornecedor(f)]}`}>
-                {(['aberto', 'aguardando', 'fechado'] as FornecedorStatus[]).map(s => (
-                  <option key={s} value={s} className="bg-surface text-white">{STATUS_LABEL[s]}</option>
-                ))}
-              </select>
-              {isAdmin && (
-                <button onClick={() => upd({ fornecedores: info.fornecedores.filter((_, j) => j !== i) })} className="text-muted hover:text-danger shrink-0"><Trash2 className="w-4 h-4" /></button>
-              )}
+        {info.fornecedores.length === 0 && <p className="text-xs text-muted">Nenhum fornecedor ainda.</p>}
+        {info.fornecedores.length > 0 && (
+          <div className="space-y-2">
+            {/* cabeçalho da tabela (só em tela larga; no celular cada campo mostra o próprio rótulo) */}
+            <div className={`hidden ${GRADE_FORN} px-0.5 text-[10px] uppercase tracking-wide text-muted`}>
+              <span>Fornecedor</span><span>Serviço</span><span>Contato</span><span>Telefone</span><span>Chegada</span><span>Situação</span><span />
             </div>
-          ))}
-        </div>
+            {info.fornecedores.map((f, i) => {
+              const setF = (patch: Partial<typeof f>) => upd({ fornecedores: info.fornecedores.map((x, j) => j === i ? { ...x, ...patch } : x) })
+              const campo = (rotulo: string, valor: string, placeholder: string, onCh: (v: string) => void, tipo = 'text') => (
+                <label className="min-w-0 block">
+                  <span className="mb-0.5 block text-[10px] text-muted lg:hidden">{rotulo}</span>
+                  <input type={tipo} className={`${inputCls} min-w-0`} placeholder={placeholder} value={valor} readOnly={!isAdmin} onChange={e => onCh(e.target.value)} />
+                </label>
+              )
+              return (
+                <div key={i} className={`grid grid-cols-2 ${GRADE_FORN} rounded-lg border border-bordercol/50 p-2 lg:border-0 lg:p-0`}>
+                  <div className="col-span-2 lg:col-span-1">{campo('Fornecedor', f.fornecedor, 'Fornecedor', v => setF({ fornecedor: v }))}</div>
+                  <div className="col-span-2 lg:col-span-1">{campo('Serviço', f.categoria, 'Serviço', v => setF({ categoria: v }))}</div>
+                  {campo('Contato', f.contato ?? '', 'Contato', v => setF({ contato: v }))}
+                  {campo('Telefone', f.telefone ?? '', 'Telefone', v => setF({ telefone: v }), 'tel')}
+                  {campo('Chegada', f.chegada ?? '', 'Chegada', v => setF({ chegada: v }))}
+                  <label className="min-w-0 block">
+                    <span className="mb-0.5 block text-[10px] text-muted lg:hidden">Situação</span>
+                    <select value={statusFornecedor(f)} disabled={!isAdmin} onChange={e => setF({ status: e.target.value as FornecedorStatus })}
+                      className={`w-full text-[11px] font-medium border rounded px-2 py-2.5 outline-none cursor-pointer disabled:cursor-not-allowed ${STATUS_COR[statusFornecedor(f)]}`}>
+                      {(['aberto', 'aguardando', 'fechado'] as FornecedorStatus[]).map(s => (
+                        <option key={s} value={s} className="bg-surface text-white">{STATUS_LABEL[s]}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {isAdmin ? (
+                    <button onClick={() => upd({ fornecedores: info.fornecedores.filter((_, j) => j !== i) })} className="col-span-2 flex items-center justify-end lg:col-span-1 lg:justify-center lg:self-end lg:pb-2.5 text-muted hover:text-danger shrink-0" title="Remover fornecedor"><Trash2 className="w-4 h-4" /></button>
+                  ) : <span />}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

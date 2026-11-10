@@ -130,7 +130,7 @@ export const ModalImportarOs: React.FC<Props> = ({ projeto, info, onAplicar, onF
                   </select>
                   <p className="text-[11px] text-muted">
                     {modoForn === 'mesclar' ? `${forn.resumo.novos} novo(s), ${forn.resumo.atualizados} corrigido(s), ${info.fornecedores.length - forn.resumo.atualizados} mantido(s) como estão.` : `A lista atual (${info.fornecedores.length}) será trocada.`}
-                    {' '}Entram como "fechado".
+                    {' '}Entram como "fechado", com serviço, contato, telefone e chegada. Nos que já existem, só preenche o que estiver vazio.
                   </p>
                 </div>
               )}
