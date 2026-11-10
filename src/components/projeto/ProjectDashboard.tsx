@@ -431,6 +431,22 @@ export function ProjectDashboard({ projeto }: Props) {
             <span className="text-xs text-text-muted italic">Sincronize a PO para carregar o total de convidados</span>
           )}
         </div>
+        {(projeto.totalConvidadosAtual ?? 0) > 0 && (
+          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { rotulo: 'Receita', total: resumo.receitaBaile.vendido },
+              { rotulo: 'Custo orçado', total: custoOrcado },
+              { rotulo: 'Custo contratado', total: custoContratado },
+              { rotulo: 'Custo projetado', total: custoProjetado },
+            ].map((c) => (
+              <div key={c.rotulo} className="p-3 rounded-inner border border-white/10" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                <p className="text-[10px] uppercase text-text-muted mb-1">{c.rotulo} / convidado</p>
+                <p className="text-base font-bold text-text-main">{formatBRL(c.total / (projeto.totalConvidadosAtual as number))}</p>
+                <p className="text-[10px] text-text-muted mt-0.5">total {formatBRL(c.total)}</p>
+              </div>
+            ))}
+          </div>
+        )}
         <input
           type="text"
           value={buscaConvidado}

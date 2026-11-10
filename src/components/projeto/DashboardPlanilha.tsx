@@ -426,6 +426,22 @@ export function DashboardPlanilha({ projeto }: { projeto: Projeto }) {
           </span>
         ) : undefined}
       >
+        {(projeto.totalConvidadosAtual ?? 0) > 0 && (
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              { rotulo: 'Receita', total: receita.vendido },
+              { rotulo: 'Custo orçado', total: ct.orcado },
+              { rotulo: 'Custo contratado', total: ct.contratado },
+              { rotulo: 'Custo projetado', total: ct.projetado },
+            ].map(c => (
+              <div key={c.rotulo} className="rounded-md border border-[#e2e6ec] bg-[#fafbfc] p-3">
+                <div className="text-[10px] uppercase text-[#64707f]">{c.rotulo} / convidado</div>
+                <div className="text-[15px] font-bold tabular-nums">{brl(c.total / (projeto.totalConvidadosAtual as number))}</div>
+                <div className="text-[10px] tabular-nums text-[#64707f]">total {brl(c.total)}</div>
+              </div>
+            ))}
+          </div>
+        )}
         <input
           value={busca}
           onChange={e => setBusca(e.target.value)}
