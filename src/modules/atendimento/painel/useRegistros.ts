@@ -137,6 +137,75 @@ export function useRegistros(cat: Categoria) {
   return { registros, carregando, erro, recarregar, salvar, excluir }
 }
 
+// ── Várias categorias de uma vez (Régua, Relatórios, Avisos de hoje) ──────────
+// `gatilho`: quando muda (ex.: a rota atual), recarrega — usado pelo contador de avisos do menu.
+export function useVariasCategorias(categorias: string[], gatilho = '') {
+  const chave = categorias.join(',')
+  const [porCategoria, setPorCategoria] = useState<Record<string, Registro[]>>({})
+  const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+  const [versao, setVersao] = useState(0)
+
+  useEffect(() => {
+    let vivo = true
+    supabase.from('atendimento_registros').select('*').in('categoria', chave.split(','))
+      .order('criado_em', { ascending: true })
+      .then(({ data, error }) => {
+        if (!vivo) return
+        if (error) setErro(`Não foi possível carregar: ${error.message}`)
+        else {
+          setErro(null)
+          const mapa: Record<string, Registro[]> = {}
+          for (const c of chave.split(',')) mapa[c] = []
+          for (const r of (data ?? []) as Registro[]) mapa[r.categoria]?.push(r)
+          setPorCategoria(mapa)
+        }
+        setCarregando(false)
+      })
+    return () => { vivo = false }
+  }, [chave, versao, gatilho])
+
+  const recarregar = useCallback(() => setVersao(v => v + 1), [])
+  return { porCategoria, carregando, erro, recarregar }
+}
+
+export async function inserirRegistros(linhas: Partial<Registro>[]): Promise<Registro[]> {
+  const { data, error } = await supabase.from('atendimento_registros').insert(linhas).select()
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Registro[]
+}
+
+export async function atualizarRegistro(id: string, patch: Partial<Registro>): Promise<Registro> {
+  const { data, error } = await supabase.from('atendimento_registros').update(patch).eq('id', id).select().single()
+  if (error) throw new Error(error.message)
+  return data as Registro
+}
+
+export async function excluirRegistro(id: string): Promise<void> {
+  const { error } = await supabase.from('atendimento_registros').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+// Data de hoje no fuso local (YYYY-MM-DD) — toISOString() daria o dia seguinte à noite no Brasil.
+export function hojeISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Data do marco da régua: data do evento − dias antes (regra do painel original).
+export function dataDoMarco(dataEvento: unknown, diasAntes: unknown): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dataEvento ?? ''))
+  if (!m) return null
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  d.setDate(d.getDate() - Number(diasAntes || 0))
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function dataBR(iso: unknown): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso ?? ''))
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : ''
+}
+
 // ── Anexos ────────────────────────────────────────────────────────────────────
 export async function enviarAnexo(catId: string, arquivo: File): Promise<string> {
   const ext = (arquivo.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '')

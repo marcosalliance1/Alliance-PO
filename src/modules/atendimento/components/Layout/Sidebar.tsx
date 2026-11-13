@@ -1,13 +1,15 @@
 import React, { useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Columns3, CalendarDays, Layers,
   Gift, Users, ShoppingBag, Link2, AlertTriangle,
   ArrowLeft, ChevronDown, ChevronRight,
   Home, ClipboardList, GraduationCap, FileX, Repeat, Calculator, SearchCheck,
   Cake, CalendarRange, PartyPopper, BookOpen, MessageSquare,
+  Bell, BarChart3, Ruler,
 } from 'lucide-react'
 import { CATEGORIAS, HUB_LABEL, type Hub } from '../../painel/config'
+import { useAvisosHoje } from '../../painel/avisos'
 
 const ICONE_CATEGORIA: Record<string, React.ReactNode> = {
   demandas: <ClipboardList className="w-4 h-4" />,
@@ -40,6 +42,8 @@ export const Sidebar: React.FC = () => {
   const [rifasAberta, setRifasAberta] = useState(true)
   const [configAberta, setConfigAberta] = useState(false)
   const [hubsAbertos, setHubsAbertos] = useState<Record<Hub, boolean>>({ geral: true, turmas: true })
+  const { pathname } = useLocation()
+  const { avisos } = useAvisosHoje(pathname)
 
   const turmasPendentes = new Set(
     rifas.filter(r => !r.match_manual && (r.dimensao_projeto_id === null || (r.match_confianca ?? 0) < 0.75))
@@ -83,6 +87,17 @@ export const Sidebar: React.FC = () => {
           <Home className="w-4 h-4" />
           <span className="flex-1">Início</span>
         </NavLink>
+        <NavLink to="/atendimento/hoje" className={linkClasse}>
+          <Bell className="w-4 h-4" />
+          <span className="flex-1">Avisos de hoje</span>
+          {avisos.length > 0 && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary text-white">{avisos.length}</span>
+          )}
+        </NavLink>
+        <NavLink to="/atendimento/relatorios" className={linkClasse}>
+          <BarChart3 className="w-4 h-4" />
+          <span className="flex-1">Relatórios</span>
+        </NavLink>
 
         {(['geral', 'turmas'] as Hub[]).map(hub => (
           <div key={hub} className="flex flex-col gap-0.5">
@@ -97,10 +112,19 @@ export const Sidebar: React.FC = () => {
             {hubsAbertos[hub] && (
               <div className="pl-4 flex flex-col gap-0.5">
                 {CATEGORIAS.filter(c => c.hubs.includes(hub)).map(c => (
-                  <NavLink key={c.id} to={`/atendimento/${c.slug}`} className={linkClasse}>
-                    {ICONE_CATEGORIA[c.id] ?? <ClipboardList className="w-4 h-4" />}
-                    <span className="flex-1">{c.label}</span>
-                  </NavLink>
+                  <React.Fragment key={c.id}>
+                    <NavLink to={`/atendimento/${c.slug}`} className={linkClasse}>
+                      {ICONE_CATEGORIA[c.id] ?? <ClipboardList className="w-4 h-4" />}
+                      <span className="flex-1">{c.label}</span>
+                    </NavLink>
+                    {/* Régua ao Contrário: tela própria, logo depois de Turmas no hub de Turmas */}
+                    {hub === 'turmas' && c.id === 'turmas' && (
+                      <NavLink to="/atendimento/regua" className={linkClasse}>
+                        <Ruler className="w-4 h-4" />
+                        <span className="flex-1">Régua ao Contrário</span>
+                      </NavLink>
+                    )}
+                  </React.Fragment>
                 ))}
               </div>
             )}

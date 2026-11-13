@@ -56,6 +56,9 @@ import { VinculosPendentesPage } from './modules/atendimento/pages/VinculosPende
 import { ConflitosPage } from './modules/atendimento/pages/ConflitosPage'
 import { AtendimentoHome } from './modules/atendimento/painel/AtendimentoHome'
 import { RegistrosPage } from './modules/atendimento/painel/RegistrosPage'
+import { ReguaPage } from './modules/atendimento/painel/ReguaPage'
+import { RelatoriosPage } from './modules/atendimento/painel/RelatoriosPage'
+import { HojePage } from './modules/atendimento/painel/HojePage'
 
 // ── Spinner simples ──────────────────────────────────────────────────────────
 function Spinner() {
@@ -381,6 +384,9 @@ function AppRoutes() {
         <Route path="rifas/vinculos-pendentes" element={<VinculosPendentesPage />} />
         <Route path="rifas/conflitos" element={<ConflitosPage />} />
         {/* Painel do Atendimento (abas configuradas em modules/atendimento/painel/config.ts) */}
+        <Route path="regua" element={<ReguaPage />} />
+        <Route path="relatorios" element={<RelatoriosPage />} />
+        <Route path="hoje" element={<HojePage />} />
         <Route path=":slug" element={<RegistrosPage />} />
       </Route>
     </Routes>

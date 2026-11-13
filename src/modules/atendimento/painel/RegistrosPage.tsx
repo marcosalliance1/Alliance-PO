@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
-import { Copy, Filter, Pencil, Plus, Search, Trash2, Paperclip } from 'lucide-react'
+import { Copy, FileDown, Filter, Pencil, Plus, Search, Trash2, Paperclip } from 'lucide-react'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { Toast } from '../../../components/ui/Toast'
 import { categoriaPorSlug, corTag, type Campo, type Categoria } from './config'
@@ -73,6 +73,41 @@ function Lista({ cat }: { cat: Categoria }) {
   const ehFinalizado = (r: Registro) => !!cat.finalizados && !!r.status && cat.finalizados.includes(r.status)
   const abertos = visiveis.filter(r => !ehFinalizado(r))
   const finalizados = visiveis.filter(ehFinalizado)
+
+  // Exportar PDF — igual ao painel original: abre uma janela de impressão com a tabela
+  // da aba (o que está filtrado na tela) e a pessoa escolhe "Salvar como PDF".
+  function exportarPdf() {
+    const linhas = visiveis
+    if (!linhas.length) { setToast({ msg: 'Não há dados nessa aba para exportar.', tipo: 'erro' }); return }
+    const janela = window.open('', '_blank')
+    if (!janela) { setToast({ msg: 'O navegador bloqueou a janela de impressão. Libere pop-ups para este site.', tipo: 'erro' }); return }
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const campos = cat.campos
+    const cab = campos.map(c => `<th>${esc(c.label)}</th>`).join('')
+    const corpo = linhas.map(r => `<tr>${campos.map(c => {
+      const t = c.type === 'image' ? (r.dados[c.key] ? 'Anexado' : '') : textoCampo(r, c, projetos)
+      return `<td>${t ? esc(t).replace(/\n/g, '<br>') : '—'}</td>`
+    }).join('')}</tr>`).join('')
+    const hoje = new Date().toLocaleDateString('pt-BR')
+    janela.document.open()
+    janela.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${esc(cat.label)} — Alliance</title>
+<style>
+  *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;margin:20px;color:#22262B}
+  h1{font-size:19px;margin:0 0 2px;color:#E4212B} h2{font-size:14px;margin:0 0 4px;font-weight:600}
+  .meta{font-size:11px;color:#666;margin-bottom:18px}
+  table{width:100%;border-collapse:collapse;font-size:10.5px}
+  th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top;word-break:break-word}
+  th{background:#141414;color:#fff;font-weight:600} tr:nth-child(even) td{background:#FAFAFA}
+  @media print{body{margin:10mm} @page{size:landscape;margin:10mm}}
+</style></head><body>
+<h1>Alliance</h1><h2>${esc(cat.label)}</h2>
+<div class="meta">Exportado em ${hoje} · ${linhas.length} registro(s)</div>
+<table><thead><tr>${cab}</tr></thead><tbody>${corpo}</tbody></table>
+<script>window.onload=function(){window.focus();window.print()}</script>
+</body></html>`)
+    janela.document.close()
+    setToast({ msg: 'Na janela que abriu, escolha "Salvar como PDF".', tipo: 'sucesso' })
+  }
 
   async function copiar(texto: string) {
     try { await navigator.clipboard.writeText(texto); setToast({ msg: 'Texto copiado.', tipo: 'sucesso' }) }
@@ -203,6 +238,9 @@ function Lista({ cat }: { cat: Categoria }) {
             <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar..."
               className="w-full bg-surface border border-white/10 rounded-lg pl-8 pr-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary/60" />
           </div>
+          <button className="btn-secondary inline-flex items-center gap-1 shrink-0" title="Exportar PDF" onClick={exportarPdf}>
+            <FileDown size={15} /> <span className="hidden sm:inline">PDF</span>
+          </button>
           <button className="btn-primary inline-flex items-center gap-1 shrink-0" onClick={() => setEditando('novo')}>
             <Plus size={15} /> Novo
           </button>

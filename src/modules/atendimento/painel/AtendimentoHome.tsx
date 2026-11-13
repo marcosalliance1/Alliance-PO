@@ -5,7 +5,7 @@ const CARDS = [
   { to: '/atendimento/demandas', icon: ClipboardList, titulo: 'Atendimento Geral',
     desc: 'Demandas, Rescisão, Alteração de Plano, Cálculo, Achados & Perdidos, Aniversários e Calendário.' },
   { to: '/atendimento/turmas', icon: Users, titulo: 'Atendimento de Turmas',
-    desc: 'Perfil de cada turma (ligado à P.O.), Demandas, Eventos e o Calendário.' },
+    desc: 'Perfil de cada turma (ligado à P.O.), Demandas, Régua ao Contrário, Eventos e o Calendário.' },
   { to: '/atendimento/rifas', icon: Gift, titulo: 'Rifas',
     desc: 'Rifas, ganhadores e acompanhamento de compra dos prêmios.' },
 ]
