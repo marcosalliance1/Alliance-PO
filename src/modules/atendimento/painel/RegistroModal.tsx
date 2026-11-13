@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import { Modal } from '../../../components/ui/Modal'
 import { calcularDevolucao, type Campo, type Categoria } from './config'
 import {
-  enviarAnexo, removerAnexos, urlAnexo, valorTurma,
+  enviarAnexo, PREFIXO_TEXTO, removerAnexos, urlAnexo, valorTurma,
   type Dados, type ProjetoOpcao, type Registro,
 } from './useRegistros'
 
@@ -121,6 +121,9 @@ export function RegistroModal({ cat, registro, prefill, projetos, onFechar, onSa
         return (
           <select className={inputCls} value={turma} onChange={e => setTurma(e.target.value)}>
             <option value="">—</option>
+            {turma.startsWith(PREFIXO_TEXTO) && (
+              <option value={turma}>{turma.slice(PREFIXO_TEXTO.length)} (sem P.O.)</option>
+            )}
             {cat.id !== 'turmas' && <option value="Geral">Geral</option>}
             {projetos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
           </select>
@@ -185,6 +188,23 @@ export function RegistroModal({ cat, registro, prefill, projetos, onFechar, onSa
             {erros[c.key] && <p className="text-xs text-danger mt-1">{erros[c.key]}</p>}
           </div>
         ))}
+
+        {/* Colunas da planilha original que não têm campo no painel (vindas da migração) */}
+        {registro && Object.keys(registro.extras ?? {}).some(k => !k.startsWith('_')) && (
+          <details className="rounded-lg border border-white/10 bg-bg/40">
+            <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-text-muted">
+              Dados da planilha original {registro.extras._origem ? `(${String(registro.extras._origem)})` : ''}
+            </summary>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 px-3 pb-3 text-xs">
+              {Object.entries(registro.extras).filter(([k]) => !k.startsWith('_')).map(([k, v]) => (
+                <div key={k} className="contents">
+                  <dt className="text-text-muted">{k}</dt>
+                  <dd className="text-text-main break-words whitespace-pre-wrap">{String(v)}</dd>
+                </div>
+              ))}
+            </dl>
+          </details>
+        )}
 
         {cat.fixavel && (
           <label className="flex items-center gap-2 text-sm text-text-main pt-1">

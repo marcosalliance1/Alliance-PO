@@ -100,6 +100,7 @@ export const CATEGORIAS: Categoria[] = [
     campoStatus: 'status', finalizados: ['Concluído'],
     campos: [
       { key: 'turma', label: 'Turma / Projeto', type: 'turma' },
+      { key: 'formando', label: 'Formando', type: 'text' },   // não existia no painel original; a planilha tem
       { key: 'dataAlteracao', label: 'Data da alteração', type: 'date' },
       { key: 'planoAnterior', label: 'Plano anterior', type: 'text' },
       { key: 'planoNovo', label: 'Novo plano', type: 'text' },

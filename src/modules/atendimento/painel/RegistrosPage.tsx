@@ -27,6 +27,8 @@ function textoCampo(r: Registro, c: Campo, projetos: ProjetoOpcao[]): string {
   if (v == null || v === '') return ''
   if (c.type === 'memberList') return Array.isArray(v) && v.length ? `${v.length} membro${v.length > 1 ? 's' : ''}` : ''
   if (c.type === 'image') return 'anexado'
+  // Aniversário sem ano (veio da planilha só com dia/mês): gravado como 1900-MM-DD, mostrado como DD/MM
+  if (c.type === 'date' && String(v).startsWith('1900-')) return formatarData(String(v)).slice(0, 5)
   if (c.type === 'date') return formatarData(String(v))
   return String(v)
 }

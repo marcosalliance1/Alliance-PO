@@ -49,14 +49,19 @@ export function nomeTurma(r: Registro, projetos: ProjetoOpcao[]): string {
   return r.turma_nome ?? ''
 }
 
-// valor do select de turma: id da P.O., "Geral" ou "" (vazio)
+// Valor do select de turma: id da P.O., "Geral", "txt:<nome>" (turma sem P.O., vinda da
+// planilha — preservada ao editar) ou "" (vazio).
+export const PREFIXO_TEXTO = 'txt:'
 export function valorTurma(r: Pick<Registro, 'projeto_id' | 'turma_nome'>): string {
-  return r.projeto_id ?? (r.turma_nome === TURMA_GERAL ? TURMA_GERAL : '')
+  if (r.projeto_id) return r.projeto_id
+  if (r.turma_nome === TURMA_GERAL) return TURMA_GERAL
+  return r.turma_nome ? PREFIXO_TEXTO + r.turma_nome : ''
 }
 
 function separarTurma(valor: string): { projeto_id: string | null; turma_nome: string | null } {
   if (!valor) return { projeto_id: null, turma_nome: null }
   if (valor === TURMA_GERAL) return { projeto_id: null, turma_nome: TURMA_GERAL }
+  if (valor.startsWith(PREFIXO_TEXTO)) return { projeto_id: null, turma_nome: valor.slice(PREFIXO_TEXTO.length) }
   return { projeto_id: valor, turma_nome: null }
 }
 
