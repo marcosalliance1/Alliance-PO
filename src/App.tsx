@@ -54,6 +54,8 @@ import { GanhadoresPage } from './modules/atendimento/pages/GanhadoresPage'
 import { ComprasPage } from './modules/atendimento/pages/ComprasPage'
 import { VinculosPendentesPage } from './modules/atendimento/pages/VinculosPendentesPage'
 import { ConflitosPage } from './modules/atendimento/pages/ConflitosPage'
+import { AtendimentoHome } from './modules/atendimento/painel/AtendimentoHome'
+import { RegistrosPage } from './modules/atendimento/painel/RegistrosPage'
 
 // ── Spinner simples ──────────────────────────────────────────────────────────
 function Spinner() {
@@ -368,7 +370,7 @@ function AppRoutes() {
         path="/atendimento/*"
         element={<RequireAuth><AtendimentoLayout /></RequireAuth>}
       >
-        <Route index element={<Navigate to="rifas" replace />} />
+        <Route index element={<AtendimentoHome />} />
         <Route path="rifas" element={<DashboardRifasPage />} />
         <Route path="rifas/kanban" element={<KanbanPage />} />
         <Route path="rifas/calendario" element={<CalendarioPage />} />
@@ -378,6 +380,8 @@ function AppRoutes() {
         <Route path="rifas/compras" element={<ComprasPage />} />
         <Route path="rifas/vinculos-pendentes" element={<VinculosPendentesPage />} />
         <Route path="rifas/conflitos" element={<ConflitosPage />} />
+        {/* Painel do Atendimento (abas configuradas em modules/atendimento/painel/config.ts) */}
+        <Route path=":slug" element={<RegistrosPage />} />
       </Route>
     </Routes>
   )
