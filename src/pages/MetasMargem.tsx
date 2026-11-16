@@ -11,6 +11,7 @@ import { TabelaLocal } from '../components/metas/TabelaLocal'
 import { GraficosMetas } from '../components/metas/GraficosMetas'
 import { DetalheProjeto } from '../components/metas/DetalheProjeto'
 import { EditorMetas } from '../components/metas/EditorMetas'
+import { RadarMargem } from '../components/metas/RadarMargem'
 import { COR_ECONOMIA, COR_FALTA, COR_META, COR_POTENCIAL, ensinoCurto, pct0, reais } from '../components/metas/formato'
 import { lerMetas, salvarMetas } from '../utils/metasMargem'
 import { padronizarCaixa } from '../utils/caixa'
@@ -50,6 +51,7 @@ export function MetasMargem() {
   const [incluirRealizados, setIncluirRealizados] = useState(false)
   const [anoPadraoAplicado, setAnoPadraoAplicado] = useState(false)
   const [abertoId, setAbertoId] = useState<string | null>(null)
+  const [aba, setAba] = useState<'metas' | 'radar'>('metas')
 
   useEffect(() => {
     let vivo = true
@@ -92,6 +94,11 @@ export function MetasMargem() {
     [todos, passa],
   )
   const grupos = useMemo(() => agruparPorLocal(resultados), [resultados])
+  // Radar: os mesmos projetos que passaram pelos filtros da página
+  const projetosRadar = useMemo(() => {
+    const ids = new Set(resultados.map((r) => r.id))
+    return brutos.filter((p) => ids.has(p.id))
+  }, [resultados, brutos])
   const tot = useMemo(() => somarResultados(resultados), [resultados])
 
   // ── Opções dos filtros ──
@@ -153,6 +160,22 @@ export function MetasMargem() {
         </div>
       </div>
 
+      {/* Abas */}
+      <div role="tablist" className="flex gap-1 border-b border-white/10">
+        {([['metas', 'Metas'], ['radar', 'Radar']] as const).map(([k, rotulo]) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={aba === k}
+            onClick={() => setAba(k)}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${aba === k ? 'border-primary text-text-main' : 'border-transparent text-text-muted hover:text-text-main'}`}
+          >
+            {rotulo}
+          </button>
+        ))}
+      </div>
+
       {avisoMetas && <p className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2 text-sm text-text-main">{avisoMetas}</p>}
 
       {/* Filtros */}
@@ -185,7 +208,9 @@ export function MetasMargem() {
 
       {erro && <p className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">Não consegui carregar os projetos: {erro}</p>}
 
-      {loading ? (
+      {aba === 'radar' && !loading ? (
+        <RadarMargem projetos={projetosRadar} metas={metas} />
+      ) : loading ? (
         <div className="flex h-32 items-center justify-center gap-2 text-sm text-text-muted">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" /> Carregando…
         </div>
