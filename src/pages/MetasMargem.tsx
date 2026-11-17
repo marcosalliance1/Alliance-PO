@@ -151,12 +151,16 @@ export function MetasMargem() {
             <SlidersHorizontal size={16} />
             <span className="text-xs sm:text-sm">Metas: Médio {pctMeta(metas.MEDIO)} · Superior {pctMeta(metas.SUPERIOR)} · Fund. {pctMeta(metas.FUNDAMENTAL)}</span>
           </button>
-          <button type="button" onClick={() => exportarMetasMargemCsv(resultados)} disabled={resultados.length === 0} className="btn-secondary flex items-center gap-2 disabled:opacity-60">
-            <FileSpreadsheet size={16} /> CSV
-          </button>
-          <button type="button" onClick={() => exportarMetasMargemXlsx(resultados, metas)} disabled={resultados.length === 0} className="btn-primary flex items-center gap-2 disabled:opacity-60">
-            <Download size={16} /> Exportar Excel
-          </button>
+          {aba === 'metas' && (
+            <>
+              <button type="button" onClick={() => exportarMetasMargemCsv(resultados)} disabled={resultados.length === 0} className="btn-secondary flex items-center gap-2 disabled:opacity-60">
+                <FileSpreadsheet size={16} /> CSV
+              </button>
+              <button type="button" onClick={() => exportarMetasMargemXlsx(resultados, metas)} disabled={resultados.length === 0} className="btn-primary flex items-center gap-2 disabled:opacity-60">
+                <Download size={16} /> Exportar Excel
+              </button>
+            </>
+          )}
         </div>
       </div>
 

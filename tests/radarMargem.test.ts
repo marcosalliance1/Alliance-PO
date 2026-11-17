@@ -95,3 +95,24 @@ test('carteira: ordena vermelho → amarelo → verde e calcula a taxa de estour
   assert.equal(taxaEstouro([{ estouros: 10, orcadoFechados: 100 }, { estouros: 0, orcadoFechados: 100 }]), 0.05)
   assert.equal(taxaEstouro([]), 0)
 })
+
+test('exportar Excel: monta Radar/O que fazer/Regras com os números da tela; projeto sem dados não quebra', async () => {
+  const XLSX = await import('xlsx')
+  const { montarPlanilhaRadar } = await import('../src/lib/exportarRadarExcel.ts')
+  const sge: SgeLinha = { projeto_id: 'p1', previsto: '800000', recebido: '10', vencido: '100000', a_vencer: '0', sge_atualizado_em: '2026-11-16T10:00:00Z' }
+  const vazio: ProjetoBruto = { id: 'x', tap: { turma: 'VAZIO', anoRealizacao: 2026 }, secoes: [], resumo_geral_orcado: null }
+  const { linhas, taxa } = montarCarteira([proj(), vazio], [sge], undefined, HOJE)
+  const wb = montarPlanilhaRadar(linhas, taxa, { MEDIO: 25, SUPERIOR: 15, FUNDAMENTAL: 15 }, new Date('2026-11-16T10:00:00Z'))
+  assert.deepEqual(wb.SheetNames, ['Radar', 'O que fazer', 'Regras'])
+  const radar = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets['Radar'])
+  assert.equal(radar.length, 2)
+  const t = radar.find((r) => r['Projeto'] === 'Teste 2026' || String(r['Projeto']).toUpperCase() === 'TESTE 2026')!
+  assert.equal(t['Receita orçada'], 1_000_000)
+  assert.equal(t['SGE vencido'], 100_000)
+  assert.equal(t['Evento'], '01/12/2026')
+  assert.equal(t['Meta %'], 0.25)
+  const sem = radar.find((r) => r['Semáforo'] === 'Sem dado')!
+  assert.equal(sem['Receita orçada'], undefined) // vazio, sem NaN
+  const acoes = XLSX.utils.sheet_to_json(wb.Sheets['O que fazer'])
+  assert.equal(acoes.length, linhas.reduce((s, l) => s + l.acoes.length, 0))
+})

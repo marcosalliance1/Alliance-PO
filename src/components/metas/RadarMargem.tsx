@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ChevronDown } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Download } from 'lucide-react'
+import { exportarRadarXlsx } from '../../lib/exportarRadarExcel'
 import { supabase } from '../../lib/supabase'
 import type { MetasPct, ProjetoBruto } from '../../lib/economiaFechados'
 import { montarCarteira, REGRAS, type CorRadar, type LinhaRadar, type SgeLinha } from '../../lib/radarMargem'
@@ -148,10 +149,15 @@ export function RadarMargem({ projetos, metas }: { projetos: ProjetoBruto[]; met
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-text-muted">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+      <p className="min-w-0 flex-1 text-sm text-text-muted">
         Semáforo por projeto: a <b className="text-text-main">margem projetada</b> (orçada + economia líquida dos itens fechados) contra a meta, o risco do que ainda falta fechar e a posição do SGE.
         Clique num projeto para ver as ações.
       </p>
+      <button type="button" onClick={() => exportarRadarXlsx(linhas, taxa, metas, sgeEm)} className="btn-primary flex items-center gap-2" title="Baixa o Radar (o que está na tela) em Excel">
+        <Download size={16} /> Exportar Excel
+      </button>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi rotulo="Vermelho" valor={String(cont.vermelho)} cor={COR.vermelho} sub={`mais de ${REGRAS.toleranciaAmarelo} p.p. abaixo da meta`} />
